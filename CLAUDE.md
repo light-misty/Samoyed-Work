@@ -13,8 +13,8 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
 | 前端 UI 组件 | 95% | 组件、Store、事件封装全部完成，待与后端联调 |
-| Rust 后端 | 80% | 数据库、配置、LLM、Agent、Skill 全部实现，待与 Sidecar 集成 |
-| Python Sidecar | 95% | 所有文档处理器已实现，待与后端集成 |
+| Rust 后端 | 90% | 数据库、配置、LLM、Agent、Skill、Sidecar 集成全部完成 |
+| Python Sidecar | 100% | 所有文档处理器已实现，已与后端集成 |
 | 共享类型 | 10% | 仅定义了 NodeType 和 ExecutionStatus |
 | 设计文档 | 100% | PRD、技术架构、组件设计、数据库设计等齐全 |
 
@@ -33,7 +33,7 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts） |
 | Tauri 命令封装 | 完成 | 所有命令的 TypeScript 封装（tauri.ts） |
 
-#### Rust 后端（80% 完成）
+#### Rust 后端（90% 完成）
 
 | 子模块 | 状态 | 说明 |
 |--------|------|------|
@@ -44,9 +44,10 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 | LLM 服务 | 完成 | OpenAI 适配器完整实现，支持流式和非流式响应 |
 | Agent 执行器 | 完成 | Tool Calling 循环核心逻辑已实现 |
 | Skill 注册表 | 完成 | 注册表框架 + 9 个内置 Skills 已实现 |
+| Sidecar 集成 | 完成 | DocumentService + SidecarManager 实现与 Python 的通信 |
 | Tauri 命令 | 完成 | 所有核心命令已实现（session、settings、workspace、llm、agent） |
 
-#### Python Sidecar（95% 完成）
+#### Python Sidecar（100% 完成）
 
 | 处理器 | 状态 | 功能 |
 |--------|------|------|
@@ -59,21 +60,23 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 ### 下一步开发重点
 
-1. **优先级高：Sidecar 集成**
-   - 实现 Rust 后端与 Python Sidecar 的通信
-   - 在 Skill 执行中调用 Sidecar 处理文档
-
-2. **优先级高：前后端联调**
+1. **优先级高：前后端联调**
    - 测试事件流（agent:thinking、agent:content 等）
    - 验证数据持久化（会话、消息、Token 统计）
+   - 测试完整的 Agent 执行流程
+
+2. **优先级高：端到端测试**
+   - 测试 LLM 调用和流式响应
+   - 测试 Skill 执行和 Sidecar 通信
+   - 测试文档生成、读取、修改功能
 
 3. **优先级中：LLM 适配器扩展**
    - 实现 Claude 适配器（Anthropic API）
    - 实现 Gemini 适配器（Google AI API）
 
 4. **优先级中：Skill 系统完善**
-   - 将内置 Skills 与 Sidecar 集成
    - 实现自定义 Skill 的动态加载
+   - 添加更多文档操作 Skills
 
 5. **优先级低：共享类型自动化**
    - 引入 ts-rs 或类似工具
@@ -126,18 +129,21 @@ src-tauri/                # Tauri Rust 后端
 │   │   └── document.rs   # 文档操作
 │   ├── services/         # 服务层
 │   │   ├── agent/        # Agent 执行器（executor.rs, context.rs）
-│   │   ├── llm/          # LLM 服务（openai_adapter.rs, router.rs）
+│   │   ├── llm/          # LLM 服务（openai_adapter.rs, provider.rs, router.rs）
 │   │   ├── skill/        # Skill 系统（registry.rs, builtin.rs）
-│   │   └── document/     # 文档服务
-│   ├── db/               # SQLite 数据库层
-│   ├── config/           # 配置管理
+│   │   └── document/     # 文档服务（mod.rs - SidecarManager, DocumentService）
+│   ├── db/               # SQLite 数据库层（init.rs, session_repo.rs, message_repo.rs 等）
+│   ├── config/           # 配置管理（llm_config.rs, app_settings.rs, workspace_config.rs）
 │   ├── models/           # 数据模型定义
-│   ├── events/           # 事件系统
-│   └── utils/            # 工具函数
+│   ├── events/           # 事件系统（emitter.rs, types.rs）
+│   ├── utils/            # 工具函数（logger.rs）
+│   ├── errors.rs         # 统一错误类型
+│   └── lib.rs            # 应用入口和状态管理
 └── resources/            # 资源文件
 
 sidecar/                  # Python Sidecar
 ├── main.py               # 入口，stdin/stdout JSON 协议通信
+├── requirements.txt      # Python 依赖
 └── handlers/             # 文档处理器
     ├── word_handler.py   # Word 文档处理
     ├── excel_handler.py  # Excel 文档处理
@@ -186,12 +192,22 @@ docs/                     # 设计文档
 ### Python Sidecar
 文档处理通过独立 Python 进程执行，与 Rust 后端通过 stdin/stdout JSON 协议通信。
 
+**通信协议**：
+- 请求格式：`{ "id": "uuid", "action": "generate|read|modify|...", "type": "docx|xlsx|...", "params": {...} }`
+- 响应格式：`{ "id": "uuid", "success": true|false, "data": {...}, "error": "..." }`
+
 **依赖库**：
 - `python-docx` — Word 文档处理
 - `openpyxl` — Excel 文档处理
 - `python-pptx` — PPT 文档处理
 - `reportlab` — PDF 生成
 - `PyMuPDF` (fitz) — PDF 读取
+
+**SidecarManager 特性**：
+- 自动启动和重启 Sidecar 进程
+- 请求超时处理（默认 120 秒）
+- 失败后自动重试
+- stderr 日志转发到 Rust 日志系统
 
 ### 数据库设计
 SQLite 数据库包含 5 张表：
@@ -201,17 +217,25 @@ SQLite 数据库包含 5 张表：
 - `documents` — 文档元数据
 - `skills` — Skill 注册表
 
+数据库特性：
+- WAL 模式提升并发性能
+- 外键约束保证数据完整性
+- 通过 Mutex 保护连接，支持多线程访问
+
 ### Skill 系统
 内置 9 个 Skills，通过 Tool Calling 与 LLM 交互：
-1. `generate_document` — 生成新文档
-2. `read_document` — 读取文档内容
-3. `modify_document` — 修改已有文档
-4. `delete_document` — 删除文档
-5. `convert_format` — 格式转换
-6. `search_documents` — 搜索文档
-7. `analyze_document` — 分析文档
-8. `list_workspace` — 列出工作区文件
-9. `batch_process` — 批量处理
+
+| Skill | 功能 | 实现方式 |
+|-------|------|----------|
+| `generate_document` | 生成新文档 | Sidecar |
+| `read_document` | 读取文档内容 | Sidecar |
+| `modify_document` | 修改已有文档 | Sidecar |
+| `delete_document` | 删除文档 | Rust 原生 |
+| `convert_format` | 格式转换 | Sidecar |
+| `search_documents` | 搜索文档 | Rust 原生 |
+| `analyze_document` | 分析文档 | Sidecar |
+| `list_workspace` | 列出工作区文件 | Rust 原生 |
+| `batch_process` | 批量处理 | Sidecar |
 
 ## 开发注意事项
 
@@ -221,3 +245,4 @@ SQLite 数据库包含 5 张表：
 - **提交规范**：遵循 Conventional Commits 格式（feat/fix/docs/refactor/chore 等），使用中文描述
 - **错误处理**：Rust 后端使用统一的 `CommandError` 类型，前端通过事件接收错误信息
 - **日志规范**：Rust 后端使用 `log` crate，Python Sidecar 使用 `logging` 模块，均输出到文件和 stderr
+- **Sidecar 调试**：Sidecar 日志输出到 `log/sidecar.log`，可通过环境变量 `DOCAGENT_PYTHON` 指定 Python 路径

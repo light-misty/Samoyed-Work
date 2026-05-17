@@ -2,12 +2,17 @@
 /// 通过 Python Sidecar 执行文档处理操作
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
+
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
 use crate::errors::CommandError;
 use serde_json::{json, Value};
+
+/// 默认请求超时时间（秒）
+const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 120;
 
 /// Sidecar 进程管理器
 pub struct SidecarManager {
@@ -17,6 +22,8 @@ pub struct SidecarManager {
     python_path: String,
     /// Sidecar 脚本路径
     script_path: String,
+    /// 请求超时时间
+    request_timeout: Duration,
 }
 
 impl SidecarManager {
@@ -25,6 +32,7 @@ impl SidecarManager {
             process: Arc::new(Mutex::new(None)),
             python_path,
             script_path,
+            request_timeout: Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS),
         }
     }
 
@@ -37,7 +45,7 @@ impl SidecarManager {
             return Ok(());
         }
 
-        let child = Command::new(&self.python_path)
+        let mut child = Command::new(&self.python_path)
             .arg(&self.script_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -47,6 +55,17 @@ impl SidecarManager {
                 log::error!("启动 Sidecar 失败: {}", e);
                 CommandError::doc(3001, format!("启动 Sidecar 失败: {}", e))
             })?;
+
+        // 取出 stderr 并启动后台任务读取日志
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    log::info!("[Sidecar stderr] {}", line);
+                }
+            });
+        }
 
         *guard = Some(child);
         log::info!("Sidecar 进程启动成功");
@@ -70,9 +89,76 @@ impl SidecarManager {
         Ok(())
     }
 
-    /// 发送请求到 Sidecar 并获取响应
+    /// 检查 Sidecar 进程是否仍在运行
+    async fn is_running(&self) -> bool {
+        let mut guard = self.process.lock().await;
+        if let Some(ref mut child) = *guard {
+            match child.try_wait() {
+                Ok(Some(_status)) => {
+                    // 进程已退出
+                    log::warn!("Sidecar 进程已退出");
+                    *guard = None;
+                    false
+                }
+                Ok(None) => true,
+                Err(e) => {
+                    log::error!("检查 Sidecar 进程状态失败: {}", e);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    /// 确保 Sidecar 正在运行，如果未运行则自动重启
+    async fn ensure_running(&self) -> Result<(), CommandError> {
+        if self.is_running().await {
+            return Ok(());
+        }
+        log::info!("Sidecar 未运行，正在重启...");
+        self.start().await
+    }
+
+    /// 发送请求到 Sidecar 并获取响应（带超时和自动重启）
     pub async fn send_request(&self, request: Value) -> Result<Value, CommandError> {
         log::debug!("发送请求到 Sidecar: action={}", request["action"]);
+
+        // 确保 Sidecar 正在运行
+        self.ensure_running().await?;
+
+        // 带超时执行请求
+        let result = tokio::time::timeout(
+            self.request_timeout,
+            self.send_request_inner(request.clone()),
+        ).await;
+
+        match result {
+            Ok(Ok(response)) => Ok(response),
+            Ok(Err(e)) => {
+                // 请求失败，可能是进程崩溃，尝试重启一次
+                log::warn!("Sidecar 请求失败，尝试重启: {}", e.message);
+                if self.start().await.is_ok() {
+                    // 重启成功后重试一次
+                    self.send_request_inner(request).await
+                } else {
+                    Err(e)
+                }
+            }
+            Err(_) => {
+                // 请求超时
+                log::error!("Sidecar 请求超时（{}秒）", self.request_timeout.as_secs());
+                // 超时后重启 Sidecar
+                let _ = self.stop().await;
+                Err(CommandError::doc(3009, format!(
+                    "Sidecar 请求超时（{}秒）", self.request_timeout.as_secs()
+                )))
+            }
+        }
+    }
+
+    /// 内部发送请求实现（无超时、无重试）
+    async fn send_request_inner(&self, request: Value) -> Result<Value, CommandError> {
         let mut guard = self.process.lock().await;
 
         let child = guard.as_mut().ok_or_else(|| {
@@ -139,16 +225,6 @@ impl DocumentService {
         params: Value,
     ) -> Result<Value, CommandError> {
         log::info!("处理文档操作: action={}, doc_type={}", action, doc_type);
-
-        // 自动启动 Sidecar（如果未运行）
-        {
-            let guard = self.sidecar.process.lock().await;
-            if guard.is_none() {
-                drop(guard);
-                log::info!("Sidecar 未启动，正在自动启动...");
-                self.sidecar.start().await?;
-            }
-        }
 
         let request = json!({
             "id": uuid::Uuid::new_v4().to_string(),

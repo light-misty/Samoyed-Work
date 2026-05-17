@@ -43,7 +43,7 @@ pub fn run() {
             let llm_config = config_manager.load_llm_config().unwrap_or_default();
             let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config);
 
-            let python_path = std::env::var("DOCGENT_PYTHON")
+            let python_path = std::env::var("DOCAGENT_PYTHON")
                 .unwrap_or_else(|_| "python".to_string());
             let sidecar_script = app_data_dir.join("sidecar").join("main.py");
             let sidecar_script_str = if sidecar_script.exists() {
@@ -53,8 +53,8 @@ pub fn run() {
                 if project_sidecar.exists() {
                     project_sidecar.to_string_lossy().to_string()
                 } else {
-                    let abs_sidecar = std::path::Path::new("d:/DeskTop/DocAgent/sidecar/main.py");
-                    abs_sidecar.to_string_lossy().to_string()
+                    log::error!("Sidecar 脚本未找到，请确保 sidecar/main.py 存在");
+                    "sidecar/main.py".to_string()
                 }
             };
             log::info!("Sidecar 脚本路径: {}", sidecar_script_str);
