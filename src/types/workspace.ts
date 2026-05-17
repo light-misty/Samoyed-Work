@@ -1,21 +1,43 @@
-// ===== 工作区类型定义 =====
+// ===== 工作区类型定义 - 与 Rust 后端对齐 =====
 
-export interface Workspace {
+export interface WorkspaceInfo {
   id: string;
   name: string;
   path: string;
-  description?: string;
-  createdAt: number;
-  lastOpenedAt: number;
-  isDefault: boolean;
+  isActive: boolean;
+  fileCount: number;
+  createdAt: string;
+  lastAccessed: string;
 }
 
-export interface FileTreeNode {
-  key: string;
+export interface WorkspaceConfig {
   name: string;
-  type: "file" | "directory";
-  children?: FileTreeNode[];
   path: string;
+}
+
+export interface FileNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size?: number;
+  modified?: string;
   extension?: string;
-  isModified?: boolean;
+  children?: FileNode[];
+}
+
+export interface SearchOptions {
+  extensions?: string[];
+  maxResults?: number;
+  includeContent?: boolean;
+}
+
+export interface SearchResult {
+  path: string;
+  name: string;
+  extension: string;
+  size: number;
+  modified: string;
+  matchType: string;
+  matchPreview?: string;
+  lineNumber?: number;
 }

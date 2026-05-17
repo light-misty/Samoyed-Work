@@ -16,8 +16,8 @@ export function GeneralTab() {
           </div>
           <input
             className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] w-[160px] transition-colors focus:border-accent"
-            value={settings.authorName}
-            onChange={(e) => updateSettings({ authorName: e.target.value })}
+            value={settings.general.authorName}
+            onChange={(e) => updateSettings({ general: { authorName: e.target.value } })}
           />
         </div>
 
@@ -28,12 +28,12 @@ export function GeneralTab() {
           </div>
           <select
             className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] bg-bg cursor-pointer"
-            value={settings.confirmLevel}
-            onChange={(e) => updateSettings({ confirmLevel: e.target.value as typeof settings.confirmLevel })}
+            value={settings.general.confirmationLevel}
+            onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as typeof settings.general.confirmationLevel } })}
           >
-            <option value="auto">全部自动确认</option>
-            <option value="low">仅破坏性操作确认</option>
-            <option value="high">全部需确认</option>
+            <option value="always">全部需确认</option>
+            <option value="editOnly">仅编辑操作确认</option>
+            <option value="never">全部自动确认</option>
           </select>
         </div>
 
@@ -43,8 +43,8 @@ export function GeneralTab() {
           </div>
           <select
             className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] bg-bg cursor-pointer"
-            value={settings.language}
-            onChange={(e) => updateSettings({ language: e.target.value as typeof settings.language })}
+            value={settings.general.language}
+            onChange={(e) => updateSettings({ general: { language: e.target.value } })}
           >
             <option value="zh-CN">简体中文</option>
             <option value="en-US">English</option>
@@ -61,24 +61,38 @@ export function GeneralTab() {
             <div className="text-[13px] text-text-primary">日预算上限</div>
             <div className="text-[11px] text-text-tertiary mt-[2px]">超出时触发提醒</div>
           </div>
-          <input className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] w-[120px] transition-colors focus:border-accent" placeholder="不限制" />
+          <input
+            className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] w-[120px] transition-colors focus:border-accent"
+            placeholder="不限制"
+            value={settings.tokenBudget.dailyLimit || ""}
+            onChange={(e) => updateSettings({ tokenBudget: { dailyLimit: Number(e.target.value) || 0 } })}
+          />
         </div>
 
         <div className="flex items-center justify-between py-[10px] border-b border-border-light">
           <div>
             <div className="text-[13px] text-text-primary">月预算上限</div>
           </div>
-          <input className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] w-[120px] transition-colors focus:border-accent" placeholder="不限制" />
+          <input
+            className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] w-[120px] transition-colors focus:border-accent"
+            placeholder="不限制"
+            value={settings.tokenBudget.monthlyLimit || ""}
+            onChange={(e) => updateSettings({ tokenBudget: { monthlyLimit: Number(e.target.value) || 0 } })}
+          />
         </div>
 
         <div className="flex items-center justify-between py-[10px] border-b border-border-light">
           <div>
             <div className="text-[13px] text-text-primary">超出预算行为</div>
           </div>
-          <select className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] bg-bg cursor-pointer">
-            <option>仅提醒</option>
-            <option>暂停Agent</option>
-            <option>切换到更便宜的模型</option>
+          <select
+            className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] bg-bg cursor-pointer"
+            value={settings.tokenBudget.exceedAction}
+            onChange={(e) => updateSettings({ tokenBudget: { exceedAction: e.target.value as typeof settings.tokenBudget.exceedAction } })}
+          >
+            <option value="warn">仅提醒</option>
+            <option value="block">暂停Agent</option>
+            <option value="fallback">切换到更便宜的模型</option>
           </select>
         </div>
       </div>
@@ -93,11 +107,12 @@ export function GeneralTab() {
           </div>
           <select
             className="px-[10px] py-[6px] border border-border rounded-[var(--radius-sm)] text-[13px] bg-bg cursor-pointer"
-            value={settings.snapshotRetention}
-            onChange={(e) => updateSettings({ snapshotRetention: e.target.value as typeof settings.snapshotRetention })}
+            value={settings.versionSnapshot.retentionPolicy}
+            onChange={(e) => updateSettings({ versionSnapshot: { retentionPolicy: e.target.value as typeof settings.versionSnapshot.retentionPolicy } })}
           >
-            <option value="count-50">按数量（最近50个）</option>
-            <option value="days-30">按时间（最近30天）</option>
+            <option value="byCount">按数量（最近{settings.versionSnapshot.maxCount}个）</option>
+            <option value="byDays">按时间（最近{settings.versionSnapshot.maxDays}天）</option>
+            <option value="both">两者都满足</option>
           </select>
         </div>
 

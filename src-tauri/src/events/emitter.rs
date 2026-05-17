@@ -120,4 +120,15 @@ impl<R: Runtime> AgentEmitter<R> {
                 CommandError::from(e)
             })
     }
+
+    /// 发射 Token 用量更新事件
+    pub fn emit_token_update(&self, payload: types::TokenUpdatePayload) -> Result<(), CommandError> {
+        log::debug!("发射事件: {} (session_id={})", types::TOKEN_UPDATE, payload.session_id);
+        self.app_handle
+            .emit(types::TOKEN_UPDATE, payload)
+            .map_err(|e| {
+                log::warn!("发射事件 {} 失败: {}", types::TOKEN_UPDATE, e);
+                CommandError::from(e)
+            })
+    }
 }

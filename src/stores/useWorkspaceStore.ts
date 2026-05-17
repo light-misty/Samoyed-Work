@@ -1,14 +1,15 @@
 import { create } from "zustand";
-import type { Workspace } from "../types";
+import type { WorkspaceInfo } from "../types";
+import * as tauriCmd from "../services/tauri";
 
 interface WorkspaceState {
   currentWorkspaceId: string | null;
-  workspaces: Workspace[];
+  workspaces: WorkspaceInfo[];
   isLoading: boolean;
 
-  addWorkspace: (name: string, path: string) => string;
-  switchWorkspace: (id: string) => void;
-  removeWorkspace: (id: string) => void;
+  addWorkspace: (path: string, name?: string) => Promise<string>;
+  switchWorkspace: (id: string) => Promise<void>;
+  removeWorkspace: (id: string) => Promise<void>;
   loadWorkspaces: () => Promise<void>;
 }
 
@@ -17,42 +18,61 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   workspaces: [],
   isLoading: false,
 
-  addWorkspace: (name, path) => {
-    const id = `ws_${Date.now()}`;
-    set((state) => ({
-      workspaces: [
-        ...state.workspaces,
-        {
-          id,
-          name,
-          path,
-          createdAt: Date.now(),
-          lastOpenedAt: Date.now(),
-          isDefault: state.workspaces.length === 0,
-        },
-      ],
-      currentWorkspaceId: state.currentWorkspaceId || id,
-    }));
-    return id;
+  // 添加工作区，调用后端 API
+  addWorkspace: async (path, name) => {
+    try {
+      const workspace = await tauriCmd.addWorkspace(path, name);
+      set((state) => ({
+        workspaces: [...state.workspaces, workspace],
+        currentWorkspaceId: state.currentWorkspaceId || workspace.id,
+      }));
+      return workspace.id;
+    } catch (error) {
+      console.error("[WorkspaceStore] 添加工作区失败:", error);
+      throw error;
+    }
   },
 
-  switchWorkspace: (id) => {
-    set({ currentWorkspaceId: id });
+  // 切换工作区，调用后端 API
+  switchWorkspace: async (id) => {
+    try {
+      await tauriCmd.setActiveWorkspace(id);
+      set({ currentWorkspaceId: id });
+    } catch (error) {
+      console.error("[WorkspaceStore] 切换工作区失败:", error);
+    }
   },
 
-  removeWorkspace: (id) => {
-    set((state) => ({
-      workspaces: state.workspaces.filter((w) => w.id !== id),
-      currentWorkspaceId:
-        state.currentWorkspaceId === id
-          ? state.workspaces[0]?.id ?? null
-          : state.currentWorkspaceId,
-    }));
+  // 移除工作区，调用后端 API
+  removeWorkspace: async (id) => {
+    try {
+      await tauriCmd.removeWorkspace(id);
+      set((state) => ({
+        workspaces: state.workspaces.filter((w) => w.id !== id),
+        currentWorkspaceId:
+          state.currentWorkspaceId === id
+            ? state.workspaces[0]?.id ?? null
+            : state.currentWorkspaceId,
+      }));
+    } catch (error) {
+      console.error("[WorkspaceStore] 移除工作区失败:", error);
+    }
   },
 
+  // 从后端加载工作区列表
   loadWorkspaces: async () => {
     set({ isLoading: true });
-    // TODO: 从 Tauri 后端加载工作区列表
-    set({ isLoading: false });
+    try {
+      const workspaces = await tauriCmd.listWorkspaces();
+      const activeWorkspace = workspaces.find((w) => w.isActive);
+      set({
+        workspaces,
+        currentWorkspaceId: activeWorkspace?.id ?? workspaces[0]?.id ?? null,
+        isLoading: false,
+      });
+    } catch (error) {
+      console.error("[WorkspaceStore] 加载工作区列表失败:", error);
+      set({ isLoading: false });
+    }
   },
 }));

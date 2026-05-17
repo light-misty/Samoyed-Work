@@ -12,6 +12,20 @@ use crate::services::llm::router::LlmRouter;
 use crate::services::skill::registry::SkillRegistry;
 use super::context::AgentContext;
 
+/// Agent 执行结果
+pub struct ExecutionResult {
+    /// 最终回复内容
+    pub summary: String,
+    /// 总步骤数
+    pub total_steps: u32,
+    /// 总输入 token 数（估算）
+    pub total_input_tokens: u64,
+    /// 总输出 token 数（估算）
+    pub total_output_tokens: u64,
+    /// 总耗时（毫秒）
+    pub duration_ms: u64,
+}
+
 /// Agent 执行器
 /// 实现 Tool Calling 循环：调用 LLM -> 检查 tool_calls -> 执行 Skill -> 反馈结果 -> 继续循环
 pub struct AgentExecutor<R: Runtime> {
@@ -63,11 +77,11 @@ impl<R: Runtime> AgentExecutor<R> {
     }
 
     /// 执行 Agent 循环
-    pub async fn execute(&self, ctx: &mut AgentContext) -> Result<String, CommandError> {
+    pub async fn execute(&self, ctx: &mut AgentContext) -> Result<ExecutionResult, CommandError> {
         let start_time = Instant::now();
         let mut total_steps = 0u32;
-        let total_input_tokens = 0u64;
-        let total_output_tokens = 0u64;
+        let mut total_input_tokens = 0u64;
+        let mut total_output_tokens = 0u64;
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
@@ -93,11 +107,23 @@ impl<R: Runtime> AgentExecutor<R> {
                     reason: "用户手动停止".to_string(),
                     completed_steps: total_steps,
                 }).ok();
-                return Ok("Agent 已被用户停止".to_string());
+                return Ok(ExecutionResult {
+                    summary: "Agent 已被用户停止".to_string(),
+                    total_steps,
+                    total_input_tokens,
+                    total_output_tokens,
+                    duration_ms: start_time.elapsed().as_millis() as u64,
+                });
             }
 
             total_steps += 1;
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
+
+            self.emitter.emit_thinking(ThinkingPayload {
+                session_id: ctx.session_id.clone(),
+                step: total_steps,
+                thought: format!("正在分析用户请求并规划操作步骤... (第{}轮)", iteration + 1),
+            }).ok();
 
             let messages = ctx.get_messages();
             log::debug!("调用 LLM 流式接口, session_id={}, 消息数={}", ctx.session_id, messages.len());
@@ -152,7 +178,8 @@ impl<R: Runtime> AgentExecutor<R> {
                         }
                     }
                     Err(e) => {
-                        if e.message == "stream_done" {
+                        if e.code == 9999 && e.message == "stream_done" {
+                            log::debug!("流式响应正常结束, session_id={}", ctx.session_id);
                             break;
                         }
                         log::warn!("流式响应错误: {}", e.message);
@@ -170,6 +197,13 @@ impl<R: Runtime> AgentExecutor<R> {
                     is_streaming: false,
                 }).ok();
             }
+
+            let input_chars: usize = messages.iter().map(|m| m.content.len()).sum();
+            let output_chars = assistant_content.len();
+            let estimated_input = (input_chars as u64) / 3;
+            let estimated_output = (output_chars as u64) / 3;
+            total_input_tokens += estimated_input;
+            total_output_tokens += estimated_output;
 
             // 检查是否有 tool_calls
             let has_tool_calls = !collected_tool_calls.is_empty();
@@ -194,7 +228,13 @@ impl<R: Runtime> AgentExecutor<R> {
                             reason: "用户手动停止".to_string(),
                             completed_steps: total_steps,
                         }).ok();
-                        return Ok("Agent 已被用户停止".to_string());
+                        return Ok(ExecutionResult {
+                            summary: "Agent 已被用户停止".to_string(),
+                            total_steps,
+                            total_input_tokens,
+                            total_output_tokens,
+                            duration_ms: start_time.elapsed().as_millis() as u64,
+                        });
                     }
 
                     log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);
@@ -254,7 +294,13 @@ impl<R: Runtime> AgentExecutor<R> {
                 duration_ms: total_duration_ms,
             }).ok();
 
-            return Ok(assistant_content);
+            return Ok(ExecutionResult {
+                summary: assistant_content,
+                total_steps,
+                total_input_tokens,
+                total_output_tokens,
+                duration_ms: total_duration_ms,
+            });
         }
 
         // 超过最大迭代次数

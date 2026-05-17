@@ -1,31 +1,117 @@
-// ===== 设置相关类型定义 =====
-
-export type LLMProvider = "openai" | "anthropic" | "google" | "local" | "custom";
-
-export type ConfirmLevel = "auto" | "low" | "medium" | "high";
+// ===== 设置相关类型定义 - 与 Rust 后端对齐 =====
 
 export type SettingsTab = "llm" | "workspace" | "skill" | "template" | "general";
 
-export interface LLMProviderConfig {
-  id: string;
-  provider: LLMProvider;
-  name: string;
-  apiKey: string;
-  baseUrl?: string;
-  modelName: string;
-  maxTokens: number;
-  temperature: number;
-  topP: number;
-  enabled: boolean;
-  latency?: string;
+// ----- 应用设置 -----
+
+export type ConfirmationLevel = "always" | "editOnly" | "never";
+export type ExceedAction = "warn" | "block" | "fallback";
+export type RetentionPolicy = "byCount" | "byDays" | "both";
+
+export interface GeneralSettings {
+  authorName: string;
+  confirmationLevel: ConfirmationLevel;
+  language: string;
 }
 
-export interface Skill {
+export interface TokenBudgetSettings {
+  dailyLimit: number;
+  monthlyLimit: number;
+  exceedAction: ExceedAction;
+}
+
+export interface VersionSnapshotSettings {
+  retentionPolicy: RetentionPolicy;
+  maxCount: number;
+  maxDays: number;
+}
+
+export interface WorkspaceDefaults {
+  defaultWorkspaceId: string;
+}
+
+export interface Shortcuts {
+  newSession: string;
+  closeSession: string;
+  sendMessage: string;
+  toggleSidebar: string;
+  quickPrompt: string;
+}
+
+export interface AppSettings {
+  general: GeneralSettings;
+  tokenBudget: TokenBudgetSettings;
+  versionSnapshot: VersionSnapshotSettings;
+  workspace: WorkspaceDefaults;
+  shortcuts: Shortcuts;
+}
+
+// ----- LLM 相关类型 -----
+
+export type LLMProviderType = "openai" | "anthropic" | "ollama" | "custom";
+
+export interface ProviderConfig {
+  name: string;
+  providerType: LLMProviderType;
+  apiBase: string;
+  apiKey: string;
+  model: string;
+  extraParams?: Record<string, unknown>;
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  providerType: LLMProviderType;
+  apiBase: string;
+  model: string;
+  isDefault: boolean;
+  isAvailable: boolean;
+  isConnected?: boolean;
+  createdAt: string;
+}
+
+export interface ConnectionResult {
+  success: boolean;
+  providerId?: string;
+  latencyMs: number;
+  modelInfo?: ModelInfo;
+  model?: string;
+  errorMessage?: string;
+  error?: string;
+}
+
+export interface ModelInfo {
+  modelName: string;
+  maxTokens: number;
+  supportsStreaming: boolean;
+  supportsToolCall: boolean;
+}
+
+// ----- Skill 相关类型 -----
+
+export interface SkillInfo {
   id: string;
   name: string;
   description: string;
+  category: string;
+  isBuiltin: boolean;
   enabled: boolean;
+  version: string;
+  paramsSchema?: unknown;
+  supportedTypes: string[];
 }
+
+export interface CustomSkillConfig {
+  name: string;
+  description: string;
+  category: string;
+  promptTemplate: string;
+  supportedTypes: string[];
+  paramsSchema?: unknown;
+}
+
+// ----- 模板相关类型 -----
 
 export interface TemplateVariable {
   name: string;
@@ -42,16 +128,6 @@ export interface PromptTemplate {
   content: string;
   category: string;
   variables?: TemplateVariable[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface AppSettings {
-  authorName: string;
-  confirmLevel: ConfirmLevel;
-  language: "zh-CN" | "en-US";
-  dailyTokenBudget: number;
-  monthlyTokenBudget: number;
-  overBudgetAction: "notify" | "pause" | "switch-model";
-  snapshotRetention: "count-50" | "days-30";
+  createdAt: string;
+  updatedAt: string;
 }

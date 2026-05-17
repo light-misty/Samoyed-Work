@@ -2,259 +2,29 @@
  * Tauri 命令调用封装
  * 为每个后端 Tauri 命令提供对应的 TypeScript 异步函数
  * 函数名使用 camelCase，调用 invoke 时使用 snake_case 命令名
+ * 类型定义统一从 types/ 目录导入，确保前后端类型一致
  */
 import { invoke } from "@tauri-apps/api/core";
 
-// ================================================================
-// 类型定义 - 与 Rust 端 serde camelCase 输出一致
-// ================================================================
-
-/** 连接测试结果 */
-export interface ConnectionResult {
-  success: boolean;
-  latencyMs: number;
-  modelInfo?: ModelInfo;
-  errorMessage?: string;
-}
-
-/** 模型信息 */
-export interface ModelInfo {
-  modelName: string;
-  maxTokens: number;
-  supportsStreaming: boolean;
-  supportsToolCall: boolean;
-}
-
-/** Provider 配置（用于添加/更新） */
-export interface ProviderConfig {
-  name: string;
-  providerType: string;
-  apiBase: string;
-  apiKey: string;
-  model: string;
-  extraParams?: Record<string, unknown>;
-}
-
-/** Provider 信息 */
-export interface ProviderInfo {
-  id: string;
-  name: string;
-  providerType: string;
-  apiBase: string;
-  model: string;
-  isDefault: boolean;
-  isAvailable: boolean;
-  createdAt: string;
-}
-
-/** 创建会话参数 */
-export interface CreateSessionParams {
-  title?: string;
-  workspaceId?: string;
-  providerId?: string;
-  templateId?: string;
-}
-
-/** 会话筛选条件 */
-export interface SessionFilter {
-  workspaceId?: string;
-  status?: string;
-  search?: string;
-  limit?: number;
-  offset?: number;
-}
-
-/** 会话信息 */
-export interface Session {
-  id: string;
-  title: string;
-  workspaceId?: string;
-  providerId: string;
-  templateId?: string;
-  createdAt: string;
-  updatedAt: string;
-  status: string;
-}
-
-/** 会话摘要 */
-export interface SessionSummary {
-  id: string;
-  title: string;
-  status: string;
-  messageCount: number;
-  lastMessagePreview?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** 会话详情 */
-export interface SessionDetail {
-  session: Session;
-  messages: Message[];
-  tokenUsage: TokenUsage;
-}
-
-/** 消息 */
-export interface Message {
-  id: string;
-  role: string;
-  content: string;
-  toolCalls?: ToolCall[];
-  createdAt: string;
-}
-
-/** 工具调用 */
-export interface ToolCall {
-  id: string;
-  name: string;
-  arguments: Record<string, unknown>;
-  result?: unknown;
-}
-
-/** Token 用量 */
-export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
-
-/** 工作区信息 */
-export interface WorkspaceInfo {
-  id: string;
-  name: string;
-  path: string;
-  isActive: boolean;
-  fileCount: number;
-  createdAt: string;
-  lastAccessed: string;
-}
-
-/** 文件树节点 */
-export interface FileNode {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size?: number;
-  modified?: string;
-  extension?: string;
-  children?: FileNode[];
-}
-
-/** 搜索选项 */
-export interface SearchOptions {
-  extensions?: string[];
-  maxResults?: number;
-  includeContent?: boolean;
-}
-
-/** 搜索结果 */
-export interface SearchResult {
-  path: string;
-  name: string;
-  extension: string;
-  size: number;
-  modified: string;
-  matchType: string;
-  matchPreview?: string;
-  lineNumber?: number;
-}
-
-/** 文档预览内容 */
-export interface PreviewContent {
-  path: string;
-  fileType: string;
-  content: string;
-  pageCount?: number;
-  sheetNames?: string[];
-  metadata?: DocumentMetadata;
-}
-
-/** 文档元数据 */
-export interface DocumentMetadata {
-  title?: string;
-  author?: string;
-  created?: string;
-  modified?: string;
-  wordCount?: number;
-}
-
-/** 版本信息 */
-export interface VersionInfo {
-  versionId: string;
-  path: string;
-  timestamp: string;
-  operation: string;
-  description: string;
-  size: number;
-  sessionId?: string;
-}
-
-/** Skill 信息 */
-export interface SkillInfo {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  isBuiltin: boolean;
-  isEnabled: boolean;
-  version: string;
-  paramsSchema?: unknown;
-  supportedTypes: string[];
-}
-
-/** 自定义 Skill 配置 */
-export interface CustomSkillConfig {
-  name: string;
-  description: string;
-  category: string;
-  promptTemplate: string;
-  supportedTypes: string[];
-  paramsSchema?: unknown;
-}
-
-/** 应用设置 */
-export interface AppSettings {
-  general: GeneralSettings;
-  tokenBudget: TokenBudget;
-  versionSnapshot: VersionSnapshot;
-  workspace: WorkspaceDefaults;
-  shortcuts: Shortcuts;
-}
-
-/** 通用设置 */
-export interface GeneralSettings {
-  authorName: string;
-  confirmationLevel: string;
-  language: string;
-}
-
-/** Token 预算设置 */
-export interface TokenBudget {
-  dailyLimit: number;
-  monthlyLimit: number;
-  exceedAction: string;
-}
-
-/** 版本快照设置 */
-export interface VersionSnapshot {
-  retentionPolicy: string;
-  maxCount: number;
-  maxDays: number;
-}
-
-/** 工作区默认设置 */
-export interface WorkspaceDefaults {
-  defaultWorkspaceId: string;
-}
-
-/** 快捷键设置 */
-export interface Shortcuts {
-  newSession: string;
-  closeSession: string;
-  sendMessage: string;
-  toggleSidebar: string;
-  quickPrompt: string;
-}
+import type {
+  ConnectionResult,
+  ProviderConfig,
+  ProviderInfo,
+  CreateSessionParams,
+  SessionFilter,
+  Session,
+  SessionSummary,
+  SessionDetail,
+  WorkspaceInfo,
+  FileNode,
+  SearchOptions,
+  SearchResult,
+  PreviewContent,
+  VersionInfo,
+  SkillInfo,
+  CustomSkillConfig,
+  AppSettings,
+} from "../types";
 
 /** 命令错误 */
 export interface CommandError {

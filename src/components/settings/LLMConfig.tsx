@@ -12,8 +12,8 @@ export function LLMConfigTab() {
           <div key={p.id} className="px-3 py-3 border border-border rounded-[var(--radius-md)] mb-2 transition-colors duration-150 hover:border-[#D0D3D9]">
             <div className="flex items-center gap-2 mb-2">
               <span className="font-semibold text-[13px]">{p.name}</span>
-              <span className="text-[10px] font-semibold px-[6px] py-[2px] rounded-[3px] bg-accent-light text-accent uppercase">{p.provider}</span>
-              {p.provider === "openai" && (
+              <span className="text-[10px] font-semibold px-[6px] py-[2px] rounded-[3px] bg-accent-light text-accent uppercase">{p.providerType}</span>
+              {p.isDefault && (
                 <span className="text-[11px] text-success ml-1">默认</span>
               )}
               <div className="ml-auto flex gap-1">
@@ -22,7 +22,7 @@ export function LLMConfigTab() {
               </div>
             </div>
             <div className="font-mono text-[11px] text-text-tertiary">
-              {p.modelName} &nbsp;|&nbsp; {p.baseUrl} &nbsp;|&nbsp; 延迟: {p.latency}
+              {p.model} &nbsp;|&nbsp; {p.apiBase} &nbsp;|&nbsp; {p.isAvailable ? "可用" : "不可用"}
             </div>
           </div>
         ))}
@@ -39,7 +39,7 @@ export function LLMConfigTab() {
             <div key={p.id} className="flex items-center gap-2 py-[6px]">
               <span className="text-accent font-semibold">{i + 1}.</span>
               {p.name}
-              {p.provider === "openai" && (
+              {p.isDefault && (
                 <span className="text-[10px] px-[6px] py-[2px] bg-success-light text-success rounded-[3px]">默认</span>
               )}
             </div>

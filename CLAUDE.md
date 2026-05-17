@@ -12,74 +12,97 @@ DocAgent 是一款 AI 文档处理桌面应用，通过自然语言驱动 Agent 
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| 前端 UI 组件 | 95% | 组件、Store、事件封装全部完成，待与后端联调 |
-| Rust 后端 | 90% | 数据库、配置、LLM、Agent、Skill、Sidecar 集成全部完成 |
-| Python Sidecar | 100% | 所有文档处理器已实现，已与后端集成 |
+| 前端 UI 组件 | 100% | 组件、Store、事件封装、后端调用全部完成 |
+| Rust 后端 | 95% | Agent 引擎、LLM 适配、Skill 系统、Sidecar 集成全部完成，少量管理命令为 stub |
+| Python Sidecar | 95% | 所有文档处理器已实现，部分格式的 convert/modify 受限 |
 | 共享类型 | 10% | 仅定义了 NodeType 和 ExecutionStatus |
 | 设计文档 | 100% | PRD、技术架构、组件设计、数据库设计等齐全 |
 
 ### 各模块详细状态
 
-#### 前端 UI 组件（95% 完成）
+#### 前端 UI 组件（100% 完成）
 
 | 子模块 | 状态 | 说明 |
 |--------|------|------|
-| 布局组件 | 完成 | TopBar、MainLayout、Sidebar、MainArea、InputArea |
+| 布局组件 | 完成 | TopBar（状态指示器硬编码）、MainLayout、Sidebar、MainArea、InputArea |
 | 工作流节点 | 完成 | WorkflowTimeline + 7 种节点组件，支持展开/折叠 |
 | 侧边栏区块 | 完成 | AgentInfo、FileTree、Todo、Token 四个区块 |
-| 设置对话框 | 完成 | SettingsDialog + 5 个标签页（LLM、工作区、Skills、模板、通用） |
-| 预览面板 | 完成 | PreviewOverlay 支持文档预览和差异对比 |
-| 状态管理 | 完成 | 6 个 Zustand Store 全部实现 |
-| 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts） |
-| Tauri 命令封装 | 完成 | 所有命令的 TypeScript 封装（tauri.ts） |
+| 设置对话框 | 完成 | SettingsDialog + 5 个标签页（添加/编辑/删除按钮为 stub，无实际后端操作） |
+| 预览面板 | 完成 | PreviewOverlay 支持文档预览和基础差异对比 |
+| 状态管理 | 完成 | 6 个 Zustand Store 全部实现，已连接后端 Tauri 命令 |
+| 事件监听 | 完成 | 完整的 Agent 事件监听封装（event.ts），9 种 Agent 事件 + 4 种系统事件 |
+| Tauri 命令封装 | 完成 | 全部 22+ 个 Tauri 命令的 TypeScript 封装（tauri.ts） |
+| useAgent Hook | 完成 | 封装 Agent 调用逻辑，自动管理事件监听和状态更新 |
 
-#### Rust 后端（90% 完成）
+#### Rust 后端（95% 完成）
 
 | 子模块 | 状态 | 说明 |
 |--------|------|------|
-| 数据库层 | 完成 | SQLite 封装、5 张表、CRUD 操作全部实现 |
-| 配置管理 | 完成 | LLM 配置、应用设置、工作区配置全部实现 |
-| 模型定义 | 完成 | 所有数据模型已定义 |
-| 事件系统 | 完成 | AgentEmitter 和事件类型全部实现 |
-| LLM 服务 | 完成 | OpenAI 适配器完整实现，支持流式和非流式响应 |
-| Agent 执行器 | 完成 | Tool Calling 循环核心逻辑已实现 |
-| Skill 注册表 | 完成 | 注册表框架 + 9 个内置 Skills 已实现 |
-| Sidecar 集成 | 完成 | DocumentService + SidecarManager 实现与 Python 的通信 |
-| Tauri 命令 | 完成 | 所有核心命令已实现（session、settings、workspace、llm、agent） |
+| 数据库层 | 完成 | SQLite 封装、5 张表（schema_version, sessions, session_messages, version_snapshots, token_usage）、CRUD 全部实现，WAL 模式+外键约束 |
+| 配置管理 | 完成 | LLM 配置、应用设置、工作区配置全部实现，JSON 文件持久化，支持向前兼容合并 |
+| 模型定义 | 完成 | 全部 7 个模型模块（session, message, workspace, document, skill, llm, 含 ChatMessage/ToolDefinition 等） |
+| 事件系统 | 完成 | AgentEmitter 封装全部 10 种事件类型，含发射方法和 payload 类型定义 |
+| LLM 服务 | 完成 | OpenAI 兼容 API 适配器完整实现，支持流式(SSE)和非流式调用，指数退避重试，Default/Fallback 路由 |
+| Agent 执行器 | 完成 | Tool Calling 循环完整实现：思考→LLM 流式调用→采集 tool_calls→执行 Skill→反馈→继续循环，支持停止检查和最大迭代限制 |
+| Skill 注册表 | 完成 | Skill trait + 注册表框架 + 9 个内置 Skills 全部实现（含参数 schema） |
+| Sidecar 集成 | 完成 | SidecarManager（进程管理/超时/自动重启）+ DocumentService（请求/响应路由）与 Python stdin/stdout 通信 |
+| Tauri 命令 | 完成 | 全部 27 个核心命令已注册（session、settings、workspace、llm、agent、skill、document） |
 
-#### Python Sidecar（100% 完成）
+#### Python Sidecar（95% 完成）
 
 | 处理器 | 状态 | 功能 |
 |--------|------|------|
-| Word 处理器 | 完成 | generate、read、modify、convert、analyze |
-| Excel 处理器 | 完成 | generate、read、modify、analyze |
-| PDF 处理器 | 完成 | generate、read、analyze |
-| PPT 处理器 | 完成 | generate、read、modify、analyze |
-| Markdown 处理器 | 完成 | generate、read、modify、analyze |
-| main.py | 完成 | stdin/stdout JSON 协议通信 |
+| Word 处理器 | 完成 | generate、read、modify、convert、analyze 全部实现 |
+| Excel 处理器 | 完成 | generate、read、modify、analyze 实现；convert 暂未实现 |
+| PDF 处理器 | 完成 | generate、read、analyze 实现；modify 和 convert 暂不支持 |
+| PPT 处理器 | 完成 | generate、read、modify、analyze 实现；convert 暂未实现 |
+| Markdown 处理器 | 完成 | generate、read、modify、analyze 实现；convert 暂未实现 |
+| main.py | 完成 | stdin/stdout JSON 协议通信，日志输出到 log/sidecar.log |
+
+### 尚未完成的工作（需在后续迭代中完善）
+
+以下功能已预留接口但尚未完全实现：
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| `agent:confirm` 事件发射 | 未完成 | Emitter 方法已实现，但 executor 中未在风险操作前发射确认事件 |
+| `agent:todo_update` 事件发射 | 未完成 | Emitter 方法已实现，但 executor 中未实现 Todo 列表更新逻辑 |
+| `confirm_operation` 命令 | stub | 仅记录日志，未通过 channel 机制将用户确认结果传递回执行器 |
+| Skill 管理命令持久化 | stub | `toggle_skill`、`add_custom_skill`、`delete_custom_skill` 仅记录日志，无实际配置持久化 |
+| ConfirmNode 联动 | 未完成 | ConfirmNode 的确认/取消按钮未连接 `useAgent.confirmOperation` |
+| 设置对话框管理按钮 | stub | Provider 添加/编辑、工作区添加、自定义 Skill 添加、模板创建等按钮无实际后端调用 |
+| TopBar 状态指示灯 | 硬编码 | 当前显示"未连接"，未对接后端连接状态 |
+| PDF modify/convert | 未实现 | Sidecar PDF 处理器中 modify 和 convert 返回错误 |
+| 其余格式 convert | 未实现 | Excel/PPT/Markdown 处理器的 convert 均返回未实现错误 |
 
 ### 下一步开发重点
 
-1. **优先级高：前后端联调**
-   - 测试事件流（agent:thinking、agent:content 等）
+1. **优先级高：确认/暂停通道**
+   - executor 中在风险操作前发射 `agent:confirm` 事件
+   - 实现 channel 机制使 `confirm_operation` 命令能将结果传回执行器
+   - 联动 ConfirmNode 的确认/取消按钮
+
+2. **优先级高：端到端测试与联调**
+   - 测试完整 Agent 执行流程（思考→工具调用→文档生成/读取）
+   - 测试事件流（agent:thinking、agent:content 等增量事件）
    - 验证数据持久化（会话、消息、Token 统计）
-   - 测试完整的 Agent 执行流程
+   - 测试 Sidecar 通信和文档处理
 
-2. **优先级高：端到端测试**
-   - 测试 LLM 调用和流式响应
-   - 测试 Skill 执行和 Sidecar 通信
-   - 测试文档生成、读取、修改功能
+3. **优先级中：Skill 系统完善**
+   - 实现自定义 Skill 的动态加载与持久化
+   - 实现 `agent:todo_update` 事件在 executor 中的发射逻辑
+   - 完善设置对话框的管理按钮（Provider/工作区/Skill/模板 CRUD）
 
-3. **优先级中：LLM 适配器扩展**
+4. **优先级中：LLM 适配器扩展**
    - 实现 Claude 适配器（Anthropic API）
    - 实现 Gemini 适配器（Google AI API）
 
-4. **优先级中：Skill 系统完善**
-   - 实现自定义 Skill 的动态加载
-   - 添加更多文档操作 Skills
+5. **优先级低：Sidecar convert 功能完善**
+   - 实现 Excel/PPT/Markdown 的格式转换
+   - 实现 PDF 的 modify 和 convert
 
-5. **优先级低：共享类型自动化**
-   - 引入 ts-rs 或类似工具
+6. **优先级低：共享类型自动化**
+   - 引入 ts-rs 或类似工具自动生成 TypeScript 类型
    - 确保前后端类型同步
 
 ## 常用命令
@@ -111,7 +134,7 @@ src/                      # React 前端
 │   ├── session/          # HistoryPanel
 │   └── common/           # Button, Icon
 ├── stores/               # 6 个 Zustand Store
-├── types/                # 类型定义（workflow、session、workspace、settings）
+├── types/                # 类型定义（workflow、session、workspace、settings、document）
 ├── utils/                # fileIcons, format, logger
 ├── services/             # event.ts（事件封装）、tauri.ts（命令封装）
 ├── hooks/                # useAgent Hook
@@ -125,7 +148,7 @@ src-tauri/                # Tauri Rust 后端
 │   │   ├── settings.rs   # 应用设置
 │   │   ├── workspace.rs  # 工作区管理、文件树、搜索
 │   │   ├── llm.rs        # LLM Provider 管理
-│   │   ├── skill.rs      # Skill 管理
+│   │   ├── skill.rs      # Skill 管理（list_skills 实现，其余仅记录日志）
 │   │   └── document.rs   # 文档操作
 │   ├── services/         # 服务层
 │   │   ├── agent/        # Agent 执行器（executor.rs, context.rs）
@@ -134,24 +157,26 @@ src-tauri/                # Tauri Rust 后端
 │   │   └── document/     # 文档服务（mod.rs - SidecarManager, DocumentService）
 │   ├── db/               # SQLite 数据库层（init.rs, session_repo.rs, message_repo.rs 等）
 │   ├── config/           # 配置管理（llm_config.rs, app_settings.rs, workspace_config.rs）
-│   ├── models/           # 数据模型定义
+│   ├── models/           # 数据模型定义（session, message, workspace, document, skill, llm）
 │   ├── events/           # 事件系统（emitter.rs, types.rs）
 │   ├── utils/            # 工具函数（logger.rs）
-│   ├── errors.rs         # 统一错误类型
-│   └── lib.rs            # 应用入口和状态管理
+│   ├── errors.rs         # 统一错误类型，7 个错误域 50+ 命名常量
+│   └── lib.rs            # 应用入口、状态管理、27 个命令注册
+├── capabilities/         # Tauri 权限配置
+├── gen/                  # 自动生成的 schema 文件
 └── resources/            # 资源文件
 
 sidecar/                  # Python Sidecar
 ├── main.py               # 入口，stdin/stdout JSON 协议通信
 ├── requirements.txt      # Python 依赖
 └── handlers/             # 文档处理器
-    ├── word_handler.py   # Word 文档处理
-    ├── excel_handler.py  # Excel 文档处理
-    ├── pdf_handler.py    # PDF 文档处理
-    ├── ppt_handler.py    # PPT 文档处理
-    └── markdown_handler.py # Markdown 文档处理
+    ├── word_handler.py   # Word 文档处理（完整实现含 convert）
+    ├── excel_handler.py  # Excel 文档处理（convert 暂未实现）
+    ├── pdf_handler.py    # PDF 文档处理（modify/convert 暂不支持）
+    ├── ppt_handler.py    # PPT 文档处理（convert 暂未实现）
+    └── markdown_handler.py # Markdown 文档处理（convert 暂未实现）
 
-shared/types.ts           # 前后端共享类型
+shared/types.ts           # 前后端共享类型（极少维护）
 docs/                     # 设计文档
 ├── PRD_DocAgent.md       # 产品需求文档
 ├── tech_architecture.md  # 技术架构文档
@@ -170,24 +195,27 @@ docs/                     # 设计文档
 - **事件命名**：`namespace:action` 格式（如 `agent:thinking`, `session:updated`）
 
 ### Agent 执行流程
-前端已预留完整的流式事件处理协议，后端 Agent 执行器核心逻辑已实现：
-1. `agent:thinking` — LLM 思考链增量
-2. `agent:content` — LLM 回复增量
-3. `agent:tool_call` — Tool 调用开始
-4. `agent:tool_result` — Tool 执行结果
-5. `agent:confirm` — 需要用户确认
-6. `agent:todo_update` — Todo 列表更新
-7. `agent:done` — 执行完成
-8. `agent:error` / `agent:stopped` — 错误/中断
+前后端完整的流式事件处理协议已实现，后端执行器核心流程如下：
+
+1. `agent:thinking` — LLM 思考链增量（executor 中已发射）
+2. `agent:content` — LLM 回复内容增量，is_streaming 标识流式状态（executor 中已发射）
+3. `agent:tool_call` — Tool 调用开始（executor 中已发射）
+4. `agent:tool_result` — Tool 执行结果（executor 中已发射）
+5. `agent:confirm` — 需要用户确认（emitter 方法存在，executor 中**未发射**）
+6. `agent:todo_update` — Todo 列表更新（emitter 方法存在，executor 中**未发射**）
+7. `agent:done` — 执行完成（executor 中已发射，含 total_steps、total_tokens、duration_ms）
+8. `agent:error` / `agent:stopped` — 错误/中断（executor 中已发射）
+
+Agent 生命周期由 `useAgent` Hook 管理，自动注册/清理事件监听，状态更新到 `useWorkflowStore`。
 
 ### 状态管理
 6 个 Zustand Store 职责分离：
-- `useWorkflowStore` — 工作流节点管理
-- `useSessionStore` — 会话管理
-- `useWorkspaceStore` — 工作区管理
+- `useWorkflowStore` — 工作流节点管理（addNode/updateNode/removeNode/clearNodes）
+- `useSessionStore` — 会话管理（创建/列表/删除/更新标题）
+- `useWorkspaceStore` — 工作区管理（添加/切换/删除/列表）
 - `useSettingsStore` — 设置、LLM、Skill、模板管理
-- `useFileTreeStore` — 文件树管理
-- `useTokenStore` — Token 统计
+- `useFileTreeStore` — 文件树管理（从后端加载/搜索过滤）
+- `useTokenStore` — Token 统计（会话/日/月累计和预算管理）
 
 ### Python Sidecar
 文档处理通过独立 Python 进程执行，与 Rust 后端通过 stdin/stdout JSON 协议通信。
@@ -211,11 +239,11 @@ docs/                     # 设计文档
 
 ### 数据库设计
 SQLite 数据库包含 5 张表：
-- `workspaces` — 工作区配置
+- `schema_version` — 数据库版本元数据
 - `sessions` — 会话记录
-- `messages` — 消息历史
-- `documents` — 文档元数据
-- `skills` — Skill 注册表
+- `session_messages` — 消息历史
+- `version_snapshots` — 文档版本快照
+- `token_usage` — Token 统计
 
 数据库特性：
 - WAL 模式提升并发性能
@@ -229,12 +257,12 @@ SQLite 数据库包含 5 张表：
 |-------|------|----------|
 | `generate_document` | 生成新文档 | Sidecar |
 | `read_document` | 读取文档内容 | Sidecar |
-| `modify_document` | 修改已有文档 | Sidecar |
-| `delete_document` | 删除文档 | Rust 原生 |
-| `convert_format` | 格式转换 | Sidecar |
-| `search_documents` | 搜索文档 | Rust 原生 |
+| `modify_document` | 修改已有文档 | Sidecar（不支持 PDF） |
+| `delete_document` | 删除文档 | Rust 原生（支持备份） |
+| `convert_format` | 格式转换 | Sidecar（部分格式未实现） |
+| `search_documents` | 搜索文档 | Rust 原生（文件名/内容搜索） |
 | `analyze_document` | 分析文档 | Sidecar |
-| `list_workspace` | 列出工作区文件 | Rust 原生 |
+| `list_workspace` | 列出工作区文件 | Rust 原生（深度控制/扩展名过滤） |
 | `batch_process` | 批量处理 | Sidecar |
 
 ## 开发注意事项
@@ -243,6 +271,6 @@ SQLite 数据库包含 5 张表：
 - **状态管理**：避免直接修改 store 中的数组/对象，使用不可变更新
 - **组件优化**：工作流节点使用 React.memo，长列表使用虚拟滚动，搜索输入使用防抖
 - **提交规范**：遵循 Conventional Commits 格式（feat/fix/docs/refactor/chore 等），使用中文描述
-- **错误处理**：Rust 后端使用统一的 `CommandError` 类型，前端通过事件接收错误信息
-- **日志规范**：Rust 后端使用 `log` crate，Python Sidecar 使用 `logging` 模块，均输出到文件和 stderr
-- **Sidecar 调试**：Sidecar 日志输出到 `log/sidecar.log`，可通过环境变量 `DOCAGENT_PYTHON` 指定 Python 路径
+- **错误处理**：Rust 后端使用统一的 `CommandError` 类型（7 个错误域 50+ 命名常量），前端通过事件接收错误信息
+- **日志规范**：Rust 后端使用 `log` crate 输出到文件和终端，Python Sidecar 使用 `logging` 模块输出到 `log/sidecar.log`，均支持按级别控制
+- **Sidecar 调试**：可通过环境变量 `DOCAGENT_PYTHON` 指定 Python 路径

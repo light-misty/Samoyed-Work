@@ -1,19 +1,19 @@
 import { useFileTreeStore } from "../../stores/useFileTreeStore";
 import { Icon } from "../common/Icon";
 import { SidebarSection } from "../layout/Sidebar";
-import type { FileTreeNode } from "../../types";
+import type { FileNode } from "../../types";
 
-function FileTreeItem({ node, depth = 0 }: { node: FileTreeNode; depth?: number }) {
+function FileTreeItem({ node, depth = 0 }: { node: FileNode; depth?: number }) {
   const { expandedKeys, selectedKey, toggleNode, selectNode } = useFileTreeStore();
-  const isExpanded = expandedKeys.has(node.key);
-  const isSelected = selectedKey === node.key;
+  const isExpanded = expandedKeys.has(node.path);
+  const isSelected = selectedKey === node.path;
 
-  if (node.type === "directory") {
+  if (node.isDir) {
     return (
       <div>
         <div
           className="ft-item"
-          onClick={() => toggleNode(node.key)}
+          onClick={() => toggleNode(node.path)}
         >
           <span className="ft-icon">
             <Icon name="folder" size={16} />
@@ -23,7 +23,7 @@ function FileTreeItem({ node, depth = 0 }: { node: FileTreeNode; depth?: number 
         {isExpanded && node.children && (
           <div className="ft-indent">
             {node.children.map((child) => (
-              <FileTreeItem key={child.key} node={child} depth={depth + 1} />
+              <FileTreeItem key={child.path} node={child} depth={depth + 1} />
             ))}
           </div>
         )}
@@ -34,7 +34,7 @@ function FileTreeItem({ node, depth = 0 }: { node: FileTreeNode; depth?: number 
   return (
     <div
       className={`ft-item ${isSelected ? "active" : ""}`}
-      onClick={() => selectNode(node.key)}
+      onClick={() => selectNode(node.path)}
     >
       <span className="ft-icon">
         {node.extension === "docx" ? <Icon name="doc" size={16} /> :
@@ -71,7 +71,7 @@ export function FileTreeSection() {
       ) : (
         <div className="file-tree">
           {treeData.map((node) => (
-            <FileTreeItem key={node.key} node={node} />
+            <FileTreeItem key={node.path} node={node} />
           ))}
         </div>
       )}

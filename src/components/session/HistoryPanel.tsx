@@ -55,7 +55,7 @@ export function HistoryPanel({ open, onClose }: HistoryPanelProps) {
                 </div>
                 <div className="text-[11px] text-text-tertiary flex gap-2">
                   <span>{new Date(s.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })}</span>
-                  <span>{s.totalTokens.toLocaleString()} tokens</span>
+                  <span>{s.status}</span>
                 </div>
               </div>
             ))

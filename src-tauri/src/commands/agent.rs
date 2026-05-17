@@ -45,6 +45,7 @@ pub async fn start_agent(
     let llm_router = Arc::clone(&state.llm_router);
     let skill_registry = Arc::clone(&state.skill_registry);
     let active_agents = Arc::clone(&state.active_agents);
+    let db = Arc::clone(&state.db);
 
     let max_iterations = options
         .as_ref()
@@ -84,6 +85,7 @@ pub async fn start_agent(
             max_iterations,
             &workspace_path,
             should_stop,
+            &db,
         ).await;
 
         if let Err(e) = &result {
@@ -168,6 +170,7 @@ async fn run_agent(
     max_iterations: u32,
     workspace_path: &str,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
+    db: &Arc<crate::db::Database>,
 ) -> Result<(), CommandError> {
     log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
 
@@ -197,8 +200,53 @@ async fn run_agent(
     .with_max_iterations(max_iterations);
 
     match executor.execute(&mut ctx).await {
-        Ok(summary) => {
-            log::info!("Agent 执行成功: session_id={}, 摘要长度={}", session_id, summary.len());
+        Ok(result) => {
+            log::info!("Agent 执行成功: session_id={}, 摘要长度={}", session_id, result.summary.len());
+
+            // 持久化消息到数据库
+            if let Ok(conn) = db.conn() {
+                for msg in &ctx.messages {
+                    let msg_id = format!("msg_{}", uuid::Uuid::new_v4());
+                    let (tool_name, tool_args, tool_result) = if let Some(tool_calls) = &msg.tool_calls {
+                        if let Some(tc) = tool_calls.first() {
+                            (Some(tc.name.as_str()), Some(tc.arguments.as_str()), None as Option<&str>)
+                        } else {
+                            (None, None, None)
+                        }
+                    } else if msg.role == "tool" {
+                        (None, None, Some(msg.content.as_str()))
+                    } else {
+                        (None, None, None)
+                    };
+
+                    if let Err(e) = crate::db::message_repo::create_message(
+                        &conn,
+                        &msg_id,
+                        session_id,
+                        &msg.role,
+                        &msg.content,
+                        tool_name,
+                        tool_args,
+                        tool_result,
+                        None,
+                        0,
+                        0,
+                    ) {
+                        log::warn!("消息持久化失败: session_id={}, 错误: {}", session_id, e.message);
+                    }
+                }
+                log::info!("消息持久化完成: session_id={}, 消息数={}", session_id, ctx.messages.len());
+            }
+
+            // 发射 Token 用量更新事件
+            emitter.emit_token_update(crate::events::types::TokenUpdatePayload {
+                session_id: session_id.to_string(),
+                provider_id: String::new(),
+                prompt_tokens: result.total_input_tokens,
+                completion_tokens: result.total_output_tokens,
+                total_cost: 0.0,
+            }).ok();
+
             Ok(())
         }
         Err(e) => {

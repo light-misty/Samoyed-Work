@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import type { FileTreeNode } from "../types";
+import type { FileNode } from "../types";
+import * as tauriCmd from "../services/tauri";
 
 interface FileTreeState {
-  treeData: FileTreeNode[];
+  treeData: FileNode[];
   expandedKeys: Set<string>;
   selectedKey: string | null;
   searchKeyword: string;
@@ -11,7 +12,7 @@ interface FileTreeState {
   toggleNode: (key: string) => void;
   selectNode: (key: string) => void;
   setSearchKeyword: (keyword: string) => void;
-  loadTree: (workspacePath: string) => Promise<void>;
+  loadTree: (workspaceId: string) => Promise<void>;
 }
 
 export const useFileTreeStore = create<FileTreeState>((set) => ({
@@ -21,6 +22,7 @@ export const useFileTreeStore = create<FileTreeState>((set) => ({
   searchKeyword: "",
   isLoading: false,
 
+  // 展开/折叠节点
   toggleNode: (key) => {
     set((state) => {
       const next = new Set(state.expandedKeys);
@@ -30,17 +32,25 @@ export const useFileTreeStore = create<FileTreeState>((set) => ({
     });
   },
 
+  // 选中节点
   selectNode: (key) => {
     set({ selectedKey: key });
   },
 
+  // 设置搜索关键词
   setSearchKeyword: (keyword) => {
     set({ searchKeyword: keyword });
   },
 
-  loadTree: async (_workspacePath: string) => {
+  // 从后端加载文件树
+  loadTree: async (workspaceId) => {
     set({ isLoading: true });
-    // TODO: 从 Tauri 后端加载文件树
-    set({ isLoading: false });
+    try {
+      const treeData = await tauriCmd.getFileTree(workspaceId);
+      set({ treeData, isLoading: false });
+    } catch (error) {
+      console.error("[FileTreeStore] 加载文件树失败:", error);
+      set({ isLoading: false });
+    }
   },
 }));
