@@ -1,0 +1,221 @@
+use std::sync::Arc;
+use std::time::Instant;
+
+use serde_json::json;
+use tauri::Runtime;
+
+use crate::errors::CommandError;
+use crate::events::emitter::AgentEmitter;
+use crate::events::types::*;
+use crate::models::llm::LlmToolCall;
+use crate::services::llm::router::LlmRouter;
+use crate::services::skill::registry::SkillRegistry;
+use super::context::AgentContext;
+
+/// Agent 执行器
+/// 实现 Tool Calling 循环：调用 LLM -> 检查 tool_calls -> 执行 Skill -> 反馈结果 -> 继续循环
+pub struct AgentExecutor<R: Runtime> {
+    /// LLM 路由器
+    router: Arc<LlmRouter>,
+    /// Skill 注册表
+    registry: Arc<SkillRegistry>,
+    /// 事件发射器
+    emitter: AgentEmitter<R>,
+    /// 最大迭代次数
+    max_iterations: u32,
+}
+
+impl<R: Runtime> AgentExecutor<R> {
+    pub fn new(
+        router: Arc<LlmRouter>,
+        registry: Arc<SkillRegistry>,
+        emitter: AgentEmitter<R>,
+    ) -> Self {
+        Self {
+            router,
+            registry,
+            emitter,
+            max_iterations: 20,
+        }
+    }
+
+    /// 执行 Agent 循环
+    pub async fn execute(&self, ctx: &mut AgentContext) -> Result<String, CommandError> {
+        let start_time = Instant::now();
+        let mut total_steps = 0u32;
+        let total_input_tokens = 0u64;
+        let total_output_tokens = 0u64;
+
+        // 获取工具定义（转为 ToolDefinition 格式）
+        let tool_defs_json = self.registry.tool_definitions();
+        let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
+            .iter()
+            .filter_map(|v| {
+                let func = v.get("function")?;
+                Some(crate::models::llm::ToolDefinition {
+                    name: func["name"].as_str()?.to_string(),
+                    description: func["description"].as_str()?.to_string(),
+                    parameters: func["parameters"].clone(),
+                })
+            })
+            .collect();
+
+        for _iteration in 0..self.max_iterations {
+            total_steps += 1;
+
+            // 调用 LLM 流式接口
+            let messages = ctx.get_messages();
+            let mut stream_rx = match self.router.chat_stream(&messages, &tools).await {
+                Ok(rx) => rx,
+                Err(e) => {
+                    self.emitter.emit_error(ErrorPayload {
+                        session_id: ctx.session_id.clone(),
+                        code: e.code,
+                        message: e.message.clone(),
+                        recoverable: true,
+                    }).ok();
+                    return Err(e);
+                }
+            };
+
+            // 收集流式响应
+            let mut assistant_content = String::new();
+            let mut collected_tool_calls: Vec<LlmToolCall> = Vec::new();
+            let mut message_id = String::new();
+
+            while let Some(chunk_result) = stream_rx.recv().await {
+                match chunk_result {
+                    Ok(chunk) => {
+                        message_id = chunk.id.clone();
+                        for choice in chunk.choices {
+                            // 处理内容增量
+                            if let Some(content) = &choice.delta.content {
+                                assistant_content.push_str(content);
+                                self.emitter.emit_content(ContentPayload {
+                                    session_id: ctx.session_id.clone(),
+                                    message_id: message_id.clone(),
+                                    content: content.clone(),
+                                    is_streaming: true,
+                                }).ok();
+                            }
+
+                            // 收集 tool_calls 增量
+                            if let Some(delta_tool_calls) = choice.delta.tool_calls {
+                                for tc in delta_tool_calls {
+                                    if let Some(existing) = collected_tool_calls.iter_mut()
+                                        .find(|c| c.id == tc.id && !tc.id.is_empty())
+                                    {
+                                        existing.name.push_str(&tc.name);
+                                        existing.arguments.push_str(&tc.arguments);
+                                    } else {
+                                        collected_tool_calls.push(tc);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // stream_done 是正常结束标记
+                        if e.message == "stream_done" {
+                            break;
+                        }
+                        log::warn!("流式响应错误: {}", e.message);
+                        break;
+                    }
+                }
+            }
+
+            // 发送内容结束事件
+            if !assistant_content.is_empty() {
+                self.emitter.emit_content(ContentPayload {
+                    session_id: ctx.session_id.clone(),
+                    message_id: message_id.clone(),
+                    content: String::new(),
+                    is_streaming: false,
+                }).ok();
+            }
+
+            // 检查是否有 tool_calls
+            let has_tool_calls = !collected_tool_calls.is_empty();
+
+            if has_tool_calls {
+                // 将助手消息（含 tool_calls）添加到上下文
+                let tool_calls_for_message = if collected_tool_calls.is_empty() {
+                    None
+                } else {
+                    Some(collected_tool_calls.clone())
+                };
+                ctx.add_assistant_message(&assistant_content, tool_calls_for_message);
+
+                // 执行每个 tool_call
+                for tool_call in &collected_tool_calls {
+                    // 发射 tool_call 事件
+                    self.emitter.emit_tool_call(ToolCallPayload {
+                        session_id: ctx.session_id.clone(),
+                        call_id: tool_call.id.clone(),
+                        tool_name: tool_call.name.clone(),
+                        arguments: serde_json::from_str(&tool_call.arguments)
+                            .unwrap_or(json!({})),
+                    }).ok();
+
+                    let tool_start = Instant::now();
+
+                    // 执行 Skill
+                    let params = serde_json::from_str(&tool_call.arguments)
+                        .unwrap_or(json!({}));
+                    let result = self.registry.execute(&tool_call.name, params).await;
+
+                    let duration_ms = tool_start.elapsed().as_millis() as u64;
+
+                    // 发射 tool_result 事件
+                    self.emitter.emit_tool_result(ToolResultPayload {
+                        session_id: ctx.session_id.clone(),
+                        call_id: tool_call.id.clone(),
+                        success: result.success,
+                        result: result.output.clone().unwrap_or(json!(null)),
+                        error: result.error.clone(),
+                        duration_ms,
+                    }).ok();
+
+                    // 将工具结果添加到上下文
+                    let result_content = if result.success {
+                        serde_json::to_string(&result.output).unwrap_or_default()
+                    } else {
+                        format!("错误: {}", result.error.unwrap_or_default())
+                    };
+                    ctx.add_tool_result(&tool_call.id, &result_content);
+                }
+
+                // 继续循环，让 LLM 处理工具结果
+                continue;
+            }
+
+            // 没有 tool_calls，表示 LLM 已完成回复
+            if !assistant_content.is_empty() {
+                ctx.add_assistant_message(&assistant_content, None);
+            }
+
+            let total_duration_ms = start_time.elapsed().as_millis() as u64;
+            self.emitter.emit_done(DonePayload {
+                session_id: ctx.session_id.clone(),
+                summary: assistant_content.clone(),
+                total_steps,
+                total_tokens: total_input_tokens + total_output_tokens,
+                duration_ms: total_duration_ms,
+            }).ok();
+
+            return Ok(assistant_content);
+        }
+
+        // 超过最大迭代次数
+        let error = CommandError::agent(2001, format!("Agent 执行超过最大迭代次数 ({})", self.max_iterations));
+        self.emitter.emit_error(ErrorPayload {
+            session_id: ctx.session_id.clone(),
+            code: error.code,
+            message: error.message.clone(),
+            recoverable: false,
+        }).ok();
+
+        Err(error)
+    }
+}
