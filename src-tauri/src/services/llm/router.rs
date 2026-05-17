@@ -56,6 +56,8 @@ impl LlmRouter {
             providers.insert(provider.id.clone(), adapter);
         }
 
+        log::info!("LLM 路由器初始化完成, 加载 {} 个 Provider, 默认 Provider: {:?}, Fallback 顺序: {:?}", providers.len(), default_id, config.fallback_order);
+
         Self {
             providers,
             default_id,
@@ -81,17 +83,25 @@ impl LlmRouter {
         let provider = self.get_default_provider()
             .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))?;
 
+        log::info!("非流式对话, 使用默认 Provider: {}", self.default_id.as_deref().unwrap_or("首个可用"));
+
         match provider.chat(messages, tools).await {
-            Ok(response) => Ok(response),
+            Ok(response) => {
+                log::info!("非流式对话完成, Provider: {}", self.default_id.as_deref().unwrap_or("首个可用"));
+                Ok(response)
+            }
             Err(e) => {
-                // 尝试 Fallback
+                log::warn!("默认 Provider 请求失败, 尝试 Fallback, 错误: {}", e.message);
                 for fallback_id in &self.fallback_order {
                     if let Some(fb_provider) = self.providers.get(fallback_id) {
+                        log::info!("尝试 Fallback Provider: {}", fallback_id);
                         if let Ok(response) = fb_provider.chat(messages, tools).await {
+                            log::info!("Fallback 成功, Provider: {}", fallback_id);
                             return Ok(response);
                         }
                     }
                 }
+                log::error!("所有 Provider 均失败, 无可用 Fallback");
                 Err(e)
             }
         }
@@ -105,14 +115,17 @@ impl LlmRouter {
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
         let provider = self.get_default_provider()
             .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))?;
+        log::info!("流式对话, 使用默认 Provider: {}", self.default_id.as_deref().unwrap_or("首个可用"));
         provider.chat_stream(messages, tools).await
     }
 
     /// 测试指定 Provider 的连接
     pub async fn test_connection(&self, provider_id: &str) -> Result<ConnectionResult, CommandError> {
+        log::info!("测试 Provider 连接, provider_id={}", provider_id);
         let provider = self.providers.get(provider_id)
             .ok_or_else(|| CommandError::llm(1002, format!("Provider 不存在: {}", provider_id)))?;
         let mut result = provider.test_connection().await?;
+        log::info!("Provider 连接测试完成, provider_id={}, 成功={}", provider_id, result.success);
         result.provider_id = Some(provider_id.to_string());
         Ok(result)
     }

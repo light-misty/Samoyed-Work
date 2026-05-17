@@ -88,10 +88,12 @@ fn config_path(data_dir: &Path) -> std::path::PathBuf {
 pub fn load_llm_config(data_dir: &Path) -> Result<LlmConfig, CommandError> {
     let path = config_path(data_dir);
     if !path.exists() {
+        log::info!("LLM 配置文件不存在，返回默认值: {}", path.display());
         return Ok(LlmConfig::default());
     }
     let content = std::fs::read_to_string(&path)?;
     let config: LlmConfig = serde_json::from_str(&content)?;
+    log::info!("已加载 LLM 配置 (providers数量: {})", config.providers.len());
     Ok(config)
 }
 
@@ -103,6 +105,7 @@ pub fn save_llm_config(data_dir: &Path, config: &LlmConfig) -> Result<(), Comman
     }
     let content = serde_json::to_string_pretty(config)?;
     std::fs::write(&path, content)?;
+    log::info!("已保存 LLM 配置 (providers数量: {})", config.providers.len());
     Ok(())
 }
 
@@ -115,6 +118,7 @@ pub fn get_default_provider(config: &LlmConfig) -> Option<&LlmProvider> {
 pub fn add_provider(config: &mut LlmConfig, provider: LlmProvider) -> Result<(), CommandError> {
     // 检查 ID 是否重复
     if config.providers.iter().any(|p| p.id == provider.id) {
+        log::warn!("添加 Provider 失败，ID 已存在: {}", provider.id);
         return Err(CommandError::config(
             CONFIG_PROVIDER_NOT_FOUND,
             format!("Provider ID '{}' 已存在", provider.id),
@@ -132,9 +136,11 @@ pub fn add_provider(config: &mut LlmConfig, provider: LlmProvider) -> Result<(),
     let mut provider = provider;
     if config.providers.is_empty() {
         provider.is_default = true;
+        log::debug!("首个 Provider，自动设为默认: {}", provider.id);
     }
 
     config.providers.push(provider);
+    log::info!("已添加 Provider，当前总数: {}", config.providers.len());
     Ok(())
 }
 
@@ -149,6 +155,7 @@ pub fn update_provider(
         .iter()
         .position(|p| p.id == id)
         .ok_or_else(|| {
+            log::warn!("更新 Provider 失败，不存在: {}", id);
             CommandError::config(
                 CONFIG_PROVIDER_NOT_FOUND,
                 format!("Provider '{}' 不存在", id),
@@ -163,6 +170,7 @@ pub fn update_provider(
     }
 
     config.providers[index] = provider;
+    log::info!("已更新 Provider: {}", id);
     Ok(())
 }
 
@@ -173,6 +181,7 @@ pub fn delete_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandEr
         .iter()
         .position(|p| p.id == id)
         .ok_or_else(|| {
+            log::warn!("删除 Provider 失败，不存在: {}", id);
             CommandError::config(
                 CONFIG_PROVIDER_NOT_FOUND,
                 format!("Provider '{}' 不存在", id),
@@ -186,12 +195,14 @@ pub fn delete_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandEr
     if was_default {
         if let Some(first) = config.providers.first_mut() {
             first.is_default = true;
+            log::debug!("已删除默认 Provider，新默认: {}", first.id);
         }
     }
 
     // 从回退顺序中移除
     config.fallback_order.retain(|fid| fid != id);
 
+    log::info!("已删除 Provider: {}，剩余数量: {}", id, config.providers.len());
     Ok(())
 }
 
@@ -199,6 +210,7 @@ pub fn delete_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandEr
 pub fn set_default_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandError> {
     let exists = config.providers.iter().any(|p| p.id == id);
     if !exists {
+        log::warn!("设置默认 Provider 失败，不存在: {}", id);
         return Err(CommandError::config(
             CONFIG_DEFAULT_PROVIDER_REQUIRED,
             format!("Provider '{}' 不存在", id),
@@ -208,5 +220,6 @@ pub fn set_default_provider(config: &mut LlmConfig, id: &str) -> Result<(), Comm
     for p in &mut config.providers {
         p.is_default = p.id == id;
     }
+    log::info!("已设置默认 Provider: {}", id);
     Ok(())
 }

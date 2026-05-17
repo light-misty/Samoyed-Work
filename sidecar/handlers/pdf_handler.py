@@ -3,11 +3,14 @@
 """
 
 import os
+import logging
 from typing import Any
 
 
 class PdfHandler:
     """PDF (.pdf) 文档处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def generate(self, params: dict) -> dict:
         """生成 PDF 文档
@@ -24,7 +27,10 @@ class PdfHandler:
         author = params.get("author", "")
 
         if not path:
+            self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        self.logger.info("generate: 开始生成 PDF 文档, path=%s", path)
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -104,21 +110,26 @@ class PdfHandler:
 
             doc.build(elements)
 
+            self.logger.info("generate: PDF 文档已生成, path=%s", path)
             return {
                 "path": path,
                 "message": f"PDF 文档已生成: {path}",
             }
 
         except ImportError:
+            self.logger.error("generate: reportlab 未安装，无法生成 PDF")
             return {"error": "reportlab 未安装，无法生成 PDF"}
 
     def read(self, params: dict) -> dict:
         """读取 PDF 文档（提取文本）"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("read: 开始读取 PDF 文档, path=%s", path)
 
         try:
             import fitz  # PyMuPDF
@@ -130,6 +141,7 @@ class PdfHandler:
                     "text": page.get_text(),
                 })
             doc.close()
+            self.logger.info("read: PDF 文档读取完成, path=%s, 页数=%d", path, len(pages))
             return {
                 "pages": pages,
                 "page_count": len(pages),
@@ -139,11 +151,13 @@ class PdfHandler:
             try:
                 from pdfminer.high_level import extract_text
                 text = extract_text(path)
+                self.logger.info("read: PDF 文档读取完成(pdfminer), path=%s", path)
                 return {
                     "text": text,
                     "page_count": text.count("\f") + 1,
                 }
             except ImportError:
+                self.logger.error("read: 未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）")
                 return {
                     "text": "",
                     "error": "未安装 PDF 读取库（PyMuPDF 或 pdfminer.six）",
@@ -152,19 +166,24 @@ class PdfHandler:
 
     def modify(self, params: dict) -> dict:
         """修改 PDF 文档（PDF 不易直接修改，建议转换为其他格式后修改）"""
+        self.logger.error("modify: PDF 格式不支持直接修改")
         return {"error": "PDF 格式不支持直接修改，建议转换为 Word 后修改"}
 
     def convert(self, params: dict) -> dict:
         """格式转换"""
+        self.logger.error("convert: PDF 格式转换暂未实现")
         return {"error": "PDF 格式转换暂未实现"}
 
     def analyze(self, params: dict) -> dict:
         """分析 PDF 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("analyze: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("analyze: 开始分析 PDF 文档, path=%s", path)
 
         try:
             import fitz
@@ -175,8 +194,10 @@ class PdfHandler:
                 "metadata": doc.metadata,
             }
             doc.close()
+            self.logger.info("analyze: PDF 文档分析完成, path=%s, 页数=%d", path, info["page_count"])
             return info
         except ImportError:
+            self.logger.error("analyze: 未安装 PyMuPDF")
             return {
                 "file_size": os.path.getsize(path),
                 "page_count": 0,

@@ -4,11 +4,14 @@
 
 import os
 import re
+import logging
 from typing import Any
 
 
 class MarkdownHandler:
     """Markdown (.md) 文档处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def generate(self, params: dict) -> dict:
         """生成 Markdown 文档
@@ -23,7 +26,10 @@ class MarkdownHandler:
         content = params.get("content", "")
 
         if not path:
+            self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        self.logger.info("generate: 开始生成 Markdown 文档, path=%s", path)
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -61,6 +67,7 @@ class MarkdownHandler:
         with open(path, "w", encoding="utf-8") as f:
             f.write(md_content)
 
+        self.logger.info("generate: Markdown 文档已生成, path=%s", path)
         return {
             "path": path,
             "message": f"Markdown 文档已生成: {path}",
@@ -70,9 +77,12 @@ class MarkdownHandler:
         """读取 Markdown 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("read: 开始读取 Markdown 文档, path=%s", path)
 
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -84,6 +94,7 @@ class MarkdownHandler:
             text = match.group(2).strip()
             headings.append({"level": level, "text": text})
 
+        self.logger.info("read: Markdown 文档读取完成, path=%s, 标题数=%d", path, len(headings))
         return {
             "content": content,
             "headings": headings,
@@ -97,9 +108,12 @@ class MarkdownHandler:
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
+            self.logger.error("modify: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("modify: 开始修改 Markdown 文档, path=%s, 操作数=%d", path, len(operations))
 
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -142,6 +156,7 @@ class MarkdownHandler:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
+        self.logger.info("modify: Markdown 文档修改完成, path=%s, 修改数=%d", path, modified_count)
         return {
             "path": path,
             "modified_count": modified_count,
@@ -150,15 +165,19 @@ class MarkdownHandler:
 
     def convert(self, params: dict) -> dict:
         """格式转换"""
+        self.logger.error("convert: Markdown 格式转换暂未实现")
         return {"error": "Markdown 格式转换暂未实现"}
 
     def analyze(self, params: dict) -> dict:
         """分析 Markdown 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("analyze: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("analyze: 开始分析 Markdown 文档, path=%s", path)
 
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -169,6 +188,7 @@ class MarkdownHandler:
         links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", content)
         images = re.findall(r"!\[([^\]]*)\]\(([^)]+)\)", content)
 
+        self.logger.info("analyze: Markdown 文档分析完成, path=%s, 标题数=%d, 代码块数=%d", path, len(headings), len(code_blocks))
         return {
             "file_size": os.path.getsize(path),
             "char_count": len(content),

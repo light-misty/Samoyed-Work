@@ -38,10 +38,12 @@ fn config_path(data_dir: &Path) -> std::path::PathBuf {
 pub fn load_workspaces(data_dir: &Path) -> Result<WorkspacesConfig, CommandError> {
     let path = config_path(data_dir);
     if !path.exists() {
+        log::info!("工作区配置文件不存在，返回默认值: {}", path.display());
         return Ok(WorkspacesConfig::default());
     }
     let content = std::fs::read_to_string(&path)?;
     let config: WorkspacesConfig = serde_json::from_str(&content)?;
+    log::info!("已加载工作区配置 (工作区数量: {})", config.workspaces.len());
     Ok(config)
 }
 
@@ -53,6 +55,7 @@ pub fn save_workspaces(data_dir: &Path, config: &WorkspacesConfig) -> Result<(),
     }
     let content = serde_json::to_string_pretty(config)?;
     std::fs::write(&path, content)?;
+    log::info!("已保存工作区配置 (工作区数量: {})", config.workspaces.len());
     Ok(())
 }
 
@@ -74,6 +77,7 @@ pub fn add_workspace(
     };
 
     config.workspaces.push(entry.clone());
+    log::info!("已添加工作区: id={}, name={}, path={}", id, name, path);
     Ok(entry)
 }
 
@@ -84,6 +88,7 @@ pub fn remove_workspace(config: &mut WorkspacesConfig, id: &str) -> Result<(), C
         .iter()
         .position(|w| w.id == id)
         .ok_or_else(|| {
+            log::warn!("移除工作区失败，不存在: {}", id);
             CommandError::fs(
                 FS_PATH_NOT_FOUND,
                 format!("工作区 '{}' 不存在", id),
@@ -91,5 +96,6 @@ pub fn remove_workspace(config: &mut WorkspacesConfig, id: &str) -> Result<(), C
         })?;
 
     config.workspaces.remove(index);
+    log::info!("已移除工作区: id={}，剩余数量: {}", id, config.workspaces.len());
     Ok(())
 }

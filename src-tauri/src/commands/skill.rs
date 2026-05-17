@@ -7,7 +7,8 @@ use crate::AppState;
 /// 列出所有 Skill
 #[tauri::command]
 pub async fn list_skills(_state: State<'_, AppState>) -> Result<Vec<SkillInfo>, CommandError> {
-    Ok(vec![
+    log::info!("list_skills: 查询所有 Skill");
+    let skills = vec![
         SkillInfo {
             id: "doc-create".to_string(),
             name: "文档创建".to_string(),
@@ -66,7 +67,9 @@ pub async fn list_skills(_state: State<'_, AppState>) -> Result<Vec<SkillInfo>, 
             params_schema: None,
             supported_types: vec!["xlsx".to_string(), "csv".to_string()],
         },
-    ])
+    ];
+    log::info!("list_skills: 查询完成, 共 {} 个 Skill", skills.len());
+    Ok(skills)
 }
 
 /// 切换 Skill 启用/禁用状态

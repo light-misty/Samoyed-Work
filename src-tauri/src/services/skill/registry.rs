@@ -49,7 +49,10 @@ impl SkillRegistry {
 
     /// 注册技能
     pub fn register(&mut self, skill: Box<dyn Skill>) {
-        self.skills.insert(skill.skill_name().to_string(), skill);
+        let name = skill.skill_name().to_string();
+        log::info!("注册技能: {}", name);
+        self.skills.insert(name.clone(), skill);
+        log::debug!("技能注册完成: {}, 当前注册总数: {}", name, self.skills.len());
     }
 
     /// 获取技能
@@ -59,20 +62,35 @@ impl SkillRegistry {
 
     /// 执行技能
     pub async fn execute(&self, name: &str, params: Value) -> SkillResult {
+        log::info!("执行技能: {}", name);
         match self.skills.get(name) {
-            Some(skill) => skill.execute(params).await,
-            None => SkillResult {
-                success: false,
-                output: None,
-                error: Some(format!("技能不存在: {}", name)),
-                duration_ms: 0,
-            },
+            Some(skill) => {
+                log::debug!("找到技能: {}, 开始执行", name);
+                let result = skill.execute(params).await;
+                if result.success {
+                    log::info!("技能执行成功: {}, 耗时: {}ms", name, result.duration_ms);
+                } else {
+                    log::error!("技能执行失败: {}, 错误: {}", name, result.error.as_deref().unwrap_or("未知错误"));
+                }
+                result
+            }
+            None => {
+                log::error!("技能不存在: {}", name);
+                SkillResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("技能不存在: {}", name)),
+                    duration_ms: 0,
+                }
+            }
         }
     }
 
     /// 生成 OpenAI function calling 格式的工具定义
     pub fn tool_definitions(&self) -> Vec<Value> {
-        self.skills.values().map(|skill| {
+        let count = self.skills.len();
+        log::debug!("生成工具定义, 技能数量: {}", count);
+        let definitions = self.skills.values().map(|skill| {
             json!({
                 "type": "function",
                 "function": {
@@ -81,7 +99,9 @@ impl SkillRegistry {
                     "parameters": skill.parameters(),
                 }
             })
-        }).collect()
+        }).collect();
+        log::debug!("工具定义生成完成, 数量: {}", count);
+        definitions
     }
 
     /// 列出所有技能信息

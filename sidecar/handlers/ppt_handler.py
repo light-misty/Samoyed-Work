@@ -3,6 +3,7 @@
 """
 
 import os
+import logging
 from typing import Any
 
 from pptx import Presentation
@@ -12,6 +13,8 @@ from pptx.enum.text import PP_ALIGN
 
 class PptHandler:
     """PowerPoint (.pptx) 文档处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def generate(self, params: dict) -> dict:
         """生成 PPT 文档
@@ -24,7 +27,10 @@ class PptHandler:
         path = params.get("path", "")
         slides = params.get("slides", [])
         if not path:
+            self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        self.logger.info("generate: 开始生成 PPT 文档, path=%s, 幻灯片数=%d", path, len(slides))
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -57,6 +63,7 @@ class PptHandler:
                         break
 
         prs.save(path)
+        self.logger.info("generate: PPT 文档已生成, path=%s, 幻灯片数=%d", path, len(slides))
         return {
             "path": path,
             "slide_count": len(slides),
@@ -67,9 +74,12 @@ class PptHandler:
         """读取 PPT 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("read: 开始读取 PPT 文档, path=%s", path)
 
         prs = Presentation(path)
         slides = []
@@ -90,6 +100,7 @@ class PptHandler:
                 slide_info["shapes"].append(shape_info)
             slides.append(slide_info)
 
+        self.logger.info("read: PPT 文档读取完成, path=%s, 幻灯片数=%d", path, len(slides))
         return {
             "slides": slides,
             "slide_count": len(slides),
@@ -100,9 +111,12 @@ class PptHandler:
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
+            self.logger.error("modify: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("modify: 开始修改 PPT 文档, path=%s, 操作数=%d", path, len(operations))
 
         prs = Presentation(path)
         modified_count = 0
@@ -133,6 +147,7 @@ class PptHandler:
                                         modified_count += 1
 
         prs.save(path)
+        self.logger.info("modify: PPT 文档修改完成, path=%s, 修改数=%d", path, modified_count)
         return {
             "path": path,
             "modified_count": modified_count,
@@ -141,17 +156,22 @@ class PptHandler:
 
     def convert(self, params: dict) -> dict:
         """格式转换"""
+        self.logger.error("convert: PPT 格式转换暂未实现")
         return {"error": "PPT 格式转换暂未实现"}
 
     def analyze(self, params: dict) -> dict:
         """分析 PPT 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("analyze: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
 
+        self.logger.info("analyze: 开始分析 PPT 文档, path=%s", path)
+
         prs = Presentation(path)
+        self.logger.info("analyze: PPT 文档分析完成, path=%s, 幻灯片数=%d", path, len(prs.slides))
         return {
             "file_size": os.path.getsize(path),
             "slide_count": len(prs.slides),

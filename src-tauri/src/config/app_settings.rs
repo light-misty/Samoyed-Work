@@ -214,10 +214,12 @@ fn config_path(data_dir: &Path) -> std::path::PathBuf {
 pub fn load_app_settings(data_dir: &Path) -> Result<AppSettings, CommandError> {
     let path = config_path(data_dir);
     if !path.exists() {
+        log::info!("应用设置文件不存在，返回默认值: {}", path.display());
         return Ok(AppSettings::default());
     }
     let content = std::fs::read_to_string(&path)?;
     let settings: AppSettings = serde_json::from_str(&content)?;
+    log::info!("已加载应用设置: {}", path.display());
     // 合并默认值以确保新增字段有值
     Ok(merge_with_defaults(&settings, &AppSettings::default()))
 }
@@ -230,6 +232,7 @@ pub fn save_app_settings(data_dir: &Path, settings: &AppSettings) -> Result<(), 
     }
     let content = serde_json::to_string_pretty(settings)?;
     std::fs::write(&path, content)?;
+    log::info!("已保存应用设置: {}", path.display());
     Ok(())
 }
 

@@ -9,10 +9,11 @@ use crate::AppState;
 /// 列出所有工作区
 #[tauri::command]
 pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo>, CommandError> {
+    log::info!("list_workspaces: 查询所有工作区");
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
-    Ok(ws_config
+    let result: Vec<WorkspaceInfo> = ws_config
         .workspaces
         .iter()
         .map(|w| {
@@ -28,7 +29,10 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<Workspace
                 last_accessed: w.created_at.clone(),
             }
         })
-        .collect())
+        .collect();
+
+    log::info!("list_workspaces: 查询完成, 共 {} 个工作区", result.len());
+    Ok(result)
 }
 
 /// 添加工作区
@@ -38,14 +42,17 @@ pub async fn add_workspace(
     name: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<WorkspaceInfo, CommandError> {
+    log::info!("add_workspace: 添加工作区, path={}", path);
     let dir_path = PathBuf::from(&path);
     if !dir_path.exists() {
+        log::error!("add_workspace: 路径不存在: {}", path);
         return Err(CommandError::fs(
             FS_PATH_NOT_FOUND,
             format!("路径不存在: {}", path),
         ));
     }
     if !dir_path.is_dir() {
+        log::error!("add_workspace: 路径不是目录: {}", path);
         return Err(CommandError::fs(
             FS_NOT_A_DIRECTORY,
             format!("路径不是目录: {}", path),
@@ -66,6 +73,7 @@ pub async fn add_workspace(
     cfg_manager.save_workspaces(&ws_config)?;
 
     let file_count = count_files_in_dir(&dir_path).unwrap_or(0);
+    log::info!("add_workspace: 工作区添加成功, name={}, id={}", display_name, entry.id);
     Ok(WorkspaceInfo {
         id: entry.id,
         name: entry.name,
@@ -83,10 +91,12 @@ pub async fn remove_workspace(
     workspace_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("remove_workspace: 移除工作区, id={}", workspace_id);
     let cfg_manager = state.config.lock().await;
     let mut ws_config = cfg_manager.load_workspaces()?;
     cfg_manager.remove_workspace(&mut ws_config, &workspace_id)?;
     cfg_manager.save_workspaces(&ws_config)?;
+    log::info!("remove_workspace: 工作区移除成功, id={}", workspace_id);
     Ok(())
 }
 
@@ -96,11 +106,13 @@ pub async fn set_active_workspace(
     workspace_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("set_active_workspace: 设置活动工作区, id={}", workspace_id);
     let cfg_manager = state.config.lock().await;
     let ws_config = cfg_manager.load_workspaces()?;
 
     let exists = ws_config.workspaces.iter().any(|w| w.id == workspace_id);
     if !exists {
+        log::error!("set_active_workspace: 工作区 '{}' 不存在", workspace_id);
         return Err(CommandError::fs(
             FS_PATH_NOT_FOUND,
             format!("工作区 '{}' 不存在", workspace_id),
@@ -112,6 +124,7 @@ pub async fn set_active_workspace(
     settings.workspace.default_workspace_id = workspace_id;
     cfg_manager.save_app_settings(&settings)?;
 
+    log::info!("set_active_workspace: 活动工作区设置成功, id={}", settings.workspace.default_workspace_id);
     Ok(())
 }
 
@@ -123,6 +136,7 @@ pub async fn get_file_tree(
     depth: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<Vec<FileNode>, CommandError> {
+    log::info!("get_file_tree: 获取文件树, workspace_id={}, path={:?}, depth={:?}", workspace_id, path, depth);
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -131,6 +145,7 @@ pub async fn get_file_tree(
         .iter()
         .find(|w| w.id == workspace_id)
         .ok_or_else(|| {
+            log::error!("get_file_tree: 工作区 '{}' 不存在", workspace_id);
             CommandError::fs(
                 FS_PATH_NOT_FOUND,
                 format!("工作区 '{}' 不存在", workspace_id),
@@ -144,7 +159,9 @@ pub async fn get_file_tree(
     };
 
     let max_depth = depth.unwrap_or(3);
-    Ok(build_file_tree(&base, &root, max_depth, 0))
+    let result = build_file_tree(&base, &root, max_depth, 0);
+    log::info!("get_file_tree: 文件树构建完成, 节点数={}", result.len());
+    Ok(result)
 }
 
 /// 搜索文件，目前只做文件名搜索
@@ -155,6 +172,7 @@ pub async fn search_files(
     options: Option<SearchOptions>,
     state: State<'_, AppState>,
 ) -> Result<Vec<SearchResult>, CommandError> {
+    log::info!("search_files: 搜索文件, workspace_id={}, query={}", workspace_id, query);
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -163,6 +181,7 @@ pub async fn search_files(
         .iter()
         .find(|w| w.id == workspace_id)
         .ok_or_else(|| {
+            log::error!("search_files: 工作区 '{}' 不存在", workspace_id);
             CommandError::fs(
                 FS_PATH_NOT_FOUND,
                 format!("工作区 '{}' 不存在", workspace_id),
@@ -179,12 +198,17 @@ pub async fn search_files(
         .and_then(|o| o.extensions.clone())
         .unwrap_or_default();
 
+    if !extensions.is_empty() {
+        log::debug!("search_files: 扩展名过滤={:?}", extensions);
+    }
+
     let root = PathBuf::from(&workspace.path);
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
 
     search_files_recursive(&root, &root, &query_lower, &extensions, max_results, &mut results);
 
+    log::info!("search_files: 搜索完成, 结果数={}", results.len());
     Ok(results)
 }
 

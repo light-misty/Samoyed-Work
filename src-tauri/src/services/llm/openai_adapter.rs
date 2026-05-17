@@ -107,6 +107,7 @@ impl OpenAiAdapter {
         for attempt in 0..=max_retries {
             if attempt > 0 {
                 let delay = Duration::from_millis(500 * 2u64.pow(attempt as u32 - 1));
+                log::warn!("请求重试, model={}, 第{}次重试, 延迟{}ms", self.model, attempt, delay.as_millis());
                 tokio::time::sleep(delay).await;
             }
 
@@ -130,16 +131,19 @@ impl OpenAiAdapter {
                     let error_body = response.text().await.unwrap_or_default();
 
                     if status.as_u16() == 401 {
+                        log::error!("认证失败(401), model={}", self.model);
                         return Err(CommandError::llm(1001, format!("认证失败: {}", error_body)));
                     }
                     if status.as_u16() == 429 {
                         if attempt < max_retries {
+                            log::warn!("请求频率受限(429), model={}, 准备重试", self.model);
                             last_error = Some(CommandError::llm(1003, "请求频率受限，正在重试".to_string()));
                             continue;
                         }
                         return Err(CommandError::llm(1003, format!("请求频率受限: {}", error_body)));
                     }
                     if status.as_u16() == 404 {
+                        log::error!("模型不存在(404), model={}", self.model);
                         return Err(CommandError::llm(1004, format!("模型不存在: {}", error_body)));
                     }
 
@@ -148,6 +152,7 @@ impl OpenAiAdapter {
                 Err(e) => {
                     if e.is_timeout() {
                         if attempt < max_retries {
+                            log::warn!("请求超时, model={}, 准备重试", self.model);
                             last_error = Some(CommandError::llm(1005, "请求超时，正在重试".to_string()));
                             continue;
                         }
@@ -158,7 +163,9 @@ impl OpenAiAdapter {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| CommandError::llm(1000, "未知错误".to_string())))
+        let err = last_error.unwrap_or_else(|| CommandError::llm(1000, "未知错误".to_string()));
+        log::error!("请求最终失败, model={}, 重试耗尽, 错误: {}", self.model, err.message);
+        Err(err)
     }
 
     /// 解析非流式响应
@@ -228,12 +235,15 @@ impl LlmProvider for OpenAiAdapter {
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
     ) -> Result<ChatResponse, CommandError> {
+        log::info!("发送非流式请求, model={}", self.model);
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
         let body = self.build_request_body(messages, tools, false);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
+            log::error!("解析非流式响应失败, model={}, 错误: {}", self.model, e);
             CommandError::llm(1000, format!("解析响应失败: {}", e))
         })?;
+        log::info!("非流式请求完成, model={}", self.model);
         self.parse_response(value)
     }
 
@@ -242,11 +252,13 @@ impl LlmProvider for OpenAiAdapter {
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
+        log::info!("发送流式请求, model={}", self.model);
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
         let body = self.build_request_body(messages, tools, true);
         let response = self.send_with_retry(&url, &body).await?;
 
         let (tx, rx) = mpsc::channel(100);
+        let model_name = self.model.clone();
 
         tokio::spawn(async move {
             let mut stream = response.bytes_stream();
@@ -311,6 +323,7 @@ impl LlmProvider for OpenAiAdapter {
                                             }
                                         }
                                         Err(e) => {
+                                            log::error!("解析 SSE 数据失败, model={}, 错误: {}", model_name, e);
                                             let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
                                         }
                                     }
@@ -319,6 +332,7 @@ impl LlmProvider for OpenAiAdapter {
                         }
                     }
                     Err(e) => {
+                        log::error!("流读取错误, model={}, 错误: {}", model_name, e);
                         let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
                         return;
                     }
@@ -330,6 +344,7 @@ impl LlmProvider for OpenAiAdapter {
     }
 
     async fn test_connection(&self) -> Result<ConnectionResult, CommandError> {
+        log::info!("测试连接, model={}", self.model);
         let start = std::time::Instant::now();
         let test_messages = vec![ChatMessage {
             role: "user".to_string(),
@@ -345,6 +360,7 @@ impl LlmProvider for OpenAiAdapter {
                 let latency_ms = start.elapsed().as_millis() as u64;
                 let value: Value = response.json().await.unwrap_or_default();
                 let model_name = value["model"].as_str().unwrap_or(&self.model).to_string();
+                log::info!("连接测试成功, model={}, 延迟={}ms", model_name, latency_ms);
                 Ok(ConnectionResult {
                     success: true,
                     provider_id: None,
@@ -355,15 +371,18 @@ impl LlmProvider for OpenAiAdapter {
                     error: None,
                 })
             }
-            Err(e) => Ok(ConnectionResult {
-                success: false,
-                provider_id: None,
-                latency_ms: start.elapsed().as_millis() as u64,
-                model_info: None,
-                model: None,
-                error_message: Some(e.message.clone()),
-                error: Some(e.message.clone()),
-            }),
+            Err(e) => {
+                log::error!("连接测试失败, model={}, 错误: {}", self.model, e.message);
+                Ok(ConnectionResult {
+                    success: false,
+                    provider_id: None,
+                    latency_ms: start.elapsed().as_millis() as u64,
+                    model_info: None,
+                    model: None,
+                    error_message: Some(e.message.clone()),
+                    error: Some(e.message.clone()),
+                })
+            }
         }
     }
 }

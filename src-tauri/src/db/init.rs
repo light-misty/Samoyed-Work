@@ -3,9 +3,13 @@ use crate::errors::CommandError;
 
 /// 执行数据库初始化：建表、创建索引、插入版本记录
 pub fn initialize_database(conn: &Connection) -> Result<(), CommandError> {
+    log::info!("开始初始化数据库结构");
+
     create_tables(conn)?;
     create_indexes(conn)?;
     insert_initial_version(conn)?;
+
+    log::info!("数据库结构初始化完成");
     Ok(())
 }
 
@@ -79,6 +83,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );"
     )?;
 
+    log::info!("数据表创建完成");
     Ok(())
 }
 
@@ -119,6 +124,8 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
         CREATE INDEX IF NOT EXISTS idx_token_usage_provider_model
             ON token_usage (llm_provider, llm_model);"
     )?;
+
+    log::info!("索引创建完成");
     Ok(())
 }
 
@@ -135,6 +142,9 @@ fn insert_initial_version(conn: &Connection) -> Result<(), CommandError> {
             "INSERT INTO schema_version (version, description) VALUES (?1, ?2)",
             rusqlite::params![1, "初始建表：sessions, session_messages, version_snapshots, token_usage"],
         )?;
+        log::info!("已插入初始版本记录 (version=1)");
+    } else {
+        log::debug!("版本记录已存在 (count={})，跳过插入", count);
     }
 
     Ok(())

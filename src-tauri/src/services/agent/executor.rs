@@ -46,7 +46,8 @@ impl<R: Runtime> AgentExecutor<R> {
         let total_input_tokens = 0u64;
         let total_output_tokens = 0u64;
 
-        // 获取工具定义（转为 ToolDefinition 格式）
+        log::info!("Agent 开始执行, session_id={}", ctx.session_id);
+
         let tool_defs_json = self.registry.tool_definitions();
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
@@ -60,14 +61,16 @@ impl<R: Runtime> AgentExecutor<R> {
             })
             .collect();
 
-        for _iteration in 0..self.max_iterations {
+        for iteration in 0..self.max_iterations {
             total_steps += 1;
+            log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
-            // 调用 LLM 流式接口
             let messages = ctx.get_messages();
+            log::debug!("调用 LLM 流式接口, session_id={}, 消息数={}", ctx.session_id, messages.len());
             let mut stream_rx = match self.router.chat_stream(&messages, &tools).await {
                 Ok(rx) => rx,
                 Err(e) => {
+                    log::error!("LLM 流式调用失败, session_id={}, 错误: {}", ctx.session_id, e.message);
                     self.emitter.emit_error(ErrorPayload {
                         session_id: ctx.session_id.clone(),
                         code: e.code,
@@ -137,6 +140,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
             // 检查是否有 tool_calls
             let has_tool_calls = !collected_tool_calls.is_empty();
+            log::debug!("LLM 响应解析完成, session_id={}, tool_calls数={}, 内容长度={}", ctx.session_id, collected_tool_calls.len(), assistant_content.len());
 
             if has_tool_calls {
                 // 将助手消息（含 tool_calls）添加到上下文
@@ -149,7 +153,8 @@ impl<R: Runtime> AgentExecutor<R> {
 
                 // 执行每个 tool_call
                 for tool_call in &collected_tool_calls {
-                    // 发射 tool_call 事件
+                    log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);
+
                     self.emitter.emit_tool_call(ToolCallPayload {
                         session_id: ctx.session_id.clone(),
                         call_id: tool_call.id.clone(),
@@ -166,8 +171,8 @@ impl<R: Runtime> AgentExecutor<R> {
                     let result = self.registry.execute(&tool_call.name, params).await;
 
                     let duration_ms = tool_start.elapsed().as_millis() as u64;
+                    log::debug!("Tool 执行完成, session_id={}, tool={}, 成功={}, 耗时={}ms", ctx.session_id, tool_call.name, result.success, duration_ms);
 
-                    // 发射 tool_result 事件
                     self.emitter.emit_tool_result(ToolResultPayload {
                         session_id: ctx.session_id.clone(),
                         call_id: tool_call.id.clone(),
@@ -196,6 +201,7 @@ impl<R: Runtime> AgentExecutor<R> {
             }
 
             let total_duration_ms = start_time.elapsed().as_millis() as u64;
+            log::info!("Agent 执行完成, session_id={}, 总步骤={}, 总耗时={}ms", ctx.session_id, total_steps, total_duration_ms);
             self.emitter.emit_done(DonePayload {
                 session_id: ctx.session_id.clone(),
                 summary: assistant_content.clone(),
@@ -209,6 +215,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
         // 超过最大迭代次数
         let error = CommandError::agent(2001, format!("Agent 执行超过最大迭代次数 ({})", self.max_iterations));
+        log::error!("Agent 执行超过最大迭代次数, session_id={}, max_iterations={}", ctx.session_id, self.max_iterations);
         self.emitter.emit_error(ErrorPayload {
             session_id: ctx.session_id.clone(),
             code: error.code,

@@ -6,6 +6,7 @@ use super::registry::Skill;
 
 /// 注册所有内置技能
 pub fn register_builtin_skills(registry: &mut super::registry::SkillRegistry) {
+    log::info!("开始注册内置技能");
     registry.register(Box::new(GenerateDocumentSkill));
     registry.register(Box::new(ReadDocumentSkill));
     registry.register(Box::new(ModifyDocumentSkill));
@@ -15,6 +16,7 @@ pub fn register_builtin_skills(registry: &mut super::registry::SkillRegistry) {
     registry.register(Box::new(AnalyzeDocumentSkill));
     registry.register(Box::new(ListWorkspaceSkill));
     registry.register(Box::new(BatchProcessSkill));
+    log::info!("内置技能注册完成, 共注册 9 个技能");
 }
 
 /// 生成文档技能
@@ -58,6 +60,7 @@ impl Skill for GenerateDocumentSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行生成文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档生成功能待接入 Sidecar"})),
@@ -96,6 +99,7 @@ impl Skill for ReadDocumentSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行读取文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档读取功能待接入 Sidecar"})),
@@ -143,6 +147,7 @@ impl Skill for ModifyDocumentSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行修改文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档修改功能待接入 Sidecar"})),
@@ -178,6 +183,7 @@ impl Skill for DeleteDocumentSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行删除文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档删除功能待接入 Sidecar"})),
@@ -220,6 +226,7 @@ impl Skill for ConvertFormatSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行格式转换技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "格式转换功能待接入 Sidecar"})),
@@ -265,6 +272,7 @@ impl Skill for SearchDocumentsSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行搜索文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档搜索功能待接入 Sidecar"})),
@@ -298,6 +306,7 @@ impl Skill for AnalyzeDocumentSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行分析文档技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "文档分析功能待接入 Sidecar"})),
@@ -337,6 +346,7 @@ impl Skill for ListWorkspaceSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行列出工作区技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "工作区列表功能待接入 Sidecar"})),
@@ -377,6 +387,7 @@ impl Skill for BatchProcessSkill {
         })
     }
     async fn execute(&self, _params: Value) -> SkillResult {
+        log::debug!("执行批量处理技能 (占位实现)");
         SkillResult {
             success: true,
             output: Some(json!({"placeholder": true, "message": "批量处理功能待接入 Sidecar"})),

@@ -46,10 +46,10 @@ pub fn run() {
 
             app.manage(state);
 
-            // 初始化日志
-            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-                .format_timestamp_millis()
-                .init();
+            // 初始化日志系统（日志输出到项目根目录 log/ 下，每次启动覆盖）
+            let log_dir = std::path::Path::new("log");
+            crate::utils::logger::init(log_dir)
+                .expect("日志系统初始化失败");
 
             log::info!("DocAgent 应用初始化完成");
 

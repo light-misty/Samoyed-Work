@@ -14,6 +14,7 @@ pub async fn preview_document(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<PreviewContent, CommandError> {
+    log::info!("preview_document: 预览文档, workspace_id={}, path={}", workspace_id, path);
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -22,6 +23,7 @@ pub async fn preview_document(
         .iter()
         .find(|w| w.id == workspace_id)
         .ok_or_else(|| {
+            log::error!("preview_document: 工作区 '{}' 不存在", workspace_id);
             CommandError::fs(
                 crate::errors::FS_PATH_NOT_FOUND,
                 format!("工作区 '{}' 不存在", workspace_id),
@@ -30,6 +32,7 @@ pub async fn preview_document(
 
     let file_path = PathBuf::from(&workspace.path).join(&path);
     if !file_path.exists() {
+        log::error!("preview_document: 文件不存在: {}", path);
         return Err(CommandError::doc(
             DOC_FILE_NOT_FOUND,
             format!("文件不存在: {}", path),
@@ -49,12 +52,15 @@ pub async fn preview_document(
         "md" | "markdown" => "md",
         "txt" => "txt",
         _ => {
+            log::warn!("preview_document: 不支持的文件格式: .{}", extension);
             return Err(CommandError::doc(
                 DOC_FORMAT_UNSUPPORTED,
                 format!("不支持的文件格式: .{}", extension),
             ))
         }
     };
+
+    log::debug!("preview_document: 文件类型={}", file_type);
 
     // 对于文本类文件直接读取内容
     let content = match file_type {
@@ -66,6 +72,7 @@ pub async fn preview_document(
         ),
     };
 
+    log::info!("preview_document: 预览完成, file_type={}", file_type);
     Ok(PreviewContent {
         path: path.clone(),
         file_type: file_type.to_string(),
@@ -83,9 +90,12 @@ pub async fn get_document_versions(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<VersionInfo>, CommandError> {
+    log::info!("get_document_versions: 查询版本历史, workspace_id={}, path={}", workspace_id, path);
     let conn = state.db.conn()?;
 
-    Ok(snapshot_repo::list_snapshots(&conn, Some(&workspace_id), Some(&path)))
+    let versions = snapshot_repo::list_snapshots(&conn, Some(&workspace_id), Some(&path));
+    log::info!("get_document_versions: 查询完成, 版本数={}", versions.len());
+    Ok(versions)
 }
 
 /// 回滚到指定版本
@@ -96,6 +106,7 @@ pub async fn rollback_version(
     version_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("rollback_version: 回滚版本, workspace_id={}, path={}, version_id={}", workspace_id, path, version_id);
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -104,6 +115,7 @@ pub async fn rollback_version(
         .iter()
         .find(|w| w.id == workspace_id)
         .ok_or_else(|| {
+            log::error!("rollback_version: 工作区 '{}' 不存在", workspace_id);
             CommandError::fs(
                 crate::errors::FS_PATH_NOT_FOUND,
                 format!("工作区 '{}' 不存在", workspace_id),
@@ -118,6 +130,7 @@ pub async fn rollback_version(
         .iter()
         .find(|s| s.version_id == version_id)
         .ok_or_else(|| {
+            log::error!("rollback_version: 版本 '{}' 不存在", version_id);
             CommandError::doc(
                 DOC_VERSION_NOT_FOUND,
                 format!("版本 '{}' 不存在", version_id),
@@ -126,6 +139,7 @@ pub async fn rollback_version(
 
     let snapshot_path = PathBuf::from(&snapshot.path);
     if !snapshot_path.exists() {
+        log::error!("rollback_version: 快照文件不存在: {}", snapshot.path);
         return Err(CommandError::doc(
             DOC_FILE_NOT_FOUND,
             format!("快照文件不存在: {}", snapshot.path),
@@ -151,5 +165,6 @@ pub async fn rollback_version(
         "rollback",
     )?;
 
+    log::info!("rollback_version: 回滚成功, version_id={}, rollback_id={}", version_id, rollback_id);
     Ok(())
 }

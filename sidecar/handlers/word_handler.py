@@ -3,6 +3,7 @@
 """
 
 import os
+import logging
 from typing import Any
 
 from docx import Document
@@ -13,6 +14,8 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 
 class WordHandler:
     """Word (.docx) 文档处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def generate(self, params: dict) -> dict:
         """生成 Word 文档
@@ -30,7 +33,10 @@ class WordHandler:
         author = params.get("author", "")
 
         if not path:
+            self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        self.logger.info("generate: 开始生成 Word 文档, path=%s", path)
 
         # 确保输出目录存在
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -59,6 +65,7 @@ class WordHandler:
                 self._add_content_block(doc, item)
 
         doc.save(path)
+        self.logger.info("generate: Word 文档已生成, path=%s", path)
         return {
             "path": path,
             "message": f"Word 文档已生成: {path}",
@@ -73,9 +80,12 @@ class WordHandler:
         """
         path = params.get("path", "")
         if not path:
+            self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("read: 开始读取 Word 文档, path=%s", path)
 
         doc = Document(path)
 
@@ -105,6 +115,7 @@ class WordHandler:
             "modified": str(doc.core_properties.modified) if doc.core_properties.modified else "",
         }
 
+        self.logger.info("read: Word 文档读取完成, path=%s, 段落数=%d, 表格数=%d", path, len(paragraphs), len(tables))
         return {
             "paragraphs": paragraphs,
             "tables": tables,
@@ -126,9 +137,12 @@ class WordHandler:
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
+            self.logger.error("modify: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("modify: 开始修改 Word 文档, path=%s, 操作数=%d", path, len(operations))
 
         doc = Document(path)
         modified_count = 0
@@ -178,6 +192,7 @@ class WordHandler:
                 modified_count += 1
 
         doc.save(path)
+        self.logger.info("modify: Word 文档修改完成, path=%s, 修改数=%d", path, modified_count)
         return {
             "path": path,
             "modified_count": modified_count,
@@ -196,9 +211,12 @@ class WordHandler:
         output_path = params.get("output_path", "")
         target_format = params.get("format", "md")
         if not path:
+            self.logger.error("convert: 缺少源文件路径")
             return {"error": "缺少源文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("convert: 开始格式转换, path=%s, format=%s", path, target_format)
 
         doc = Document(path)
 
@@ -240,6 +258,7 @@ class WordHandler:
             content = "\n".join(para.text for para in doc.paragraphs)
 
         else:
+            self.logger.error("convert: 不支持的目标格式: %s", target_format)
             return {"error": f"不支持的目标格式: {target_format}"}
 
         # 写入输出文件
@@ -247,6 +266,7 @@ class WordHandler:
             os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(content)
+            self.logger.info("convert: 格式转换完成, output_path=%s, format=%s", output_path, target_format)
             return {
                 "path": output_path,
                 "format": target_format,
@@ -266,9 +286,12 @@ class WordHandler:
         """
         path = params.get("path", "")
         if not path:
+            self.logger.error("analyze: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("analyze: 开始分析 Word 文档, path=%s", path)
 
         doc = Document(path)
 
@@ -292,6 +315,7 @@ class WordHandler:
                         level = 0
                 headings.append({"level": level, "text": para.text})
 
+        self.logger.info("analyze: Word 文档分析完成, path=%s, 段落数=%d, 标题数=%d", path, len(doc.paragraphs), heading_count)
         return {
             "file_size": os.path.getsize(path),
             "paragraph_count": len(doc.paragraphs),

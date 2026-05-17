@@ -3,6 +3,7 @@
 """
 
 import os
+import logging
 from typing import Any
 
 from openpyxl import Workbook, load_workbook
@@ -12,6 +13,8 @@ from openpyxl.utils import get_column_letter
 
 class ExcelHandler:
     """Excel (.xlsx) 文档处理器"""
+
+    logger = logging.getLogger(__name__)
 
     def generate(self, params: dict) -> dict:
         """生成 Excel 文档
@@ -24,7 +27,10 @@ class ExcelHandler:
         path = params.get("path", "")
         sheets = params.get("sheets", [])
         if not path:
+            self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        self.logger.info("generate: 开始生成 Excel 文档, path=%s, 工作表数=%d", path, len(sheets))
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
@@ -64,6 +70,7 @@ class ExcelHandler:
                 ws.column_dimensions[col_letter].width = min(max_length + 2, 50)
 
         wb.save(path)
+        self.logger.info("generate: Excel 文档已生成, path=%s, 工作表数=%d", path, len(sheets))
         return {
             "path": path,
             "sheet_count": len(sheets),
@@ -82,9 +89,12 @@ class ExcelHandler:
         sheet_name = params.get("sheet", None)
         read_range = params.get("range", None)
         if not path:
+            self.logger.error("read: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("read: 开始读取 Excel 文档, path=%s", path)
 
         wb = load_workbook(path, data_only=True)
         result = {"sheets": {}}
@@ -115,6 +125,7 @@ class ExcelHandler:
             }
 
         result["sheet_names"] = wb.sheetnames
+        self.logger.info("read: Excel 文档读取完成, path=%s, 工作表数=%d", path, len(result["sheets"]))
         return result
 
     def modify(self, params: dict) -> dict:
@@ -127,9 +138,12 @@ class ExcelHandler:
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
+            self.logger.error("modify: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("modify: 开始修改 Excel 文档, path=%s, 操作数=%d", path, len(operations))
 
         wb = load_workbook(path)
         modified_count = 0
@@ -174,6 +188,7 @@ class ExcelHandler:
                     modified_count += 1
 
         wb.save(path)
+        self.logger.info("modify: Excel 文档修改完成, path=%s, 修改数=%d", path, modified_count)
         return {
             "path": path,
             "modified_count": modified_count,
@@ -182,15 +197,19 @@ class ExcelHandler:
 
     def convert(self, params: dict) -> dict:
         """格式转换"""
+        self.logger.error("convert: Excel 格式转换暂未实现")
         return {"error": "Excel 格式转换暂未实现"}
 
     def analyze(self, params: dict) -> dict:
         """分析 Excel 文档"""
         path = params.get("path", "")
         if not path:
+            self.logger.error("analyze: 缺少文件路径")
             return {"error": "缺少文件路径"}
         if not os.path.exists(path):
             raise FileNotFoundError(path)
+
+        self.logger.info("analyze: 开始分析 Excel 文档, path=%s", path)
 
         wb = load_workbook(path, data_only=True)
         sheets_info = []
@@ -202,6 +221,7 @@ class ExcelHandler:
                 "cols": ws.max_column,
             })
 
+        self.logger.info("analyze: Excel 文档分析完成, path=%s, 工作表数=%d", path, len(wb.sheetnames))
         return {
             "file_size": os.path.getsize(path),
             "sheet_count": len(wb.sheetnames),

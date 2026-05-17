@@ -16,10 +16,13 @@ pub async fn start_agent(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("start_agent 请求: session_id={}, prompt长度={}", session_id, prompt.len());
+
     // 检查是否已有 Agent 在该会话中运行
     {
         let active = state.active_agents.lock().await;
         if active.contains_key(&session_id) {
+            log::error!("start_agent 失败: 会话 '{}' 已有 Agent 正在运行", session_id);
             return Err(CommandError::agent(
                 AGENT_ALREADY_RUNNING,
                 format!("会话 '{}' 已有 Agent 正在运行", session_id),
@@ -31,12 +34,14 @@ pub async fn start_agent(
     {
         let mut active = state.active_agents.lock().await;
         active.insert(session_id.clone(), true);
+        log::info!("start_agent: 会话 '{}' 已注册为活跃 Agent", session_id);
     }
 
     let emitter = AgentEmitter::new(app_handle.clone());
     let sid = session_id.clone();
 
     // 在后台 spawn Agent 执行循环
+    log::info!("start_agent: 会话 '{}' 开始 spawn 后台任务", session_id);
     tokio::spawn(async move {
         let _ = run_agent_loop(&sid, &prompt, &emitter).await;
 
@@ -45,10 +50,12 @@ pub async fn start_agent(
         {
             let mut active = app_state.active_agents.lock().await;
             active.remove(&sid);
+            log::info!("start_agent: 会话 '{}' 已从活跃列表移除", sid);
         }
     });
 
     let _ = options;
+    log::info!("start_agent 成功: session_id={}", session_id);
     Ok(())
 }
 
@@ -58,8 +65,10 @@ pub async fn stop_agent(
     session_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("stop_agent 请求: session_id={}", session_id);
     let mut active = state.active_agents.lock().await;
     if !active.contains_key(&session_id) {
+        log::error!("stop_agent 失败: 会话 '{}' 没有 Agent 在运行", session_id);
         return Err(CommandError::agent(
             AGENT_NOT_RUNNING,
             format!("会话 '{}' 没有 Agent 在运行", session_id),
@@ -68,6 +77,7 @@ pub async fn stop_agent(
 
     // 标记为停止
     active.insert(session_id.clone(), false);
+    log::info!("stop_agent 成功: 会话 '{}' 已标记为停止", session_id);
     Ok(())
 }
 
@@ -80,8 +90,10 @@ pub async fn confirm_operation(
     feedback: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
+    log::info!("confirm_operation 请求: session_id={}, operation_id={}, approved={}", session_id, operation_id, approved);
     let active = state.active_agents.lock().await;
     if !active.contains_key(&session_id) {
+        log::error!("confirm_operation 失败: 会话 '{}' 没有 Agent 在运行", session_id);
         return Err(CommandError::agent(
             AGENT_SESSION_NOT_FOUND,
             format!("会话 '{}' 没有 Agent 在运行", session_id),
@@ -106,12 +118,15 @@ async fn run_agent_loop(
     prompt: &str,
     emitter: &AgentEmitter<tauri::Wry>,
 ) -> Result<(), CommandError> {
+    log::info!("run_agent_loop 开始: session_id={}", session_id);
+
     // 发送思考链开始事件
     emitter.emit_thinking(ThinkingPayload {
         session_id: session_id.to_string(),
         step: 1,
         thought: format!("正在分析用户需求: {}", prompt),
     })?;
+    log::debug!("run_agent_loop: 思考链事件已发送, session_id={}", session_id);
 
     // 发送 Todo 列表更新事件
     emitter.emit_todo_update(TodoUpdatePayload {
@@ -134,6 +149,7 @@ async fn run_agent_loop(
             },
         ],
     })?;
+    log::debug!("run_agent_loop: Todo更新事件已发送, session_id={}", session_id);
 
     // 发送内容增量事件
     emitter.emit_content(ContentPayload {
@@ -142,6 +158,7 @@ async fn run_agent_loop(
         content: format!("收到您的请求: {}\n\nAgent 引擎正在开发中，此为占位响应。", prompt),
         is_streaming: false,
     })?;
+    log::debug!("run_agent_loop: 内容增量事件已发送, session_id={}", session_id);
 
     // 发送完成事件
     emitter.emit_done(DonePayload {
@@ -151,6 +168,8 @@ async fn run_agent_loop(
         total_tokens: 0,
         duration_ms: 100,
     })?;
+    log::debug!("run_agent_loop: 完成事件已发送, session_id={}", session_id);
 
+    log::info!("run_agent_loop 成功完成: session_id={}", session_id);
     Ok(())
 }
