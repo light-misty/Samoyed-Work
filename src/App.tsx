@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { TopBar } from "./components/layout/TopBar";
 import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
@@ -24,7 +24,7 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [templateLabel, setTemplateLabel] = useState<string | undefined>(undefined);
 
-  const { addNode, setExecutionStatus, clearNodes } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler } = useWorkflowStore();
   const { loadSessions } = useSessionStore();
   const { loadSettings } = useSettingsStore();
   const { loadWorkspaces } = useWorkspaceStore();
@@ -40,10 +40,13 @@ export default function App() {
     todos,
     doneResult,
     sendMessage,
+    confirmOperation,
     reset: resetAgent,
   } = useAgent();
 
-  // 应用初始化：加载后端数据
+  const streamingNodeIdRef = useRef<string | null>(null);
+  const confirmNodeIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     loadSettings();
     loadWorkspaces();
@@ -96,41 +99,88 @@ export default function App() {
     }
   }, [lastToolResult, addNode]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：执行完成
+  useEffect(() => {
+    if (content) {
+      if (!streamingNodeIdRef.current) {
+        const nodeId = addNode("reply", {
+          content,
+        }, "running");
+        streamingNodeIdRef.current = nodeId;
+      } else {
+        updateNode(streamingNodeIdRef.current, {
+          data: { content },
+        });
+      }
+    }
+  }, [content, addNode, updateNode]);
+
   useEffect(() => {
     if (doneResult) {
-      addNode("reply", {
-        content: doneResult.summary || content,
-      });
+      if (streamingNodeIdRef.current) {
+        updateNode(streamingNodeIdRef.current, {
+          data: { content: doneResult.summary || content },
+          status: "completed",
+        });
+        streamingNodeIdRef.current = null;
+      } else {
+        addNode("reply", {
+          content: doneResult.summary || content,
+        });
+      }
       setExecutionStatus("completed");
     }
-  }, [doneResult, content, addNode, setExecutionStatus]);
+  }, [doneResult, content, addNode, updateNode, setExecutionStatus]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：执行错误
   useEffect(() => {
     if (agentError) {
+      if (streamingNodeIdRef.current) {
+        updateNode(streamingNodeIdRef.current, {
+          status: "failed",
+        });
+        streamingNodeIdRef.current = null;
+      }
       setExecutionStatus("failed");
     }
-  }, [agentError, setExecutionStatus]);
+  }, [agentError, updateNode, setExecutionStatus]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：需要用户确认
   useEffect(() => {
     if (pendingConfirmation) {
-      addNode("confirm", {
+      const nodeId = addNode("confirm", {
         title: pendingConfirmation.operationType,
         description: pendingConfirmation.description,
         confirmLabel: "确认执行",
         cancelLabel: "取消操作",
         confirmed: null,
       }, "running");
+      confirmNodeIdRef.current = nodeId;
+
+      setConfirmHandler(async (approved: boolean) => {
+        if (confirmNodeIdRef.current) {
+          updateNode(confirmNodeIdRef.current, {
+            data: {
+              title: pendingConfirmation.operationType,
+              description: pendingConfirmation.description,
+              confirmLabel: "确认执行",
+              cancelLabel: "取消操作",
+              confirmed: approved,
+            },
+            status: approved ? "completed" : "cancelled",
+          });
+          confirmNodeIdRef.current = null;
+        }
+        await confirmOperation(pendingConfirmation.operationId, approved);
+        setConfirmHandler(null);
+      });
     }
-  }, [pendingConfirmation, addNode]);
+  }, [pendingConfirmation, addNode, updateNode, confirmOperation, setConfirmHandler]);
 
   // 发送用户消息
   const handleSend = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
-    // 添加用户节点
+    streamingNodeIdRef.current = null;
+    confirmNodeIdRef.current = null;
+
     addNode("user", { content: text, attachments: [] });
     setExecutionStatus("running");
 
@@ -146,6 +196,8 @@ export default function App() {
   const handleNewSession = useCallback(() => {
     clearNodes();
     resetAgent();
+    streamingNodeIdRef.current = null;
+    confirmNodeIdRef.current = null;
   }, [clearNodes, resetAgent]);
 
   // 监听键盘快捷键
@@ -192,7 +244,7 @@ export default function App() {
                 id: t.id,
                 text: t.content,
                 done: t.status === "completed",
-                active: t.status === "running",
+                active: t.status === "in_progress",
               }))}
             />
             <TokenSection />

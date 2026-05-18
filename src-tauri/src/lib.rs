@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tauri::Manager;
@@ -11,11 +12,19 @@ pub mod models;
 pub mod services;
 pub mod utils;
 
+/// 用户确认决策
+#[derive(Debug, Clone)]
+pub struct ConfirmDecision {
+    pub approved: bool,
+    pub feedback: Option<String>,
+}
+
 /// 应用全局状态，通过 tauri::State 在命令中共享
 pub struct AppState {
     pub db: Arc<crate::db::Database>,
     pub config: Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
-    pub active_agents: Arc<tokio::sync::Mutex<std::collections::HashMap<String, bool>>>,
+    pub active_agents: Arc<tokio::sync::Mutex<HashMap<String, bool>>>,
+    pub confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
@@ -81,7 +90,8 @@ pub fn run() {
             let state = AppState {
                 db: Arc::new(database),
                 config: Arc::new(tokio::sync::Mutex::new(config_manager)),
-                active_agents: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+                active_agents: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                confirm_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 doc_service: doc_service_for_skills,
                 llm_router: Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router))),
                 skill_registry: Arc::new(skill_registry),

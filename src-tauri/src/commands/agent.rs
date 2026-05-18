@@ -46,6 +46,7 @@ pub async fn start_agent(
     let skill_registry = Arc::clone(&state.skill_registry);
     let active_agents = Arc::clone(&state.active_agents);
     let db = Arc::clone(&state.db);
+    let confirm_channels = Arc::clone(&state.confirm_channels);
 
     let max_iterations = options
         .as_ref()
@@ -86,6 +87,7 @@ pub async fn start_agent(
             &workspace_path,
             should_stop,
             &db,
+            &confirm_channels,
         ).await;
 
         if let Err(e) = &result {
@@ -139,24 +141,36 @@ pub async fn confirm_operation(
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
     log::info!("confirm_operation 请求: session_id={}, operation_id={}, approved={}", session_id, operation_id, approved);
-    let active = state.active_agents.lock().await;
-    if !active.contains_key(&session_id) {
-        log::error!("confirm_operation 失败: 会话 '{}' 没有 Agent 在运行", session_id);
-        return Err(CommandError::agent(
-            AGENT_SESSION_NOT_FOUND,
-            format!("会话 '{}' 没有 Agent 在运行", session_id),
-        ));
+
+    let sender = {
+        let mut channels = state.confirm_channels.lock().await;
+        channels.remove(&operation_id)
+    };
+
+    match sender {
+        Some(tx) => {
+            let decision = crate::ConfirmDecision {
+                approved,
+                feedback,
+            };
+            if tx.send(decision).is_err() {
+                log::warn!("confirm_operation: 接收端已关闭, operation_id={}", operation_id);
+                return Err(CommandError::agent(
+                    AGENT_SESSION_NOT_FOUND,
+                    "Agent 执行已结束，无法确认操作".to_string(),
+                ));
+            }
+            log::info!("confirm_operation: 确认结果已发送, operation_id={}, approved={}", operation_id, approved);
+            Ok(())
+        }
+        None => {
+            log::error!("confirm_operation 失败: 未找到操作确认通道, operation_id={}", operation_id);
+            Err(CommandError::agent(
+                AGENT_SESSION_NOT_FOUND,
+                format!("未找到操作确认通道: {}", operation_id),
+            ))
+        }
     }
-
-    log::info!(
-        "操作确认: session={}, operation={}, approved={}, feedback={:?}",
-        session_id,
-        operation_id,
-        approved,
-        feedback
-    );
-
-    Ok(())
 }
 
 /// 真正的 Agent 执行逻辑
@@ -171,6 +185,7 @@ async fn run_agent(
     workspace_path: &str,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     db: &Arc<crate::db::Database>,
+    confirm_channels: &Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<crate::ConfirmDecision>>>>,
 ) -> Result<(), CommandError> {
     log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
 
@@ -195,6 +210,7 @@ async fn run_agent(
         Arc::clone(llm_router),
         Arc::clone(skill_registry),
         emitter.clone(),
+        Arc::clone(confirm_channels),
     )
     .with_stop_check(should_stop)
     .with_max_iterations(max_iterations);

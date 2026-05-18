@@ -6,6 +6,7 @@ interface WorkflowState {
   executionStatus: ExecutionStatus;
   error: string | null;
   autoScroll: boolean;
+  confirmHandler: ((approved: boolean) => Promise<void>) | null;
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -15,6 +16,7 @@ interface WorkflowState {
   setError: (error: string | null) => void;
   toggleNode: (id: string) => void;
   setAutoScroll: (autoScroll: boolean) => void;
+  setConfirmHandler: (handler: ((approved: boolean) => Promise<void>) | null) => void;
 }
 
 let nodeCounter = 0;
@@ -24,6 +26,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   executionStatus: "idle",
   error: null,
   autoScroll: true,
+  confirmHandler: null,
 
   addNode: (type, data, status = "completed") => {
     const id = `node_${++nodeCounter}`;
@@ -56,7 +59,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   },
 
   clearNodes: () => {
-    set({ nodes: [], error: null, executionStatus: "idle" });
+    set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null });
   },
 
   setExecutionStatus: (status) => {
@@ -77,5 +80,9 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   setAutoScroll: (autoScroll) => {
     set({ autoScroll });
+  },
+
+  setConfirmHandler: (handler) => {
+    set({ confirmHandler: handler });
   },
 }));

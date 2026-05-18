@@ -1,5 +1,6 @@
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::Duration;
 
 use serde_json::json;
 use tauri::Runtime;
@@ -10,34 +11,26 @@ use crate::events::types::*;
 use crate::models::llm::LlmToolCall;
 use crate::services::llm::router::LlmRouter;
 use crate::services::skill::registry::SkillRegistry;
+use crate::ConfirmDecision;
 use super::context::AgentContext;
 
-/// Agent 执行结果
+const HIGH_RISK_SKILLS: &[&str] = &["delete_document", "modify_document", "batch_process"];
+const CONFIRM_TIMEOUT_SECS: u64 = 300;
+
 pub struct ExecutionResult {
-    /// 最终回复内容
     pub summary: String,
-    /// 总步骤数
     pub total_steps: u32,
-    /// 总输入 token 数（估算）
     pub total_input_tokens: u64,
-    /// 总输出 token 数（估算）
     pub total_output_tokens: u64,
-    /// 总耗时（毫秒）
     pub duration_ms: u64,
 }
 
-/// Agent 执行器
-/// 实现 Tool Calling 循环：调用 LLM -> 检查 tool_calls -> 执行 Skill -> 反馈结果 -> 继续循环
 pub struct AgentExecutor<R: Runtime> {
-    /// LLM 路由器
     router: Arc<LlmRouter>,
-    /// Skill 注册表
     registry: Arc<SkillRegistry>,
-    /// 事件发射器
     emitter: AgentEmitter<R>,
-    /// 最大迭代次数
+    confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     max_iterations: u32,
-    /// 停止标志检查：返回 true 表示 Agent 应该停止
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
 }
 
@@ -46,11 +39,13 @@ impl<R: Runtime> AgentExecutor<R> {
         router: Arc<LlmRouter>,
         registry: Arc<SkillRegistry>,
         emitter: AgentEmitter<R>,
+        confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     ) -> Self {
         Self {
             router,
             registry,
             emitter,
+            confirm_channels,
             max_iterations: 20,
             should_stop: Arc::new(|_| false),
         }
@@ -76,9 +71,118 @@ impl<R: Runtime> AgentExecutor<R> {
         (self.should_stop)(session_id)
     }
 
-    /// 执行 Agent 循环
+    fn is_high_risk_skill(name: &str) -> bool {
+        HIGH_RISK_SKILLS.contains(&name)
+    }
+
+    async fn request_confirmation(
+        &self,
+        session_id: &str,
+        tool_name: &str,
+        arguments: &serde_json::Value,
+    ) -> Result<bool, CommandError> {
+        let operation_id = format!("confirm_{}", uuid::Uuid::new_v4());
+
+        let risk_level = if tool_name == "delete_document" {
+            "critical"
+        } else {
+            "high"
+        };
+
+        let description = match tool_name {
+            "delete_document" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
+            "modify_document" => format!("修改文件: {}", arguments["path"].as_str().unwrap_or("未知")),
+            "batch_process" => format!("批量处理 {} 个文件", arguments["paths"].as_array().map(|a| a.len()).unwrap_or(0)),
+            _ => format!("执行高风险操作: {}", tool_name),
+        };
+
+        self.emitter.emit_confirm(ConfirmPayload {
+            session_id: session_id.to_string(),
+            operation_id: operation_id.clone(),
+            operation_type: tool_name.to_string(),
+            description,
+            details: arguments.clone(),
+            risk_level: risk_level.to_string(),
+        }).ok();
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut channels = self.confirm_channels.lock().await;
+            channels.insert(operation_id.clone(), tx);
+        }
+
+        match tokio::time::timeout(Duration::from_secs(CONFIRM_TIMEOUT_SECS), rx).await {
+            Ok(Ok(decision)) => {
+                let mut channels = self.confirm_channels.lock().await;
+                channels.remove(&operation_id);
+                if decision.approved {
+                    log::info!("用户确认操作: operation_id={}, tool={}", operation_id, tool_name);
+                    Ok(true)
+                } else {
+                    log::info!("用户拒绝操作: operation_id={}, tool={}, feedback={:?}", operation_id, tool_name, decision.feedback);
+                    Ok(false)
+                }
+            }
+            Ok(Err(_)) => {
+                let mut channels = self.confirm_channels.lock().await;
+                channels.remove(&operation_id);
+                log::warn!("确认通道关闭: operation_id={}", operation_id);
+                Ok(false)
+            }
+            Err(_) => {
+                let mut channels = self.confirm_channels.lock().await;
+                channels.remove(&operation_id);
+                log::warn!("确认超时: operation_id={}", operation_id);
+                self.emitter.emit_error(ErrorPayload {
+                    session_id: session_id.to_string(),
+                    code: crate::errors::AGENT_CONFIRMATION_TIMEOUT,
+                    message: format!("操作确认超时 ({}秒)", CONFIRM_TIMEOUT_SECS),
+                    recoverable: true,
+                }).ok();
+                Ok(false)
+            }
+        }
+    }
+
+    fn emit_todo_progress(
+        &self,
+        session_id: &str,
+        current_step: u32,
+        total_possible: u32,
+        tool_name: &str,
+    ) {
+        let mut todos = Vec::new();
+
+        if current_step > 1 {
+            todos.push(TodoItem {
+                id: format!("step_{}", current_step - 1),
+                content: format!("步骤 {} 已完成", current_step - 1),
+                status: "completed".to_string(),
+            });
+        }
+
+        todos.push(TodoItem {
+            id: format!("step_{}", current_step),
+            content: format!("正在执行: {}", tool_name),
+            status: "in_progress".to_string(),
+        });
+
+        if current_step < total_possible {
+            todos.push(TodoItem {
+                id: format!("step_{}", current_step + 1),
+                content: format!("步骤 {} 待执行", current_step + 1),
+                status: "pending".to_string(),
+            });
+        }
+
+        self.emitter.emit_todo_update(TodoUpdatePayload {
+            session_id: session_id.to_string(),
+            todos,
+        }).ok();
+    }
+
     pub async fn execute(&self, ctx: &mut AgentContext) -> Result<ExecutionResult, CommandError> {
-        let start_time = Instant::now();
+        let start_time = std::time::Instant::now();
         let mut total_steps = 0u32;
         let mut total_input_tokens = 0u64;
         let mut total_output_tokens = 0u64;
@@ -97,6 +201,15 @@ impl<R: Runtime> AgentExecutor<R> {
                 })
             })
             .collect();
+
+        self.emitter.emit_todo_update(TodoUpdatePayload {
+            session_id: ctx.session_id.clone(),
+            todos: vec![TodoItem {
+                id: "step_0".to_string(),
+                content: "正在分析用户请求...".to_string(),
+                status: "in_progress".to_string(),
+            }],
+        }).ok();
 
         for iteration in 0..self.max_iterations {
             // 检查是否被用户停止
@@ -218,9 +331,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 };
                 ctx.add_assistant_message(&assistant_content, tool_calls_for_message);
 
-                // 执行每个 tool_call
-                for tool_call in &collected_tool_calls {
-                    // 检查是否被停止
+                for (tc_index, tool_call) in collected_tool_calls.iter().enumerate() {
                     if self.check_stopped(&ctx.session_id) {
                         log::info!("Agent 在 Tool 执行前被停止, session_id={}", ctx.session_id);
                         self.emitter.emit_stopped(StoppedPayload {
@@ -239,19 +350,57 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);
 
-                    self.emitter.emit_tool_call(ToolCallPayload {
-                        session_id: ctx.session_id.clone(),
-                        call_id: tool_call.id.clone(),
-                        tool_name: tool_call.name.clone(),
-                        arguments: serde_json::from_str(&tool_call.arguments)
-                            .unwrap_or(json!({})),
-                    }).ok();
+                    self.emit_todo_progress(
+                        &ctx.session_id,
+                        total_steps,
+                        self.max_iterations,
+                        &tool_call.name,
+                    );
 
-                    let tool_start = Instant::now();
-
-                    // 执行 Skill
                     let params = serde_json::from_str(&tool_call.arguments)
                         .unwrap_or(json!({}));
+
+                    if Self::is_high_risk_skill(&tool_call.name) {
+                        self.emitter.emit_tool_call(ToolCallPayload {
+                            session_id: ctx.session_id.clone(),
+                            call_id: tool_call.id.clone(),
+                            tool_name: format!("{} (等待确认)", tool_call.name),
+                            arguments: params.clone(),
+                        }).ok();
+
+                        let approved = self.request_confirmation(
+                            &ctx.session_id,
+                            &tool_call.name,
+                            &params,
+                        ).await?;
+
+                        if !approved {
+                            let skip_msg = format!("用户拒绝了操作: {}", tool_call.name);
+                            log::info!("操作被拒绝: session_id={}, tool={}", ctx.session_id, tool_call.name);
+
+                            self.emitter.emit_tool_result(ToolResultPayload {
+                                session_id: ctx.session_id.clone(),
+                                call_id: tool_call.id.clone(),
+                                success: false,
+                                result: json!(null),
+                                error: Some(skip_msg.clone()),
+                                duration_ms: 0,
+                            }).ok();
+
+                            ctx.add_tool_result(&tool_call.id, &skip_msg);
+                            continue;
+                        }
+                    } else {
+                        self.emitter.emit_tool_call(ToolCallPayload {
+                            session_id: ctx.session_id.clone(),
+                            call_id: tool_call.id.clone(),
+                            tool_name: tool_call.name.clone(),
+                            arguments: params.clone(),
+                        }).ok();
+                    }
+
+                    let tool_start = std::time::Instant::now();
+
                     let result = self.registry.execute(&tool_call.name, params).await;
 
                     let duration_ms = tool_start.elapsed().as_millis() as u64;
@@ -273,16 +422,26 @@ impl<R: Runtime> AgentExecutor<R> {
                         format!("错误: {}", result.error.unwrap_or_default())
                     };
                     ctx.add_tool_result(&tool_call.id, &result_content);
+
+                    let _ = tc_index;
                 }
 
                 // 继续循环，让 LLM 处理工具结果
                 continue;
             }
 
-            // 没有 tool_calls，表示 LLM 已完成回复
             if !assistant_content.is_empty() {
                 ctx.add_assistant_message(&assistant_content, None);
             }
+
+            self.emitter.emit_todo_update(TodoUpdatePayload {
+                session_id: ctx.session_id.clone(),
+                todos: vec![TodoItem {
+                    id: "done".to_string(),
+                    content: "任务完成".to_string(),
+                    status: "completed".to_string(),
+                }],
+            }).ok();
 
             let total_duration_ms = start_time.elapsed().as_millis() as u64;
             log::info!("Agent 执行完成, session_id={}, 总步骤={}, 总耗时={}ms", ctx.session_id, total_steps, total_duration_ms);
