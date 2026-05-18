@@ -48,6 +48,8 @@ export interface UseAgentReturn {
   todos: TodoUpdatePayload | null;
   /** 执行完成结果 */
   doneResult: DonePayload | null;
+  /** 是否已被用户主动停止 */
+  isStopped: boolean;
   /** 发送消息，启动 Agent */
   sendMessage: (prompt: string, options?: Record<string, unknown>) => Promise<void>;
   /** 停止 Agent */
@@ -70,6 +72,7 @@ const initialState = {
   pendingConfirmation: null as ConfirmPayload | null,
   todos: null as TodoUpdatePayload | null,
   doneResult: null as DonePayload | null,
+  isStopped: false,
 };
 
 /**
@@ -87,45 +90,62 @@ export function useAgent(): UseAgentReturn {
   const [pendingConfirmation, setPendingConfirmation] = useState<ConfirmPayload | null>(null);
   const [todos, setTodos] = useState<TodoUpdatePayload | null>(null);
   const [doneResult, setDoneResult] = useState<DonePayload | null>(null);
+  const [isStopped, setIsStopped] = useState(false);
 
   // 保存事件取消监听函数的引用
   const unlistenRefs = useRef<(() => void)[]>([]);
+  // 使用 ref 追踪最新的 sessionId，供事件处理器过滤使用
+  const sessionIdRef = useRef<string | null>(null);
+
+  // 同步 sessionId 到 ref，确保事件处理器始终能访问最新值
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   // 注册所有 Agent 事件监听
   useEffect(() => {
     const registerListeners = async () => {
       const unlisteners = await Promise.all([
         onAgentThinking((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setLastThinking(payload);
         }),
         onAgentContent((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setContent((prev) => prev + payload.content);
         }),
         onAgentToolCall((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setCurrentToolCall(payload);
         }),
         onAgentToolResult((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setLastToolResult(payload);
           setCurrentToolCall(null);
         }),
         onAgentConfirm((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setPendingConfirmation(payload);
         }),
         onAgentTodoUpdate((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setTodos(payload);
         }),
         onAgentDone((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setIsLoading(false);
           setDoneResult(payload);
         }),
         onAgentError((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setIsLoading(false);
           setError(payload.message);
         }),
         onAgentStopped((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
           setIsLoading(false);
-          // 中断也视为完成，保留中断原因
-          setError(`Agent 已停止: ${payload.reason}`);
+          // 用户主动停止，不视为错误，设置停止标志
+          setIsStopped(true);
         }),
       ]);
 
@@ -153,6 +173,7 @@ export function useAgent(): UseAgentReturn {
       setPendingConfirmation(null);
       setTodos(null);
       setDoneResult(null);
+      setIsStopped(false);
       setIsLoading(true);
 
       try {
@@ -162,6 +183,8 @@ export function useAgent(): UseAgentReturn {
           const session = await tauriCmd.createSession({});
           sid = session.id;
           setSessionId(sid);
+          // 立即同步 ref，避免事件在 useEffect 同步前到达时被过滤
+          sessionIdRef.current = sid;
         }
 
         await tauriCmd.startAgent(sid, prompt, options);
@@ -211,6 +234,7 @@ export function useAgent(): UseAgentReturn {
     setPendingConfirmation(initialState.pendingConfirmation);
     setTodos(initialState.todos);
     setDoneResult(initialState.doneResult);
+    setIsStopped(initialState.isStopped);
   }, []);
 
   return {
@@ -224,6 +248,7 @@ export function useAgent(): UseAgentReturn {
     pendingConfirmation,
     todos,
     doneResult,
+    isStopped,
     sendMessage,
     stopAgent,
     confirmOperation,

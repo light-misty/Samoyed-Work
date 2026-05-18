@@ -131,4 +131,26 @@ impl<R: Runtime> AgentEmitter<R> {
                 CommandError::from(e)
             })
     }
+
+    /// 发射会话更新事件
+    pub fn emit_session_updated(&self, payload: types::SessionUpdatePayload) -> Result<(), CommandError> {
+        log::debug!("发射事件: {} (session_id={}, change_type={})", types::SESSION_UPDATED, payload.session_id, payload.change_type);
+        self.app_handle
+            .emit(types::SESSION_UPDATED, payload)
+            .map_err(|e| {
+                log::warn!("发射事件 {} 失败: {}", types::SESSION_UPDATED, e);
+                CommandError::from(e)
+            })
+    }
+
+    /// 发射工作区变更事件
+    pub fn emit_workspace_change(&self, payload: types::WorkspaceChangePayload) -> Result<(), CommandError> {
+        log::debug!("发射事件: {} (workspace_id={})", types::WORKSPACE_CHANGE, payload.workspace_id);
+        self.app_handle
+            .emit(types::WORKSPACE_CHANGE, payload)
+            .map_err(|e| {
+                log::warn!("发射事件 {} 失败: {}", types::WORKSPACE_CHANGE, e);
+                CommandError::from(e)
+            })
+    }
 }

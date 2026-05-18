@@ -47,13 +47,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   removeWorkspace: async (id) => {
     try {
       await tauriCmd.removeWorkspace(id);
-      set((state) => ({
-        workspaces: state.workspaces.filter((w) => w.id !== id),
-        currentWorkspaceId:
-          state.currentWorkspaceId === id
-            ? state.workspaces[0]?.id ?? null
-            : state.currentWorkspaceId,
-      }));
+      set((state) => {
+        // 先过滤得到剩余列表，再从剩余列表中取回退值，避免回退到已删除的工作区
+        const remaining = state.workspaces.filter((w) => w.id !== id);
+        return {
+          workspaces: remaining,
+          currentWorkspaceId:
+            state.currentWorkspaceId === id
+              ? remaining[0]?.id ?? null
+              : state.currentWorkspaceId,
+        };
+      });
     } catch (error) {
       console.error("[WorkspaceStore] 移除工作区失败:", error);
     }

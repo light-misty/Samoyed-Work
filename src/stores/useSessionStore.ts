@@ -56,13 +56,17 @@ export const useSessionStore = create<SessionState>((set) => ({
   deleteSession: async (sessionId) => {
     try {
       await tauriCmd.deleteSession(sessionId);
-      set((state) => ({
-        sessions: state.sessions.filter((s) => s.id !== sessionId),
-        currentSessionId:
-          state.currentSessionId === sessionId
-            ? state.sessions[0]?.id ?? null
-            : state.currentSessionId,
-      }));
+      set((state) => {
+        // 先过滤得到剩余列表，再从剩余列表中取回退值，避免回退到已删除的会话
+        const remaining = state.sessions.filter((s) => s.id !== sessionId);
+        return {
+          sessions: remaining,
+          currentSessionId:
+            state.currentSessionId === sessionId
+              ? remaining[0]?.id ?? null
+              : state.currentSessionId,
+        };
+      });
     } catch (error) {
       console.error("[SessionStore] 删除会话失败:", error);
       throw error;

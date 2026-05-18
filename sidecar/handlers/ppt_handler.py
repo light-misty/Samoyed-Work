@@ -23,12 +23,35 @@ class PptHandler:
             path: 输出文件路径
             slides: 幻灯片列表
                 [{"title": "...", "content": "...", "layout": "title_slide"}]
+            content: 文档内容（当 slides 为空时，从 content 构建）
+            title: 文档标题（当 slides 为空时，作为标题幻灯片的标题）
         """
         path = params.get("path", "")
         slides = params.get("slides", [])
+        content = params.get("content", "")
+        title = params.get("title", "")
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        # 当 slides 为空但 content 非空时，从 content 构建默认幻灯片
+        if not slides and content:
+            self.logger.info("generate: slides 为空，从 content 参数构建默认幻灯片")
+            # 如果有标题，先创建一张标题幻灯片，再创建内容幻灯片
+            if title:
+                slides.append({"title": title, "layout": "title_slide"})
+            # 将 content 按段落拆分为多张幻灯片
+            paragraphs = [p.strip() for p in content.split("\n") if p.strip()]
+            # 将段落分组，每组最多 5 个段落作为一张幻灯片
+            chunk_size = 5
+            for i in range(0, len(paragraphs), chunk_size):
+                chunk = paragraphs[i:i + chunk_size]
+                slide_title = title if i == 0 and not title else f"第 {i // chunk_size + 1} 页"
+                slides.append({
+                    "title": slide_title,
+                    "content": "\n".join(chunk),
+                    "layout": "title_slide",
+                })
 
         self.logger.info("generate: 开始生成 PPT 文档, path=%s, 幻灯片数=%d", path, len(slides))
 

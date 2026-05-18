@@ -20,9 +20,9 @@ pub async fn start_agent(
 ) -> Result<(), CommandError> {
     log::info!("start_agent 请求: session_id={}, prompt长度={}", session_id, prompt.len());
 
-    // 检查是否已有 Agent 在该会话中运行
+    // 检查是否已有 Agent 在该会话中运行，并注册为活跃 Agent（单次加锁避免 TOCTOU 竞态）
     {
-        let active = state.active_agents.lock().await;
+        let mut active = state.active_agents.lock().await;
         if active.contains_key(&session_id) {
             log::error!("start_agent 失败: 会话 '{}' 已有 Agent 正在运行", session_id);
             return Err(CommandError::agent(
@@ -30,11 +30,6 @@ pub async fn start_agent(
                 format!("会话 '{}' 已有 Agent 正在运行", session_id),
             ));
         }
-    }
-
-    // 注册为活跃 Agent
-    {
-        let mut active = state.active_agents.lock().await;
         active.insert(session_id.clone(), true);
         log::info!("start_agent: 会话 '{}' 已注册为活跃 Agent", session_id);
     }
@@ -262,6 +257,7 @@ async fn run_agent(
     let system_prompt = crate::services::agent::context::AgentContext::build_system_prompt(workspace_path);
     let mut ctx = AgentContext::new(session_id.to_string(), system_prompt);
     ctx.max_iterations = max_iterations;
+    ctx.workspace_path = workspace_path.to_string();
     ctx.add_user_message(prompt);
 
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息

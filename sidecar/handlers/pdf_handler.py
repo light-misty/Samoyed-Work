@@ -3,6 +3,7 @@
 """
 
 import os
+import html
 import logging
 from typing import Any
 
@@ -82,27 +83,27 @@ class PdfHandler:
 
             elements = []
 
-            # 添加标题
+            # 添加标题（Paragraph 使用 XML 标记语法，需转义特殊字符）
             if title:
-                elements.append(Paragraph(title, title_style))
+                elements.append(Paragraph(html.escape(title), title_style))
                 elements.append(Spacer(1, 1 * cm))
 
             # 添加内容
             if isinstance(content, str):
                 for line in content.split("\n"):
                     if line.strip():
-                        elements.append(Paragraph(line, body_style))
+                        elements.append(Paragraph(html.escape(line), body_style))
             elif isinstance(content, list):
                 for item in content:
                     if isinstance(item, str):
-                        elements.append(Paragraph(item, body_style))
+                        elements.append(Paragraph(html.escape(item), body_style))
                     elif isinstance(item, dict):
                         text = item.get("text", "")
                         style_type = item.get("style", "body")
                         if style_type == "heading":
-                            elements.append(Paragraph(text, title_style))
+                            elements.append(Paragraph(html.escape(text), title_style))
                         else:
-                            elements.append(Paragraph(text, body_style))
+                            elements.append(Paragraph(html.escape(text), body_style))
 
             # 设置作者
             if author:

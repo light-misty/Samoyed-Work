@@ -30,7 +30,7 @@ def setup_logging():
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
@@ -101,8 +101,20 @@ def handle_request(request: dict) -> dict:
             "error": f"不支持的操作: {action}/{doc_type}",
         }
 
+    # read 操作时，将 Rust 端发送的 input_path 映射为 Python handler 期望的 path
+    if action == "read" and "input_path" in params and "path" not in params:
+        params["path"] = params["input_path"]
+
     try:
         result = action_method(params)
+        # 检查结果中是否包含错误信息（handler 参数校验失败时返回含 error 键的字典而非抛出异常）
+        if isinstance(result, dict) and "error" in result:
+            logger.warning("操作返回错误: id=%s, error=%s", request_id, result["error"])
+            return {
+                "id": request_id,
+                "success": False,
+                "error": result["error"],
+            }
         logger.info("操作执行成功: id=%s, action=%s/%s", request_id, action, doc_type)
         return {
             "id": request_id,

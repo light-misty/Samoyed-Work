@@ -59,6 +59,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   },
 
   clearNodes: () => {
+    nodeCounter = 0;
     set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null });
   },
 

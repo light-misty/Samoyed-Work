@@ -155,6 +155,9 @@ pub struct ToolDefinition {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct LlmToolCall {
+    /// 流式响应中的索引，用于增量合并
+    #[serde(default)]
+    pub index: u32,
     pub id: String,
     pub name: String,
     pub arguments: String,

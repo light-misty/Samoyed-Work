@@ -13,6 +13,8 @@ pub struct AgentContext {
     pub max_iterations: u32,
     /// 已持久化的消息数量，用于增量持久化
     persisted_count: usize,
+    /// 当前工作区路径，用于 Skill 的路径安全校验
+    pub workspace_path: String,
 }
 
 impl AgentContext {
@@ -23,6 +25,7 @@ impl AgentContext {
             system_prompt,
             max_iterations: 20,
             persisted_count: 0,
+            workspace_path: String::new(),
         }
     }
 

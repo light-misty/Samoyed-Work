@@ -121,6 +121,13 @@ impl<R: Runtime> AgentExecutor<R> {
             _ => format!("执行高风险操作: {}", tool_name),
         };
 
+        // 先创建 channel 并插入 map，再发射事件，避免竞态条件
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut channels = self.confirm_channels.lock().await;
+            channels.insert(operation_id.clone(), tx);
+        }
+
         self.emitter.emit_confirm(ConfirmPayload {
             session_id: session_id.to_string(),
             operation_id: operation_id.clone(),
@@ -129,12 +136,6 @@ impl<R: Runtime> AgentExecutor<R> {
             details: arguments.clone(),
             risk_level: risk_level.to_string(),
         }).ok();
-
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        {
-            let mut channels = self.confirm_channels.lock().await;
-            channels.insert(operation_id.clone(), tx);
-        }
 
         match tokio::time::timeout(Duration::from_secs(CONFIRM_TIMEOUT_SECS), rx).await {
             Ok(Ok(decision)) => {
@@ -289,7 +290,8 @@ impl<R: Runtime> AgentExecutor<R> {
 
             // 收集流式响应
             let mut assistant_content = String::new();
-            let mut collected_tool_calls: Vec<LlmToolCall> = Vec::new();
+            // 使用 HashMap 按 index 收集 tool_calls 增量，避免碎片化
+            let mut collected_tool_calls: HashMap<u32, LlmToolCall> = HashMap::new();
             let mut message_id = String::new();
 
             while let Some(chunk_result) = stream_rx.recv().await {
@@ -308,16 +310,22 @@ impl<R: Runtime> AgentExecutor<R> {
                                 }).ok();
                             }
 
-                            // 收集 tool_calls 增量
+                            // 收集 tool_calls 增量，按 index 合并
                             if let Some(delta_tool_calls) = choice.delta.tool_calls {
                                 for tc in delta_tool_calls {
-                                    if let Some(existing) = collected_tool_calls.iter_mut()
-                                        .find(|c| c.id == tc.id && !tc.id.is_empty())
-                                    {
-                                        existing.name.push_str(&tc.name);
-                                        existing.arguments.push_str(&tc.arguments);
-                                    } else {
-                                        collected_tool_calls.push(tc);
+                                    match collected_tool_calls.get_mut(&tc.index) {
+                                        Some(existing) => {
+                                            // 后续增量：追加 name 和 arguments
+                                            if !tc.id.is_empty() {
+                                                existing.id = tc.id;
+                                            }
+                                            existing.name.push_str(&tc.name);
+                                            existing.arguments.push_str(&tc.arguments);
+                                        }
+                                        None => {
+                                            // 首次出现的 index，直接插入
+                                            collected_tool_calls.insert(tc.index, tc);
+                                        }
                                     }
                                 }
                             }
@@ -329,6 +337,11 @@ impl<R: Runtime> AgentExecutor<R> {
                     }
                 }
             }
+
+            // 将 HashMap 转为按 index 排序的 Vec
+            let mut collected_tool_calls: Vec<LlmToolCall> = collected_tool_calls.into_values()
+                .collect::<Vec<_>>();
+            collected_tool_calls.sort_by_key(|tc| tc.index);
 
             // 发送内容结束事件（无论是否有 tool_calls，只要有内容就应发送）
             if !assistant_content.is_empty() {
@@ -442,8 +455,19 @@ impl<R: Runtime> AgentExecutor<R> {
                         reg.get_arc(&tool_call.name)
                     };
 
+                    // 对需要路径安全校验的 Skill，注入工作区根目录
+                    // 防止 LLM 提供恶意路径绕过校验
+                    let mut safe_params = params;
+                    let needs_workspace_root = matches!(
+                        tool_call.name.as_str(),
+                        "delete_document" | "search_documents" | "list_workspace"
+                    );
+                    if needs_workspace_root && !ctx.workspace_path.is_empty() {
+                        safe_params["workspace_root"] = json!(ctx.workspace_path);
+                    }
+
                     let result = match skill_arc {
-                        Some(skill) => skill.execute(params).await,
+                        Some(skill) => skill.execute(safe_params).await,
                         None => crate::models::skill::SkillResult {
                             success: false,
                             output: None,

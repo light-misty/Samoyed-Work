@@ -53,7 +53,7 @@ impl SidecarManager {
             .spawn()
             .map_err(|e| {
                 log::error!("启动 Sidecar 失败: {}", e);
-                CommandError::doc(3001, format!("启动 Sidecar 失败: {}", e))
+                CommandError::doc(3010, format!("启动 Sidecar 失败: {}", e))
             })?;
 
         // 取出 stderr 并启动后台任务读取日志
@@ -155,7 +155,7 @@ impl SidecarManager {
                 log::error!("Sidecar 请求超时（{}秒）", self.request_timeout.as_secs());
                 // 超时后重启 Sidecar
                 let _ = self.stop().await;
-                Err(CommandError::doc(3009, format!(
+                Err(CommandError::doc(3010, format!(
                     "Sidecar 请求超时（{}秒）", self.request_timeout.as_secs()
                 )))
             }
@@ -168,42 +168,46 @@ impl SidecarManager {
 
         let child = guard.as_mut().ok_or_else(|| {
             log::error!("Sidecar 未启动, 无法发送请求");
-            CommandError::doc(3003, "Sidecar 未启动".to_string())
+            CommandError::doc(3010, "Sidecar 未启动".to_string())
         })?;
 
         // 写入请求
         let stdin = child.stdin.as_mut().ok_or_else(|| {
             log::error!("无法写入 Sidecar stdin");
-            CommandError::doc(3004, "无法写入 Sidecar stdin".to_string())
+            CommandError::doc(3010, "无法写入 Sidecar stdin".to_string())
         })?;
 
         let request_str = serde_json::to_string(&request).unwrap_or_default();
         stdin.write_all(format!("{}\n", request_str).as_bytes()).await.map_err(|e| {
             log::error!("写入 Sidecar 失败: {}", e);
-            CommandError::doc(3005, format!("写入 Sidecar 失败: {}", e))
+            CommandError::doc(3010, format!("写入 Sidecar 失败: {}", e))
         })?;
         stdin.flush().await.map_err(|e| {
             log::error!("刷新 Sidecar stdin 失败: {}", e);
-            CommandError::doc(3005, format!("刷新 Sidecar stdin 失败: {}", e))
+            CommandError::doc(3010, format!("刷新 Sidecar stdin 失败: {}", e))
         })?;
         log::debug!("请求已写入 Sidecar");
 
         // 读取响应
         let stdout = child.stdout.as_mut().ok_or_else(|| {
             log::error!("无法读取 Sidecar stdout");
-            CommandError::doc(3006, "无法读取 Sidecar stdout".to_string())
+            CommandError::doc(3010, "无法读取 Sidecar stdout".to_string())
         })?;
 
         let mut reader = BufReader::new(stdout);
         let mut response_line = String::new();
         reader.read_line(&mut response_line).await.map_err(|e| {
             log::error!("读取 Sidecar 响应失败: {}", e);
-            CommandError::doc(3007, format!("读取 Sidecar 响应失败: {}", e))
+            CommandError::doc(3010, format!("读取 Sidecar 响应失败: {}", e))
         })?;
 
-        let response: Value = serde_json::from_str(response_line.trim()).map_err(|e| {
-            log::error!("解析 Sidecar 响应失败: {}, 原始内容: {}", e, response_line.trim());
-            CommandError::doc(3008, format!("解析 Sidecar 响应失败: {}", e))
+        let trimmed = response_line.trim();
+        // 去除 UTF-8 BOM（Python Sidecar 输出可能包含 BOM，trim() 不会移除）
+        let trimmed = trimmed.strip_prefix('\u{feff}').unwrap_or(trimmed);
+
+        let response: Value = serde_json::from_str(trimmed).map_err(|e| {
+            log::error!("解析 Sidecar 响应失败: {}, 原始内容: {}", e, trimmed);
+            CommandError::doc(3010, format!("解析 Sidecar 响应失败: {}", e))
         })?;
 
         log::debug!("收到 Sidecar 响应: success={}", response["success"].as_bool().unwrap_or(false));
@@ -246,7 +250,7 @@ impl DocumentService {
         } else {
             let error = response["error"].as_str().unwrap_or("未知错误");
             log::error!("文档处理失败: action={}, doc_type={}, 错误: {}", action, doc_type, error);
-            Err(CommandError::doc(3000, error.to_string()))
+            Err(CommandError::doc(3010, error.to_string()))
         }
     }
 }

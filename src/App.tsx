@@ -17,7 +17,6 @@ import { useSettingsStore } from "./stores/useSettingsStore";
 import { useWorkspaceStore } from "./stores/useWorkspaceStore";
 import { useTokenStore } from "./stores/useTokenStore";
 import { useAgent } from "./hooks/useAgent";
-import { onTokenUpdate } from "./services/event";
 
 export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -28,7 +27,7 @@ export default function App() {
   const { loadSessions } = useSessionStore();
   const { loadSettings } = useSettingsStore();
   const { loadWorkspaces } = useWorkspaceStore();
-  const { addTokenUsage } = useTokenStore();
+  const { initTokenListener, destroyTokenListener } = useTokenStore();
 
   const {
     error: agentError,
@@ -53,18 +52,13 @@ export default function App() {
     loadSessions();
   }, []);
 
-  // 监听 Token 用量更新事件
+  // 初始化 Token 用量更新事件监听（由 store 统一管理）
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    onTokenUpdate((payload) => {
-      addTokenUsage(payload.promptTokens, payload.completionTokens);
-    }).then((fn) => {
-      unlisten = fn;
-    });
+    initTokenListener();
     return () => {
-      unlisten?.();
+      destroyTokenListener();
     };
-  }, [addTokenUsage]);
+  }, [initTokenListener, destroyTokenListener]);
 
   // Agent 事件 -> WorkflowStore 节点映射：思考过程
   useEffect(() => {

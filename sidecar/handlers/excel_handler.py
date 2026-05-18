@@ -23,12 +23,32 @@ class ExcelHandler:
             path: 输出文件路径
             sheets: 工作表列表
                 [{"name": "Sheet1", "data": [[...]], "headers": [...]}]
+            content: 文档内容（当 sheets 为空时，从 content 构建）
+            title: 文档标题（当 sheets 为空时，作为默认工作表名）
         """
         path = params.get("path", "")
         sheets = params.get("sheets", [])
+        content = params.get("content", "")
+        title = params.get("title", "")
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
+
+        # 当 sheets 为空但 content 非空时，从 content 构建默认工作表
+        if not sheets and content:
+            self.logger.info("generate: sheets 为空，从 content 参数构建默认工作表")
+            sheet_name = title if title else "Sheet1"
+            # 将 content 按行拆分，每行按制表符或逗号拆分为列
+            rows = []
+            for line in content.split("\n"):
+                line = line.strip()
+                if line:
+                    # 优先按制表符拆分，其次按逗号拆分
+                    if "\t" in line:
+                        rows.append(line.split("\t"))
+                    else:
+                        rows.append(line.split(","))
+            sheets = [{"name": sheet_name, "data": rows}]
 
         self.logger.info("generate: 开始生成 Excel 文档, path=%s, 工作表数=%d", path, len(sheets))
 

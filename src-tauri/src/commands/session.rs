@@ -1,9 +1,11 @@
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::db::session_repo;
 use crate::db::message_repo;
 use crate::db::token_repo;
 use crate::errors::CommandError;
+use crate::events::AgentEmitter;
+use crate::events::types;
 use crate::models::session::{
     CreateSessionParams, Session, SessionDetail, SessionFilter, SessionSummary, TokenUsage,
 };
@@ -13,6 +15,7 @@ use crate::AppState;
 #[tauri::command]
 pub async fn create_session(
     params: CreateSessionParams,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Session, CommandError> {
     log::info!("create_session 请求: title={:?}, workspace_id={:?}, provider_id={:?}", params.title, params.workspace_id, params.provider_id);
@@ -33,6 +36,15 @@ pub async fn create_session(
 
     let session = session_repo::get_session(&conn, &id)?;
     log::info!("create_session 成功: session_id={}, title={}", session.id, session.title);
+
+    // 发射会话更新事件
+    let emitter = AgentEmitter::new(app_handle);
+    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+        session_id: session.id.clone(),
+        change_type: "created".to_string(),
+        data: Some(serde_json::to_value(&session).unwrap_or_default()),
+    });
+
     Ok(session)
 }
 
@@ -87,12 +99,22 @@ pub async fn get_session(
 #[tauri::command]
 pub async fn delete_session(
     session_id: String,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
     log::info!("delete_session 请求: session_id={}", session_id);
     let conn = state.db.conn()?;
     session_repo::delete_session(&conn, &session_id)?;
     log::info!("delete_session 成功: session_id={}", session_id);
+
+    // 发射会话更新事件
+    let emitter = AgentEmitter::new(app_handle);
+    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+        session_id: session_id.clone(),
+        change_type: "deleted".to_string(),
+        data: None,
+    });
+
     Ok(())
 }
 
@@ -101,11 +123,21 @@ pub async fn delete_session(
 pub async fn update_session_title(
     session_id: String,
     title: String,
+    app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
     log::info!("update_session_title 请求: session_id={}, title={}", session_id, title);
     let conn = state.db.conn()?;
     session_repo::update_session_title(&conn, &session_id, &title)?;
     log::info!("update_session_title 成功: session_id={}, title={}", session_id, title);
+
+    // 发射会话更新事件
+    let emitter = AgentEmitter::new(app_handle);
+    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+        session_id: session_id.clone(),
+        change_type: "updated".to_string(),
+        data: Some(serde_json::json!({ "title": title })),
+    });
+
     Ok(())
 }

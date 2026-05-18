@@ -132,7 +132,7 @@ impl OpenAiAdapter {
 
                     if status.as_u16() == 401 {
                         log::error!("认证失败(401), model={}", self.model);
-                        return Err(CommandError::llm(1001, format!("认证失败: {}", error_body)));
+                        return Err(CommandError::llm(1002, format!("认证失败: {}", error_body)));
                     }
                     if status.as_u16() == 429 {
                         if attempt < max_retries {
@@ -144,7 +144,7 @@ impl OpenAiAdapter {
                     }
                     if status.as_u16() == 404 {
                         log::error!("模型不存在(404), model={}", self.model);
-                        return Err(CommandError::llm(1004, format!("模型不存在: {}", error_body)));
+                        return Err(CommandError::llm(1005, format!("模型不存在: {}", error_body)));
                     }
 
                     last_error = Some(CommandError::llm(1000, format!("API 请求失败 ({}): {}", status, error_body)));
@@ -153,10 +153,10 @@ impl OpenAiAdapter {
                     if e.is_timeout() {
                         if attempt < max_retries {
                             log::warn!("请求超时, model={}, 准备重试", self.model);
-                            last_error = Some(CommandError::llm(1005, "请求超时，正在重试".to_string()));
+                            last_error = Some(CommandError::llm(1006, "请求超时，正在重试".to_string()));
                             continue;
                         }
-                        return Err(CommandError::llm(1005, "请求超时".to_string()));
+                        return Err(CommandError::llm(1006, "请求超时".to_string()));
                     }
                     last_error = Some(CommandError::llm(1000, format!("网络错误: {}", e)));
                 }
@@ -184,11 +184,12 @@ impl OpenAiAdapter {
                         let tool_calls = message["tool_calls"].as_array().map(|tc_arr| {
                             tc_arr.iter()
                                 .filter_map(|tc| {
+                                    let index = tc["index"].as_u64().unwrap_or(0) as u32;
                                     let id = tc["id"].as_str().unwrap_or("").to_string();
                                     let func = &tc["function"];
                                     let name = func["name"].as_str().unwrap_or("").to_string();
                                     let arguments = func["arguments"].as_str().unwrap_or("{}").to_string();
-                                    Some(LlmToolCall { id, name, arguments })
+                                    Some(LlmToolCall { index, id, name, arguments })
                                 })
                                 .collect::<Vec<_>>()
                         });
@@ -276,7 +277,9 @@ impl LlmProvider for OpenAiAdapter {
                             buffer = buffer[pos + 2..].to_string();
 
                             for line in event_text.lines() {
-                                if let Some(data) = line.strip_prefix("data: ") {
+                                // SSE 规范允许 data: 后有无空格，先尝试带空格再尝试无空格
+                                let data = line.strip_prefix("data: ").or_else(|| line.strip_prefix("data:"));
+                                if let Some(data) = data {
                                     let data = data.trim();
                                     if data == "[DONE]" {
                                         // 流式响应正常结束，直接关闭 channel（drop sender）
@@ -297,11 +300,12 @@ impl LlmProvider for OpenAiAdapter {
                                                         let content = delta["content"].as_str().map(String::from);
                                                         let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
                                                             tc_arr.iter().filter_map(|tc| {
+                                                                let index = tc["index"].as_u64().unwrap_or(0) as u32;
                                                                 let id = tc["id"].as_str().unwrap_or("").to_string();
                                                                 let func = &tc["function"];
                                                                 let name = func["name"].as_str().unwrap_or("").to_string();
                                                                 let arguments = func["arguments"].as_str().unwrap_or("").to_string();
-                                                                Some(LlmToolCall { id, name, arguments })
+                                                                Some(LlmToolCall { index, id, name, arguments })
                                                             }).collect::<Vec<_>>()
                                                         });
                                                         let finish_reason = c["finish_reason"].as_str().map(String::from);

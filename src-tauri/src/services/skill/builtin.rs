@@ -79,7 +79,19 @@ impl Skill for GenerateDocumentSkill {
         let doc_type = params["format"].as_str().unwrap_or("docx");
         let output_path = params["path"].as_str().unwrap_or("");
         let title = params["title"].as_str().unwrap_or("");
-        let content = params["content"].as_str().unwrap_or("");
+
+        // content 参数支持纯文本或结构化 JSON
+        // 如果是字符串直接使用，如果是 JSON 对象/数组则序列化为字符串传递
+        let content = match params["content"].as_str() {
+            Some(s) => s.to_string(),
+            None => {
+                if !params["content"].is_null() {
+                    serde_json::to_string(&params["content"]).unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            }
+        };
 
         let mut sidecar_params = json!({
             "path": output_path,
@@ -305,6 +317,8 @@ impl Skill for DeleteDocumentSkill {
     async fn execute(&self, params: Value) -> SkillResult {
         let start = Instant::now();
         let file_path = params["path"].as_str().unwrap_or("");
+        // workspace_root 优先使用 executor 注入的值（来自应用配置），
+        // 而非 LLM 提供的值，防止 LLM 提供恶意路径绕过校验
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
         if file_path.is_empty() {
@@ -563,6 +577,7 @@ impl Skill for SearchDocumentsSkill {
         let directory = params["directory"].as_str().unwrap_or(".");
         let max_results = params["max_results"].as_u64().unwrap_or(50) as usize;
         let include_content = params["include_content"].as_bool().unwrap_or(false);
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
         let extensions: Vec<String> = params["extensions"]
             .as_array()
@@ -578,6 +593,7 @@ impl Skill for SearchDocumentsSkill {
             };
         }
 
+        // 路径安全校验：搜索目录必须在工作区内
         let dir_path = std::path::Path::new(directory);
         if !dir_path.exists() || !dir_path.is_dir() {
             return SkillResult {
@@ -586,6 +602,39 @@ impl Skill for SearchDocumentsSkill {
                 error: Some(format!("目录不存在或不是目录: {}", directory)),
                 duration_ms: start.elapsed().as_millis() as u64,
             };
+        }
+
+        if !workspace_root.is_empty() {
+            let canonical_dir = match dir_path.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return SkillResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("目录路径无效: {}", directory)),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    };
+                }
+            };
+            let canonical_root = match std::path::Path::new(workspace_root).canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return SkillResult {
+                        success: false,
+                        output: None,
+                        error: Some("工作区根目录路径无效".to_string()),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    };
+                }
+            };
+            if !canonical_dir.starts_with(&canonical_root) {
+                return SkillResult {
+                    success: false,
+                    output: None,
+                    error: Some("搜索目录不在工作区内，拒绝访问".to_string()),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                };
+            }
         }
 
         let query_lower = query.to_lowercase();
@@ -817,6 +866,7 @@ impl Skill for ListWorkspaceSkill {
         let start = Instant::now();
         let dir_path = params["path"].as_str().unwrap_or(".");
         let max_depth = params["depth"].as_u64().unwrap_or(1) as u32;
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
 
         let extensions: Vec<String> = params["extensions"]
             .as_array()
@@ -840,6 +890,40 @@ impl Skill for ListWorkspaceSkill {
                 error: Some(format!("路径不是目录: {}", dir_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
             };
+        }
+
+        // 路径安全校验：列出目录必须在工作区内
+        if !workspace_root.is_empty() {
+            let canonical_dir = match dir.canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return SkillResult {
+                        success: false,
+                        output: None,
+                        error: Some(format!("目录路径无效: {}", dir_path)),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    };
+                }
+            };
+            let canonical_root = match std::path::Path::new(workspace_root).canonicalize() {
+                Ok(p) => p,
+                Err(_) => {
+                    return SkillResult {
+                        success: false,
+                        output: None,
+                        error: Some("工作区根目录路径无效".to_string()),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                    };
+                }
+            };
+            if !canonical_dir.starts_with(&canonical_root) {
+                return SkillResult {
+                    success: false,
+                    output: None,
+                    error: Some("目录不在工作区内，拒绝访问".to_string()),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                };
+            }
         }
 
         let dir_path_owned = dir_path.to_string();
