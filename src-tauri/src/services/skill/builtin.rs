@@ -598,7 +598,7 @@ impl Skill for SearchDocumentsSkill {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "搜索关键词"
+                    "description": "搜索关键词（可选，仅按扩展名过滤时可省略）"
                 },
                 "directory": {
                     "type": "string",
@@ -620,7 +620,7 @@ impl Skill for SearchDocumentsSkill {
                     "default": 50
                 }
             },
-            "required": ["query"]
+            "required": []
         })
     }
     async fn execute(&self, params: Value) -> SkillResult {
@@ -636,11 +636,11 @@ impl Skill for SearchDocumentsSkill {
             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_default();
 
-        if query.is_empty() {
+        if query.is_empty() && extensions.is_empty() {
             return SkillResult {
                 success: false,
                 output: None,
-                error: Some("搜索关键词不能为空".to_string()),
+                error: Some("搜索关键词和文件扩展名不能同时为空，请至少提供一项".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
             };
         }
@@ -763,10 +763,11 @@ fn skill_search_files(
         }
 
         let name_lower = name.to_lowercase();
-        let mut name_matched = name_lower.contains(query);
+        // 当 query 为空时，跳过名称匹配（仅按扩展名过滤）
+        let mut name_matched = query.is_empty() || name_lower.contains(query);
         let mut content_preview = None;
 
-        if include_content && !name_matched {
+        if include_content && !name_matched && !query.is_empty() {
             let text_extensions = ["txt", "md", "markdown", "csv", "json", "xml", "html", "css", "js", "ts", "py", "rs", "toml", "yaml", "yml"];
             if text_extensions.contains(&ext.as_str()) {
                 if let Ok(content) = std::fs::read_to_string(&path) {
@@ -797,12 +798,21 @@ fn skill_search_files(
             Err(_) => continue,
         };
 
+        // 根据匹配方式确定 match_type：内容匹配 > 名称匹配 > 扩展名过滤
+        let match_type = if content_preview.is_some() {
+            "content"
+        } else if !query.is_empty() {
+            "name"
+        } else {
+            "extension"
+        };
+
         let mut result = json!({
             "path": relative,
             "name": name,
             "extension": ext,
             "size": metadata.len(),
-            "match_type": if content_preview.is_some() { "content" } else { "name" },
+            "match_type": match_type,
         });
 
         if let Some(preview) = content_preview {
