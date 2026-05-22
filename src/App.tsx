@@ -232,9 +232,10 @@ export default function App() {
     // 获取当前工作区路径，传递给 Agent 以正确解析文件路径
     const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
     const workingDirectory = currentWorkspace?.path;
+    const workspaceId = currentWorkspaceId;
 
     try {
-      await sendMessage(text, workingDirectory ? { workingDirectory } : undefined);
+      await sendMessage(text, workingDirectory ? { workingDirectory, workspaceId } : undefined);
     } catch (err) {
       console.error("[App] 发送消息失败:", err);
       setExecutionStatus("failed");

@@ -15,6 +15,8 @@ pub struct AgentContext {
     persisted_count: usize,
     /// 当前工作区路径，用于 Skill 的路径安全校验
     pub workspace_path: String,
+    /// 当前工作区 ID，用于版本快照等需要关联工作区的操作
+    pub workspace_id: String,
 }
 
 impl AgentContext {
@@ -26,6 +28,7 @@ impl AgentContext {
             max_iterations: 20,
             persisted_count: 0,
             workspace_path: String::new(),
+            workspace_id: String::new(),
         }
     }
 

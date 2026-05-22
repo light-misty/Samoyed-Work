@@ -29,6 +29,10 @@ pub struct ExecutionResult {
 /// 接收 session_id 和新增消息列表，返回持久化结果
 type PersistFn = Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync>;
 
+/// 版本快照回调类型
+/// 接收 (workspace_id, session_id, file_path, operation)，在文件修改/删除前创建快照
+type SnapshotFn = Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync>;
+
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
     registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
@@ -38,6 +42,8 @@ pub struct AgentExecutor<R: Runtime> {
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     /// 增量持久化回调，每轮迭代后调用，防止崩溃丢失消息
     persist_fn: Option<PersistFn>,
+    /// 版本快照回调，在文件修改/删除前调用，自动创建快照
+    snapshot_fn: Option<SnapshotFn>,
 }
 
 impl<R: Runtime> AgentExecutor<R> {
@@ -55,6 +61,7 @@ impl<R: Runtime> AgentExecutor<R> {
             max_iterations: 20,
             should_stop: Arc::new(|_| false),
             persist_fn: None,
+            snapshot_fn: None,
         }
     }
 
@@ -76,6 +83,12 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 设置增量持久化回调
     pub fn with_persist_fn(mut self, f: PersistFn) -> Self {
         self.persist_fn = Some(f);
+        self
+    }
+
+    /// 设置版本快照回调，在文件修改/删除前自动创建快照
+    pub fn with_snapshot_fn(mut self, f: SnapshotFn) -> Self {
+        self.snapshot_fn = Some(f);
         self
     }
 
@@ -116,6 +129,31 @@ impl<R: Runtime> AgentExecutor<R> {
 
     fn is_high_risk_skill(name: &str) -> bool {
         HIGH_RISK_SKILLS.contains(&name)
+    }
+
+    /// 从 Skill 参数中提取需要创建快照的文件路径列表
+    /// modify_document / delete_document / convert_format: 单文件路径
+    /// batch_process: 多文件路径列表
+    fn extract_snapshot_paths(&self, skill_name: &str, params: &serde_json::Value) -> Vec<String> {
+        match skill_name {
+            "modify_document" | "delete_document" => {
+                vec![params["path"].as_str().unwrap_or("").to_string()]
+            }
+            "convert_format" => {
+                vec![params["source_path"].as_str().unwrap_or("").to_string()]
+            }
+            "batch_process" => {
+                params["paths"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// 调用增量持久化回调，将新增消息写入数据库
@@ -486,6 +524,32 @@ impl<R: Runtime> AgentExecutor<R> {
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
+                    }
+
+                    // 在文件修改/删除操作前自动创建版本快照
+                    // 确保用户可以回滚到修改前的版本
+                    if let Some(ref snapshot_fn) = self.snapshot_fn {
+                        let files_to_snapshot = self.extract_snapshot_paths(&tool_call.name, &safe_params);
+                        for file_path in &files_to_snapshot {
+                            if !file_path.is_empty() {
+                                let operation = match tool_call.name.as_str() {
+                                    "delete_document" => "delete",
+                                    "modify_document" => "modify",
+                                    "batch_process" => "batch_modify",
+                                    "convert_format" => "convert",
+                                    _ => "unknown",
+                                };
+                                match snapshot_fn(&ctx.workspace_id, &ctx.session_id, file_path, operation) {
+                                    Ok(_) => {
+                                        log::info!("版本快照已创建: file={}, operation={}", file_path, operation);
+                                    }
+                                    Err(e) => {
+                                        // 快照创建失败不阻塞操作，仅记录警告
+                                        log::warn!("版本快照创建失败: file={}, 错误: {}", file_path, e.message);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     let result = match skill_arc {
