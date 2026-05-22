@@ -128,7 +128,26 @@ export interface PromptTemplate {
   description: string;
   content: string;
   category: string;
+  isBuiltin: boolean;
   variables?: TemplateVariable[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** 创建模板参数 */
+export interface CreateTemplateParams {
+  name: string;
+  description: string;
+  content: string;
+  category: string;
+  variables?: TemplateVariable[];
+}
+
+/** 更新模板参数 */
+export interface UpdateTemplateParams {
+  name?: string;
+  description?: string;
+  content?: string;
+  category?: string;
+  variables?: TemplateVariable[];
 }

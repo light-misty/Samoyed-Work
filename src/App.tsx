@@ -23,7 +23,6 @@ import * as tauriCmd from "./services/tauri";
 export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [templateLabel, setTemplateLabel] = useState<string | undefined>(undefined);
 
   // 文档预览状态
   const [previewTitle, setPreviewTitle] = useState("");
@@ -373,8 +372,6 @@ export default function App() {
             inputArea={
               <InputArea
                 onSend={handleSend}
-                templateLabel={templateLabel}
-                onToggleTemplate={() => setTemplateLabel(templateLabel ? undefined : "生成周报")}
                 executionStatus={executionStatus}
                 onStop={handleStop}
               />

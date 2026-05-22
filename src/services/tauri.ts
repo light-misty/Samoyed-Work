@@ -24,6 +24,9 @@ import type {
   SkillInfo,
   CustomSkillConfig,
   AppSettings,
+  PromptTemplate,
+  CreateTemplateParams,
+  UpdateTemplateParams,
 } from "../types";
 
 /** 命令错误 */
@@ -463,6 +466,60 @@ export async function confirmOperation(
     });
   } catch (error) {
     console.error("[tauri] confirmOperation 失败:", error);
+    throw error;
+  }
+}
+
+// ================================================================
+// 模板命令
+// ================================================================
+
+/** 列出所有 Prompt 模板 */
+export async function listTemplates(): Promise<PromptTemplate[]> {
+  try {
+    return await invoke<PromptTemplate[]>("list_templates");
+  } catch (error) {
+    console.error("[tauri] listTemplates 失败:", error);
+    throw error;
+  }
+}
+
+/** 获取单个 Prompt 模板 */
+export async function getTemplate(templateId: string): Promise<PromptTemplate> {
+  try {
+    return await invoke<PromptTemplate>("get_template", { templateId });
+  } catch (error) {
+    console.error("[tauri] getTemplate 失败:", error);
+    throw error;
+  }
+}
+
+/** 创建 Prompt 模板 */
+export async function createTemplate(params: CreateTemplateParams): Promise<PromptTemplate> {
+  try {
+    return await invoke<PromptTemplate>("create_template", { params });
+  } catch (error) {
+    console.error("[tauri] createTemplate 失败:", error);
+    throw error;
+  }
+}
+
+/** 更新 Prompt 模板 */
+export async function updateTemplate(templateId: string, params: UpdateTemplateParams): Promise<PromptTemplate> {
+  try {
+    return await invoke<PromptTemplate>("update_template", { templateId, params });
+  } catch (error) {
+    console.error("[tauri] updateTemplate 失败:", error);
+    throw error;
+  }
+}
+
+/** 删除 Prompt 模板 */
+export async function deleteTemplate(templateId: string): Promise<void> {
+  try {
+    await invoke("delete_template", { templateId });
+  } catch (error) {
+    console.error("[tauri] deleteTemplate 失败:", error);
     throw error;
   }
 }

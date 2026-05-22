@@ -6,19 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DocAgent 是一个基于 Tauri 2.x 的 AI 文档处理桌面应用。用户通过对话式 AI Agent 完成 Word/Excel/PPT/PDF/Markdown 文档的生成、读取、修改、格式转换等操作。
 
-## 当前开发阶段
-
-项目处于 **Phase 2 - 格式扩展**，已完成多格式文档 Sidecar handler、多 LLM Provider 适配（OpenAI/Anthropic/Gemini/Ollama/Custom），正在完善文档预览浮层、文件树、格式转换功能。
-
 ## 技术栈
 
-- **桌面框架**: Tauri 2.x (Rust + React/TypeScript)
+- **桌面框架**: Tauri 2.x (Rust + React/TypeScript)，无边框窗口（decorations: false）
 - **前端**: React 19 + TypeScript 5 + Vite 6 + Tailwind CSS 4
+- **UI 组件**: Shadcn/ui + Radix 原语组件
 - **状态管理**: Zustand 5
-- **后端语言**: Rust 1.80+ (edition 2021)
+- **后端语言**: Rust 1.80+ (edition 2021)，Tokio 异步运行时
 - **数据库**: SQLite (rusqlite, bundled)
 - **配置存储**: JSON 文件 (serde)
-- **文档处理**: Python 3.12+ Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab)
+- **文档处理**: Python 3.12+ Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six)
+- **Markdown 渲染**: react-markdown + remark-gfm + rehype-highlight
+- **PDF 预览**: pdfjs-dist
+- **代码高亮**: Shiki
+- **数学公式**: KaTeX
 
 ## 构建与运行命令
 
@@ -35,6 +36,9 @@ npm run tauri:build
 # TypeScript 类型检查 + Vite 构建
 npm run build    # tsc -b && vite build
 
+# 仅 TypeScript 类型检查（不生成产物）
+npx tsc -b
+
 # 预览生产构建
 npm run preview
 
@@ -43,6 +47,37 @@ pip install -r sidecar/requirements.txt
 ```
 
 环境变量 `DOCAGENT_PYTHON` 可指定 Python 解释器路径。
+
+### Rust 后端命令
+
+```bash
+# 编译（不运行）
+cargo build -p docagent_lib
+
+# 运行所有 Rust 测试
+cargo test
+
+# 运行特定测试
+cargo test <test_name>
+
+# Lint 检查
+cargo clippy
+
+# 代码格式化检查
+cargo fmt --check
+```
+
+注意：目前项目**尚无前端测试和后端测试**，`cargo test` 无可运行测试用例。编写新功能时需注意手工验证。
+
+### 其他有用命令
+
+```bash
+# 查看 Rust 依赖树
+cargo tree
+
+# 清理构建缓存
+cargo clean
+```
 
 ## 项目架构
 
@@ -62,14 +97,17 @@ pip install -r sidecar/requirements.txt
 │  └─ types/             TypeScript类型定义 (与Rust后端对齐)
 │
 ├─ src-tauri/            Rust 后端
+│  ├─ tauri.conf.json    Tauri 配置 (无边框窗口, CSP, 构建命令)
+│  ├─ capabilities/      Tauri 权限配置 (shell, dialog 等插件权限)
 │  ├─ src/
 │  │  ├─ lib.rs          入口, AppState定义, 命令注册, 初始化流程
-│  │  ├─ commands/       Tauri命令层 (8个模块): llm, session, workspace, document, skill, settings, agent, mod
+│  │  ├─ commands/       Tauri命令层 (7个模块+mod): agent, document, llm, session,
+│  │  │                       settings, skill, workspace
 │  │  ├─ services/       业务逻辑层
 │  │  │  ├─ agent/       Agent调度引擎: executor (Tool Calling循环), context (对话上下文管理)
-│  │  │  ├─ llm/         LLM多Provider适配: router (路由+健康检查+fallback), provider (trait),
+│  │  │  ├─ llm/         LLM多Provider适配: router, provider (trait),
 │  │  │  │                  openai_adapter, anthropic_adapter, gemini_adapter
-│  │  │  ├─ skill/       Skill引擎: registry (注册表+禁用管理), builtin (9个内置技能)
+│  │  │  ├─ skill/       Skill引擎: registry (注册表+禁用管理), builtin
 │  │  │  ├─ document/    Python Sidecar进程管理 (自动重启、超时、重试)
 │  │  │  └─ fs_watcher/  文件系统监听 (notify crate, 递归监听+事件发射)
 │  │  ├─ db/             数据库层: init (迁移), session/message/snapshot/token repo
@@ -82,10 +120,19 @@ pip install -r sidecar/requirements.txt
 │
 ├─ sidecar/              Python 文档处理引擎
 │  ├─ main.py            stdin/stdout JSON 行协议入口
-│  └─ handlers/          文档处理器: word_handler, excel_handler, ppt_handler, pdf_handler, markdown_handler
+│  └─ handlers/          文档处理器: word, excel, ppt, pdf, markdown, font_utils
 │
-├─ shared/               前后端共享类型 (TypeScript, 需与Rust端手动同步)
-└─ docs/                 开发文档
+├─ shared/               前后端共享TypeScript类型 (需与Rust端手动同步)
+│  └─ types.ts
+│
+└─ docs/                 详细开发文档
+   ├─ tech_architecture.md     技术架构
+   ├─ tauri_commands.md        Tauri命令/事件接口规范
+   ├─ database_design.md       数据库设计
+   ├─ skill_development.md     Skill开发规范
+   ├─ component_design.md      前端组件设计
+   ├─ task_breakdown.md        任务分解
+   └─ e2e_test_plan.md         E2E测试计划
 ```
 
 ## 核心架构要点
@@ -191,6 +238,44 @@ AppState {
 - 开发模式(debug): DEBUG 级别；发布模式(release): INFO 级别
 - 每次启动覆盖日志文件 (Create + Truncate)
 - 日志文件创建失败时降级为仅控制台输出
+
+### Tauri 安全与权限
+- 无边框窗口 (`decorations: false`)，自定义窗口控件
+- CSP 限制严格: 仅允许 `http://localhost:*` 和 `http://127.0.0.1:*` 的 connect-src（用于 LLM API 调用）
+- 使用 `capabilities/` 目录配置插件权限（shell、dialog 等）
+- Tauri 插件: `tauri-plugin-shell`, `tauri-plugin-dialog`
+
+## TypeScript 路径别名
+
+配置在 `tsconfig.json` 中:
+```json
+{
+  "paths": {
+    "@/*": ["src/*"]
+  }
+}
+```
+示例: `import { Button } from "@/components/common/Button"`
+
+## 开发文档参考
+
+`docs/` 目录包含详细的开发规范文档，在实现相关功能前应优先查阅:
+- `tech_architecture.md` — 完整技术架构与技术选型理由
+- `tauri_commands.md` — 所有 Tauri 命令、事件、错误码的完整接口规范
+- `skill_development.md` — Skill 接口规范与自定义 Skill 开发指南
+- `database_design.md` — 数据库表结构与迁移策略
+- `component_design.md` — 前端组件层级与交互设计
+- `task_breakdown.md` — 阶段任务分解与进度
+- `e2e_test_plan.md` — E2E 测试计划
+
+## 个人规则
+
+`.claude/rules/PersonalRules.md` 包含以下约束:
+- 不确定的知识积极联网搜索
+- 不确定的内容向用户提问确认
+- 生成代码时添加中文注释，不删除原有注释
+- 保持对话语言为中文
+- 任务过程中禁止使用 emoji
 
 ## 提交规范
 

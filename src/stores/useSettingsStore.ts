@@ -4,6 +4,8 @@ import type {
   ProviderInfo,
   SkillInfo,
   PromptTemplate,
+  CreateTemplateParams,
+  UpdateTemplateParams,
   SettingsTab,
 } from "../types";
 import type { ProviderSwitchPayload } from "../services/event";
@@ -91,6 +93,14 @@ interface SettingsState {
   loadSkills: () => Promise<void>;
   /** 初始化 Provider 切换事件监听 */
   initProviderSwitchListener: () => Promise<() => void>;
+  /** 从后端加载模板列表 */
+  loadTemplates: () => Promise<void>;
+  /** 创建模板 */
+  createTemplate: (params: CreateTemplateParams) => Promise<PromptTemplate | null>;
+  /** 更新模板 */
+  updateTemplate: (id: string, params: UpdateTemplateParams) => Promise<PromptTemplate | null>;
+  /** 删除模板 */
+  deleteTemplate: (id: string) => Promise<boolean>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -161,6 +171,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         activeProviderId: defaultProvider?.id ?? null,
         skills,
       });
+      // 异步加载模板列表（不阻塞设置加载）
+      get().loadTemplates();
     } catch (error) {
       console.error("[SettingsStore] 加载设置失败:", error);
     }
@@ -203,5 +215,57 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ lastProviderSwitch: payload });
     });
     return unlisten;
+  },
+
+  // 从后端加载模板列表
+  loadTemplates: async () => {
+    try {
+      const templates = await tauriCmd.listTemplates();
+      set({ templates });
+    } catch (error) {
+      console.error("[SettingsStore] 加载模板列表失败:", error);
+    }
+  },
+
+  // 创建模板
+  createTemplate: async (params) => {
+    try {
+      const newTemplate = await tauriCmd.createTemplate(params);
+      set((state) => ({
+        templates: [newTemplate, ...state.templates],
+      }));
+      return newTemplate;
+    } catch (error) {
+      console.error("[SettingsStore] 创建模板失败:", error);
+      return null;
+    }
+  },
+
+  // 更新模板
+  updateTemplate: async (id, params) => {
+    try {
+      const updated = await tauriCmd.updateTemplate(id, params);
+      set((state) => ({
+        templates: state.templates.map((t) => (t.id === id ? updated : t)),
+      }));
+      return updated;
+    } catch (error) {
+      console.error("[SettingsStore] 更新模板失败:", error);
+      return null;
+    }
+  },
+
+  // 删除模板
+  deleteTemplate: async (id) => {
+    try {
+      await tauriCmd.deleteTemplate(id);
+      set((state) => ({
+        templates: state.templates.filter((t) => t.id !== id),
+      }));
+      return true;
+    } catch (error) {
+      console.error("[SettingsStore] 删除模板失败:", error);
+      return false;
+    }
   },
 }));

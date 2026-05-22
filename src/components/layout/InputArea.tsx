@@ -1,19 +1,19 @@
 import { useState, useRef, useCallback, type KeyboardEvent } from "react";
 import { Icon } from "../common/Icon";
+import { TemplatePicker } from "../common/TemplatePicker";
 import type { ExecutionStatus } from "../../types/workflow";
 
 interface InputAreaProps {
   onSend: (text: string) => void;
   disabled?: boolean;
-  templateLabel?: string;
-  onToggleTemplate?: () => void;
   // Agent 执行状态
   executionStatus?: ExecutionStatus;
   onStop?: () => void;
 }
 
-export function InputArea({ onSend, disabled = false, templateLabel, onToggleTemplate, executionStatus = "idle", onStop }: InputAreaProps) {
+export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop }: InputAreaProps) {
   const [text, setText] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = useCallback(() => {
@@ -32,8 +32,18 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
         e.preventDefault();
         handleSend();
       }
+      // Ctrl+/ 快捷键打开模板选择器
+      if (e.ctrlKey && e.key === "/") {
+        e.preventDefault();
+        setPickerOpen((prev) => !prev);
+      }
+      // Escape 关闭模板选择器
+      if (e.key === "Escape" && pickerOpen) {
+        e.preventDefault();
+        setPickerOpen(false);
+      }
     },
-    [handleSend]
+    [handleSend, pickerOpen]
   );
 
   const handleInput = useCallback(() => {
@@ -43,68 +53,85 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }, []);
 
+  // 模板插入回调
+  const handleTemplateInsert = useCallback((templateText: string) => {
+    setText(templateText);
+    setPickerOpen(false);
+    // 聚焦输入框
+    setTimeout(() => textareaRef.current?.focus(), 50);
+    // 调整高度
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+      }
+    }, 60);
+  }, []);
+
   const hasContent = text.trim().length > 0;
 
   return (
     <div className="input-area-wrapper">
-      <div className={`input-container ${hasContent ? "has-content" : ""}`}>
-        <button className="input-btn" title="附加文件">
-          <Icon name="attach" />
-        </button>
+      <div className="input-container-wrapper" style={{ position: "relative" }}>
+        <div className={`input-container ${hasContent ? "has-content" : ""}`}>
+          <button className="input-btn" title="附加文件">
+            <Icon name="attach" />
+          </button>
 
-        <textarea
-          ref={textareaRef}
-          className="input-textarea"
-          rows={1}
-          placeholder="输入指令，让Agent帮你处理文档..."
-          value={text}
-          onChange={(e) => { setText(e.target.value); handleInput(); }}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-        />
+          <textarea
+            ref={textareaRef}
+            className="input-textarea"
+            rows={1}
+            placeholder="输入指令，让Agent帮你处理文档..."
+            value={text}
+            onChange={(e) => { setText(e.target.value); handleInput(); }}
+            onKeyDown={handleKeyDown}
+            disabled={disabled}
+          />
 
-        <div className="input-actions-right">
-          {templateLabel && (
-            <button className="template-badge" title={templateLabel}>
-              <Icon name="template" size={12} />
-              <span>{templateLabel}</span>
-            </button>
-          )}
-          {onToggleTemplate && (
-            <button className="input-btn" title="Prompt模板" onClick={onToggleTemplate}>
+          <div className="input-actions-right">
+            <button
+              className={`input-btn ${pickerOpen ? "input-btn-active" : ""}`}
+              title="Prompt模板 (Ctrl+/)"
+              onClick={() => setPickerOpen(!pickerOpen)}
+            >
               <Icon name="template" />
             </button>
-          )}
-          {executionStatus === "running" && onStop ? (
-            // Agent 执行中显示停止按钮
-            <button
-              className="stop-btn"
-              title="停止执行"
-              onClick={onStop}
-            >
-              <Icon name="stop" />
-            </button>
-          ) : executionStatus === "stopping" ? (
-            // 正在停止中，显示加载状态
-            <button
-              className="stop-btn stop-btn-loading"
-              title="正在停止..."
-              disabled
-            >
-              <span className="loading-spinner"></span>
-            </button>
-          ) : (
-            // 正常发送按钮
-            <button
-              className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
-              title="发送"
-              onClick={handleSend}
-              disabled={disabled || !text.trim()}
-            >
-              <Icon name="send" />
-            </button>
-          )}
+            {executionStatus === "running" && onStop ? (
+              <button
+                className="stop-btn"
+                title="停止执行"
+                onClick={onStop}
+              >
+                <Icon name="stop" />
+              </button>
+            ) : executionStatus === "stopping" ? (
+              <button
+                className="stop-btn stop-btn-loading"
+                title="正在停止..."
+                disabled
+              >
+                <span className="loading-spinner"></span>
+              </button>
+            ) : (
+              <button
+                className={`send-btn ${hasContent && !disabled ? "send-btn-active" : ""}`}
+                title="发送"
+                onClick={handleSend}
+                disabled={disabled || !text.trim()}
+              >
+                <Icon name="send" />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* 模板选择器 */}
+        <TemplatePicker
+          open={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          onInsert={handleTemplateInsert}
+        />
       </div>
 
       <div className="shortcut-hints">
@@ -115,7 +142,7 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
           <kbd className="kbd">Shift + Enter</kbd> 换行
         </span>
         <span>
-          <kbd className="kbd">Ctrl + N</kbd> 新建会话
+          <kbd className="kbd">Ctrl + /</kbd> 模板
         </span>
       </div>
 
@@ -163,6 +190,10 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
           color: var(--color-text-secondary);
           background: var(--color-bg-sub);
         }
+        .input-btn-active {
+          color: var(--color-accent);
+          background: var(--color-accent-light);
+        }
         .input-textarea {
           flex: 1;
           resize: none;
@@ -180,19 +211,6 @@ export function InputArea({ onSend, disabled = false, templateLabel, onToggleTem
           align-items: center;
           gap: 4px;
           flex-shrink: 0;
-        }
-        .template-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          padding: 2px 6px;
-          background: var(--color-accent-light);
-          border-radius: var(--radius-xs);
-          font-size: 10px;
-          color: var(--color-accent);
-          font-weight: 500;
-          border: none;
-          cursor: default;
         }
         .send-btn {
           width: 30px;

@@ -245,6 +245,12 @@ pub fn run() {
             commands::agent::start_agent,
             commands::agent::stop_agent,
             commands::agent::confirm_operation,
+            // 模板命令
+            commands::template::list_templates,
+            commands::template::get_template,
+            commands::template::create_template,
+            commands::template::update_template,
+            commands::template::delete_template,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

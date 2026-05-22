@@ -5,3 +5,4 @@ pub mod document;
 pub mod skill;
 pub mod settings;
 pub mod agent;
+pub mod template;
