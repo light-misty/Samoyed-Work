@@ -1,17 +1,87 @@
+import { useState, useEffect, useCallback } from "react";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { Icon } from "../common/Icon";
+import { CustomSkillDialog } from "./CustomSkillDialog";
+import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
+import { addCustomSkill, updateCustomSkill, deleteCustomSkill, listCustomSkills } from "../../services/tauri";
+import type { CustomSkillConfig } from "../../types";
 
 export function SkillsTab() {
-  const { skills, toggleSkill } = useSettingsStore();
+  const { skills, toggleSkill, refreshSkills } = useSettingsStore();
+  const [customSkills, setCustomSkills] = useState<CustomSkillConfig[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSkill, setEditingSkill] = useState<CustomSkillConfig | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomSkillConfig | null>(null);
+
+  // 加载自定义 Skill 列表
+  const loadCustomSkills = useCallback(async () => {
+    try {
+      const configs = await listCustomSkills();
+      setCustomSkills(configs);
+    } catch (err) {
+      console.error("[SkillsTab] 加载自定义 Skill 失败:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCustomSkills();
+  }, [loadCustomSkills]);
+
+  // 打开创建对话框
+  const handleCreate = () => {
+    setEditingSkill(null);
+    setDialogOpen(true);
+  };
+
+  // 打开编辑对话框
+  const handleEdit = (skill: CustomSkillConfig) => {
+    setEditingSkill(skill);
+    setDialogOpen(true);
+  };
+
+  // 保存自定义 Skill（创建或更新）
+  const handleSave = async (config: CustomSkillConfig) => {
+    if (editingSkill) {
+      // 更新
+      await updateCustomSkill(config);
+    } else {
+      // 创建
+      await addCustomSkill(config);
+    }
+    // 刷新列表
+    await loadCustomSkills();
+    await refreshSkills();
+  };
+
+  // 确认删除
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCustomSkill(deleteTarget.id);
+      await loadCustomSkills();
+      await refreshSkills();
+    } catch (err) {
+      console.error("[SkillsTab] 删除自定义 Skill 失败:", err);
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  // 内置 Skill 列表
+  const builtinSkills = skills.filter((s) => s.isBuiltin);
+  // 自定义 Skill 列表（从 registry 同步）
+  const customSkillInfos = skills.filter((s) => !s.isBuiltin);
 
   return (
     <div>
+      {/* 内置 Skills */}
       <div className="section-header">
         <span className="section-title">内置 Skills</span>
-        <span className="section-badge">{skills.filter((s) => s.enabled).length} / {skills.length}</span>
+        <span className="section-badge">{builtinSkills.filter((s) => s.enabled).length} / {builtinSkills.length}</span>
       </div>
 
       <div className="skills-list">
-        {skills.map((s) => (
+        {builtinSkills.map((s) => (
           <div key={s.id} className="skill-item">
             <div className="skill-item-info">
               <div className="skill-name">{s.name}</div>
@@ -31,16 +101,100 @@ export function SkillsTab() {
         ))}
       </div>
 
+      {/* 自定义 Skills */}
       <div className="custom-skills-section">
         <div className="section-header">
           <span className="section-title">自定义 Skills</span>
+          {customSkills.length > 0 && (
+            <span className="section-badge">{customSkills.length}</span>
+          )}
         </div>
-        <div className="empty-state-lg">暂无自定义 Skill，点击下方按钮添加</div>
-        <button className="add-btn">
+
+        {customSkills.length > 0 ? (
+          <div className="skills-list">
+            {customSkills.map((cs) => {
+              // 从 registry 中获取启用状态
+              const registryInfo = customSkillInfos.find((s) => s.id === cs.id);
+              const enabled = registryInfo?.enabled ?? true;
+              return (
+                <div key={cs.id} className="skill-item custom-skill-item">
+                  <div className="skill-item-info">
+                    <div className="skill-name-row">
+                      <span className="skill-name">{cs.name}</span>
+                      <span className="skill-custom-badge">自定义</span>
+                    </div>
+                    <div className="skill-desc">{cs.description}</div>
+                    {cs.supportedTypes.length > 0 && (
+                      <div className="skill-types">
+                        {cs.supportedTypes.map((t) => (
+                          <span key={t} className="skill-type-tag">{t}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="skill-actions">
+                    <label className="toggle-switch">
+                      <input
+                        type="checkbox"
+                        className="toggle-input"
+                        checked={enabled}
+                        onChange={() => toggleSkill(cs.id)}
+                      />
+                      <span className="toggle-track" />
+                      <span className="toggle-thumb" />
+                    </label>
+                    <button
+                      className="skill-action-btn"
+                      title="编辑"
+                      onClick={() => handleEdit(cs)}
+                    >
+                      <Icon name="edit" size={14} />
+                    </button>
+                    <button
+                      className="skill-action-btn skill-action-btn-danger"
+                      title="删除"
+                      onClick={() => setDeleteTarget(cs)}
+                    >
+                      <Icon name="trash" size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-state-lg">
+            <div className="empty-icon">
+              <Icon name="template" size={32} />
+            </div>
+            <div>暂无自定义 Skill</div>
+            <div className="empty-desc">创建自定义 Skill 来扩展 Agent 的能力</div>
+          </div>
+        )}
+
+        <button className="add-btn" onClick={handleCreate}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          添加自定义 Skill
+          创建自定义 Skill
         </button>
       </div>
+
+      {/* 自定义 Skill 编辑对话框 */}
+      <CustomSkillDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        skill={editingSkill}
+        onSave={handleSave}
+      />
+
+      {/* 删除确认对话框 */}
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          name={`自定义 Skill "${deleteTarget.name}"`}
+          isDir={false}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       <style>{`
         .section-header {
@@ -92,10 +246,60 @@ export function SkillsTab() {
           font-weight: 500;
           color: var(--color-text-primary);
         }
+        .skill-name-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .skill-custom-badge {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 1px 6px;
+          border-radius: 4px;
+          background: var(--color-purple-light, rgba(139,92,246,0.1));
+          color: var(--color-purple, #8b5cf6);
+        }
         .skill-desc {
           font-size: 11px;
           color: var(--color-text-quaternary);
           margin-top: 2px;
+        }
+        .skill-types {
+          display: flex;
+          gap: 4px;
+          margin-top: 4px;
+        }
+        .skill-type-tag {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 1px 6px;
+          border-radius: 4px;
+          background: var(--color-bg-sub);
+          color: var(--color-text-quaternary);
+        }
+        .skill-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        .skill-action-btn {
+          width: 28px;
+          height: 28px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: var(--radius-sm);
+          color: var(--color-text-quaternary);
+          transition: all 0.15s;
+        }
+        .skill-action-btn:hover {
+          background: var(--color-bg-sub);
+          color: var(--color-text-primary);
+        }
+        .skill-action-btn-danger:hover {
+          background: var(--color-error-light, rgba(239,68,68,0.1));
+          color: var(--color-error, #ef4444);
         }
         .toggle-switch {
           position: relative;
@@ -143,6 +347,14 @@ export function SkillsTab() {
           color: var(--color-text-quaternary);
           text-align: center;
           padding: 24px 16px;
+        }
+        .empty-icon {
+          margin-bottom: 8px;
+          opacity: 0.4;
+        }
+        .empty-desc {
+          font-size: 11px;
+          margin-top: 4px;
         }
         .add-btn {
           display: inline-flex;

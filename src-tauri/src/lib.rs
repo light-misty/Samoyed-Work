@@ -28,6 +28,7 @@ pub struct AppState {
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub skill_registry: Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
+    pub custom_skill_loader: Arc<crate::services::skill::custom::CustomSkillLoader>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
 }
 
@@ -137,6 +138,10 @@ pub fn run() {
                 Arc::clone(&doc_service_for_skills),
             );
 
+            // 初始化自定义 Skill 加载器并加载自定义 Skill
+            let custom_skill_loader = crate::services::skill::custom::CustomSkillLoader::new(&app_data_dir);
+            custom_skill_loader.register_all(&mut skill_registry);
+
             // 从配置加载已禁用 Skill 列表
             let app_settings = config_manager.load_app_settings().unwrap_or_default();
             skill_registry = skill_registry.with_disabled_skills(app_settings.disabled_skills.clone());
@@ -154,6 +159,7 @@ pub fn run() {
                 doc_service: doc_service_for_skills,
                 llm_router: Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router))),
                 skill_registry: Arc::new(tokio::sync::Mutex::new(skill_registry)),
+                custom_skill_loader: Arc::new(custom_skill_loader),
                 fs_watcher: Arc::new(fs_watcher),
             };
 
@@ -235,8 +241,10 @@ pub fn run() {
             commands::document::show_in_file_manager,
             // Skill 命令
             commands::skill::list_skills,
+            commands::skill::list_custom_skills,
             commands::skill::toggle_skill,
             commands::skill::add_custom_skill,
+            commands::skill::update_custom_skill,
             commands::skill::delete_custom_skill,
             // 设置命令
             commands::settings::get_settings,

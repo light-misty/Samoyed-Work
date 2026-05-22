@@ -368,6 +368,16 @@ export async function listSkills(): Promise<SkillInfo[]> {
   }
 }
 
+/** 列出所有自定义 Skill 配置 */
+export async function listCustomSkills(): Promise<CustomSkillConfig[]> {
+  try {
+    return await invoke<CustomSkillConfig[]>("list_custom_skills");
+  } catch (error) {
+    console.error("[tauri] listCustomSkills 失败:", error);
+    throw error;
+  }
+}
+
 /** 切换 Skill 启用/禁用 */
 export async function toggleSkill(skillId: string, enabled: boolean): Promise<void> {
   try {
@@ -379,11 +389,21 @@ export async function toggleSkill(skillId: string, enabled: boolean): Promise<vo
 }
 
 /** 添加自定义 Skill */
-export async function addCustomSkill(config: CustomSkillConfig): Promise<void> {
+export async function addCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
   try {
-    await invoke("add_custom_skill", { config });
+    return await invoke<CustomSkillConfig>("add_custom_skill", { config });
   } catch (error) {
     console.error("[tauri] addCustomSkill 失败:", error);
+    throw error;
+  }
+}
+
+/** 更新自定义 Skill */
+export async function updateCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
+  try {
+    return await invoke<CustomSkillConfig>("update_custom_skill", { config });
+  } catch (error) {
+    console.error("[tauri] updateCustomSkill 失败:", error);
     throw error;
   }
 }

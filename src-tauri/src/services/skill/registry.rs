@@ -160,4 +160,17 @@ impl SkillRegistry {
         }
         self.disabled_skills.iter().cloned().collect()
     }
+
+    /// 注销技能（从注册表中移除）
+    /// 用于删除自定义 Skill 时彻底移除
+    pub fn unregister(&mut self, skill_id: &str) -> bool {
+        self.disabled_skills.remove(skill_id);
+        if self.skills.remove(skill_id).is_some() {
+            log::info!("技能已注销: {}", skill_id);
+            true
+        } else {
+            log::warn!("注销技能失败，技能不存在: {}", skill_id);
+            false
+        }
+    }
 }

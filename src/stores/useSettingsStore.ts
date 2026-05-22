@@ -91,6 +91,8 @@ interface SettingsState {
   loadSettings: () => Promise<void>;
   loadProviders: () => Promise<void>;
   loadSkills: () => Promise<void>;
+  /** 刷新 Skill 列表（loadSkills 的别名，语义更清晰） */
+  refreshSkills: () => Promise<void>;
   /** 初始化 Provider 切换事件监听 */
   initProviderSwitchListener: () => Promise<() => void>;
   /** 从后端加载模板列表 */
@@ -200,6 +202,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch (error) {
       console.error("[SettingsStore] 加载 Skill 列表失败:", error);
     }
+  },
+
+  // 刷新 Skill 列表
+  refreshSkills: async () => {
+    await get().loadSkills();
   },
 
   // 初始化 Provider 切换事件监听，返回取消监听函数

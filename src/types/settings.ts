@@ -104,12 +104,17 @@ export interface SkillInfo {
 }
 
 export interface CustomSkillConfig {
+  id: string;
   name: string;
   description: string;
   category: string;
+  /** 提示词模板，支持 {{param_name}} 占位符 */
   promptTemplate: string;
   supportedTypes: string[];
   paramsSchema?: unknown;
+  version: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ----- 模板相关类型 -----
