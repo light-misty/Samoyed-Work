@@ -4,6 +4,8 @@ use crate::errors::CommandError;
 use super::types;
 
 /// Agent 事件发射器，封装 Tauri 事件发送逻辑
+/// 所有 emit 方法返回 Result，调用方可根据事件重要性决定是否忽略错误
+/// 关键事件（error/done/stopped）失败时会额外记录 warn 级别日志
 pub struct AgentEmitter<R: Runtime> {
     app_handle: AppHandle<R>,
 }
@@ -22,151 +24,89 @@ impl<R: Runtime> AgentEmitter<R> {
         Self { app_handle }
     }
 
-    /// 发射 Agent 思考链增量事件
+    /// 内部统一发射方法，根据事件重要性选择日志级别
+    fn emit_event<T: Clone + serde::Serialize + std::fmt::Debug>(
+        &self,
+        event: &str,
+        payload: T,
+        critical: bool,
+    ) -> Result<(), CommandError> {
+        log::debug!("发射事件: {}", event);
+        self.app_handle
+            .emit(event, payload)
+            .map_err(|e| {
+                // 关键事件发射失败用 warn 级别，非关键用 debug 级别
+                if critical {
+                    log::warn!("关键事件 {} 发射失败: {}", event, e);
+                } else {
+                    log::debug!("事件 {} 发射失败（非关键）: {}", event, e);
+                }
+                CommandError::from(e)
+            })
+    }
+
+    /// 发射 Agent 思考链增量事件（非关键）
     pub fn emit_thinking(&self, payload: types::ThinkingPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_THINKING, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_THINKING, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_THINKING, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_THINKING, payload, false)
     }
 
-    /// 发射 Agent 回复内容增量事件
+    /// 发射 Agent 回复内容增量事件（非关键）
     pub fn emit_content(&self, payload: types::ContentPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_CONTENT, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_CONTENT, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_CONTENT, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_CONTENT, payload, false)
     }
 
-    /// 发射 Tool 调用开始事件
+    /// 发射 Tool 调用开始事件（非关键）
     pub fn emit_tool_call(&self, payload: types::ToolCallPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_TOOL_CALL, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_TOOL_CALL, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_TOOL_CALL, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_TOOL_CALL, payload, false)
     }
 
-    /// 发射 Tool 执行结果事件
+    /// 发射 Tool 执行结果事件（非关键）
     pub fn emit_tool_result(&self, payload: types::ToolResultPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_TOOL_RESULT, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_TOOL_RESULT, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_TOOL_RESULT, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_TOOL_RESULT, payload, false)
     }
 
-    /// 发射需要用户确认的事件
+    /// 发射需要用户确认的事件（关键 - 用户必须收到确认请求）
     pub fn emit_confirm(&self, payload: types::ConfirmPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_CONFIRM, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_CONFIRM, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_CONFIRM, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_CONFIRM, payload, true)
     }
 
-    /// 发射 Todo 列表更新事件
+    /// 发射 Todo 列表更新事件（非关键）
     pub fn emit_todo_update(&self, payload: types::TodoUpdatePayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_TODO_UPDATE, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_TODO_UPDATE, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_TODO_UPDATE, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_TODO_UPDATE, payload, false)
     }
 
-    /// 发射 Agent 执行完成事件
+    /// 发射 Agent 执行完成事件（关键 - 前端依赖此事件更新状态）
     pub fn emit_done(&self, payload: types::DonePayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_DONE, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_DONE, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_DONE, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_DONE, payload, true)
     }
 
-    /// 发射 Agent 执行错误事件
+    /// 发射 Agent 执行错误事件（关键 - 前端依赖此事件显示错误信息）
     pub fn emit_error(&self, payload: types::ErrorPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_ERROR, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_ERROR, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_ERROR, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_ERROR, payload, true)
     }
 
-    /// 发射 Agent 执行中断事件
+    /// 发射 Agent 执行中断事件（关键 - 前端依赖此事件更新状态）
     pub fn emit_stopped(&self, payload: types::StoppedPayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::AGENT_STOPPED, payload.session_id);
-        self.app_handle
-            .emit(types::AGENT_STOPPED, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::AGENT_STOPPED, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::AGENT_STOPPED, payload, true)
     }
 
-    /// 发射 Token 用量更新事件
+    /// 发射 Token 用量更新事件（非关键）
     pub fn emit_token_update(&self, payload: types::TokenUpdatePayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={})", types::TOKEN_UPDATE, payload.session_id);
-        self.app_handle
-            .emit(types::TOKEN_UPDATE, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::TOKEN_UPDATE, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::TOKEN_UPDATE, payload, false)
     }
 
-    /// 发射会话更新事件
+    /// 发射会话更新事件（关键 - 前端依赖此事件刷新会话列表）
     pub fn emit_session_updated(&self, payload: types::SessionUpdatePayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (session_id={}, change_type={})", types::SESSION_UPDATED, payload.session_id, payload.change_type);
-        self.app_handle
-            .emit(types::SESSION_UPDATED, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::SESSION_UPDATED, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::SESSION_UPDATED, payload, true)
     }
 
-    /// 发射工作区变更事件
+    /// 发射工作区变更事件（关键 - 前端依赖此事件刷新文件树）
     pub fn emit_workspace_change(&self, payload: types::WorkspaceChangePayload) -> Result<(), CommandError> {
-        log::debug!("发射事件: {} (workspace_id={})", types::WORKSPACE_CHANGE, payload.workspace_id);
-        self.app_handle
-            .emit(types::WORKSPACE_CHANGE, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::WORKSPACE_CHANGE, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::WORKSPACE_CHANGE, payload, true)
     }
 
-    /// 发射 LLM Provider 切换通知事件
+    /// 发射 LLM Provider 切换通知事件（非关键）
     pub fn emit_provider_switch(&self, payload: types::ProviderSwitchPayload) -> Result<(), CommandError> {
-        log::debug!(
-            "发射事件: {} (from={}, to={})",
-            types::LLM_PROVIDER_SWITCH,
-            payload.from_provider_id,
-            payload.to_provider_id
-        );
-        self.app_handle
-            .emit(types::LLM_PROVIDER_SWITCH, payload)
-            .map_err(|e| {
-                log::warn!("发射事件 {} 失败: {}", types::LLM_PROVIDER_SWITCH, e);
-                CommandError::from(e)
-            })
+        self.emit_event(types::LLM_PROVIDER_SWITCH, payload, false)
     }
 }

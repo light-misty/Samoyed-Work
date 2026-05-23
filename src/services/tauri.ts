@@ -2,9 +2,10 @@
  * Tauri 命令调用封装
  * 为每个后端 Tauri 命令提供对应的 TypeScript 异步函数
  * 函数名使用 camelCase，调用 invoke 时使用 snake_case 命令名
- * 类型定义统一从 types/ 目录导入，确保前后端类型一致
+ * 统一使用 safeInvoke 进行错误处理和 Toast 通知
  */
 import { invoke } from "@tauri-apps/api/core";
+import { safeInvoke } from "./errorHandler";
 
 import type {
   ConnectionResult,
@@ -32,85 +33,53 @@ import type {
   TokenUsageOverview,
 } from "../types";
 
-/** 命令错误 */
-export interface CommandError {
-  code: number;
-  message: string;
-}
-
 // ================================================================
 // LLM 命令
 // ================================================================
 
 /** 测试 LLM Provider 连接 */
 export async function testConnection(providerId: string): Promise<ConnectionResult> {
-  try {
-    return await invoke<ConnectionResult>("test_connection", { providerId });
-  } catch (error) {
-    console.error("[tauri] testConnection 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<ConnectionResult>("test_connection", { providerId }), { context: "testConnection" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 列出所有 LLM Provider */
 export async function listProviders(): Promise<ProviderInfo[]> {
-  try {
-    return await invoke<ProviderInfo[]>("list_providers");
-  } catch (error) {
-    console.error("[tauri] listProviders 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<ProviderInfo[]>("list_providers"), { context: "listProviders" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 添加 LLM Provider */
 export async function addProvider(config: ProviderConfig): Promise<void> {
-  try {
-    await invoke("add_provider", { config });
-  } catch (error) {
-    console.error("[tauri] addProvider 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("add_provider", { config }), { context: "addProvider" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 更新 LLM Provider */
 export async function updateProvider(providerId: string, config: ProviderConfig): Promise<void> {
-  try {
-    await invoke("update_provider", { providerId, config });
-  } catch (error) {
-    console.error("[tauri] updateProvider 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("update_provider", { providerId, config }), { context: "updateProvider" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 删除 LLM Provider */
 export async function deleteProvider(providerId: string): Promise<void> {
-  try {
-    await invoke("delete_provider", { providerId });
-  } catch (error) {
-    console.error("[tauri] deleteProvider 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("delete_provider", { providerId }), { context: "deleteProvider" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 设置默认 LLM Provider */
 export async function setDefaultProvider(providerId: string): Promise<void> {
-  try {
-    await invoke("set_default_provider", { providerId });
-  } catch (error) {
-    console.error("[tauri] setDefaultProvider 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("set_default_provider", { providerId }), { context: "setDefaultProvider" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 对所有 LLM Provider 执行健康检查 */
 export async function healthCheckProviders(): Promise<Record<string, ConnectionResult>> {
-  try {
-    const result = await invoke<Record<string, ConnectionResult>>("health_check_providers");
-    return result;
-  } catch (error) {
-    console.error("[tauri] healthCheckProviders 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<Record<string, ConnectionResult>>("health_check_providers"), { context: "healthCheckProviders" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================
@@ -119,62 +88,42 @@ export async function healthCheckProviders(): Promise<Record<string, ConnectionR
 
 /** 创建新会话 */
 export async function createSession(params: CreateSessionParams): Promise<Session> {
-  try {
-    return await invoke<Session>("create_session", { params });
-  } catch (error) {
-    console.error("[tauri] createSession 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<Session>("create_session", { params }), { context: "createSession" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 列出会话 */
 export async function listSessions(filter?: SessionFilter): Promise<SessionSummary[]> {
-  try {
-    return await invoke<SessionSummary[]>("list_sessions", { filter: filter ?? null });
-  } catch (error) {
-    console.error("[tauri] listSessions 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<SessionSummary[]>("list_sessions", { filter: filter ?? null }), { context: "listSessions" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 获取会话详情 */
 export async function getSession(sessionId: string): Promise<SessionDetail> {
-  try {
-    return await invoke<SessionDetail>("get_session", { sessionId });
-  } catch (error) {
-    console.error("[tauri] getSession 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<SessionDetail>("get_session", { sessionId }), { context: "getSession" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 删除会话 */
 export async function deleteSession(sessionId: string): Promise<void> {
-  try {
-    await invoke("delete_session", { sessionId });
-  } catch (error) {
-    console.error("[tauri] deleteSession 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("delete_session", { sessionId }), { context: "deleteSession" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 更新会话标题 */
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
-  try {
-    await invoke("update_session_title", { sessionId, title });
-  } catch (error) {
-    console.error("[tauri] updateSessionTitle 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("update_session_title", { sessionId, title }), { context: "updateSessionTitle" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 清除所有会话数据 */
 export async function clearAllSessions(): Promise<number> {
-  try {
-    return await invoke<number>("clear_all_sessions");
-  } catch (error) {
-    console.error("[tauri] clearAllSessions 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<number>("clear_all_sessions"), { context: "clearAllSessions" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================
@@ -183,42 +132,28 @@ export async function clearAllSessions(): Promise<number> {
 
 /** 列出所有工作区 */
 export async function listWorkspaces(): Promise<WorkspaceInfo[]> {
-  try {
-    return await invoke<WorkspaceInfo[]>("list_workspaces");
-  } catch (error) {
-    console.error("[tauri] listWorkspaces 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<WorkspaceInfo[]>("list_workspaces"), { context: "listWorkspaces" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 添加工作区 */
 export async function addWorkspace(path: string, name?: string): Promise<WorkspaceInfo> {
-  try {
-    return await invoke<WorkspaceInfo>("add_workspace", { path, name: name ?? null });
-  } catch (error) {
-    console.error("[tauri] addWorkspace 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<WorkspaceInfo>("add_workspace", { path, name: name ?? null }), { context: "addWorkspace" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 移除工作区 */
 export async function removeWorkspace(workspaceId: string): Promise<void> {
-  try {
-    await invoke("remove_workspace", { workspaceId });
-  } catch (error) {
-    console.error("[tauri] removeWorkspace 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("remove_workspace", { workspaceId }), { context: "removeWorkspace" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 设置活动工作区 */
 export async function setActiveWorkspace(workspaceId: string): Promise<void> {
-  try {
-    await invoke("set_active_workspace", { workspaceId });
-  } catch (error) {
-    console.error("[tauri] setActiveWorkspace 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("set_active_workspace", { workspaceId }), { context: "setActiveWorkspace" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 获取文件树 */
@@ -227,16 +162,13 @@ export async function getFileTree(
   path?: string,
   depth?: number,
 ): Promise<FileNode[]> {
-  try {
-    return await invoke<FileNode[]>("get_file_tree", {
-      workspaceId,
-      path: path ?? null,
-      depth: depth ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] getFileTree 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<FileNode[]>("get_file_tree", {
+    workspaceId,
+    path: path ?? null,
+    depth: depth ?? null,
+  }), { context: "getFileTree" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 搜索文件 */
@@ -245,16 +177,13 @@ export async function searchFiles(
   query: string,
   options?: SearchOptions,
 ): Promise<SearchResult[]> {
-  try {
-    return await invoke<SearchResult[]>("search_files", {
-      workspaceId,
-      query,
-      options: options ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] searchFiles 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<SearchResult[]>("search_files", {
+    workspaceId,
+    query,
+    options: options ?? null,
+  }), { context: "searchFiles" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================
@@ -266,12 +195,9 @@ export async function previewDocument(
   workspaceId: string,
   path: string,
 ): Promise<PreviewContent> {
-  try {
-    return await invoke<PreviewContent>("preview_document", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] previewDocument 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PreviewContent>("preview_document", { workspaceId, path }), { context: "previewDocument" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 获取 PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染 */
@@ -279,12 +205,9 @@ export async function getPdfData(
   workspaceId: string,
   path: string,
 ): Promise<string> {
-  try {
-    return await invoke<string>("get_pdf_data", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] getPdfData 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<string>("get_pdf_data", { workspaceId, path }), { context: "getPdfData" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 获取文档版本历史 */
@@ -292,12 +215,9 @@ export async function getDocumentVersions(
   workspaceId: string,
   path: string,
 ): Promise<VersionInfo[]> {
-  try {
-    return await invoke<VersionInfo[]>("get_document_versions", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] getDocumentVersions 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<VersionInfo[]>("get_document_versions", { workspaceId, path }), { context: "getDocumentVersions" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 回滚到指定版本 */
@@ -306,12 +226,8 @@ export async function rollbackVersion(
   path: string,
   versionId: string,
 ): Promise<void> {
-  try {
-    await invoke("rollback_version", { workspaceId, path, versionId });
-  } catch (error) {
-    console.error("[tauri] rollbackVersion 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("rollback_version", { workspaceId, path, versionId }), { context: "rollbackVersion" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 获取指定版本快照的文档内容，用于版本预览和差异对比 */
@@ -320,12 +236,9 @@ export async function getVersionContent(
   path: string,
   versionId: string,
 ): Promise<PreviewContent> {
-  try {
-    return await invoke<PreviewContent>("get_version_content", { workspaceId, path, versionId });
-  } catch (error) {
-    console.error("[tauri] getVersionContent 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PreviewContent>("get_version_content", { workspaceId, path, versionId }), { context: "getVersionContent" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 创建空文件 */
@@ -333,12 +246,8 @@ export async function createFile(
   workspaceId: string,
   path: string,
 ): Promise<void> {
-  try {
-    await invoke("create_file", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] createFile 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("create_file", { workspaceId, path }), { context: "createFile" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 创建目录 */
@@ -346,12 +255,8 @@ export async function createDirectory(
   workspaceId: string,
   path: string,
 ): Promise<void> {
-  try {
-    await invoke("create_directory", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] createDirectory 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("create_directory", { workspaceId, path }), { context: "createDirectory" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 重命名文件或目录 */
@@ -360,12 +265,8 @@ export async function renameFile(
   oldPath: string,
   newPath: string,
 ): Promise<void> {
-  try {
-    await invoke("rename_file", { workspaceId, oldPath, newPath });
-  } catch (error) {
-    console.error("[tauri] renameFile 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("rename_file", { workspaceId, oldPath, newPath }), { context: "renameFile" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 删除文件或目录（永久删除） */
@@ -373,12 +274,8 @@ export async function deleteFile(
   workspaceId: string,
   path: string,
 ): Promise<void> {
-  try {
-    await invoke("delete_file", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] deleteFile 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("delete_file", { workspaceId, path }), { context: "deleteFile" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 在系统文件管理器中显示 */
@@ -386,12 +283,8 @@ export async function showInFileManager(
   workspaceId: string,
   path: string,
 ): Promise<void> {
-  try {
-    await invoke("show_in_file_manager", { workspaceId, path });
-  } catch (error) {
-    console.error("[tauri] showInFileManager 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("show_in_file_manager", { workspaceId, path }), { context: "showInFileManager" });
+  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================
@@ -400,62 +293,42 @@ export async function showInFileManager(
 
 /** 列出所有 Skill */
 export async function listSkills(): Promise<SkillInfo[]> {
-  try {
-    return await invoke<SkillInfo[]>("list_skills");
-  } catch (error) {
-    console.error("[tauri] listSkills 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<SkillInfo[]>("list_skills"), { context: "listSkills" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 列出所有自定义 Skill 配置 */
 export async function listCustomSkills(): Promise<CustomSkillConfig[]> {
-  try {
-    return await invoke<CustomSkillConfig[]>("list_custom_skills");
-  } catch (error) {
-    console.error("[tauri] listCustomSkills 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<CustomSkillConfig[]>("list_custom_skills"), { context: "listCustomSkills" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 切换 Skill 启用/禁用 */
 export async function toggleSkill(skillId: string, enabled: boolean): Promise<void> {
-  try {
-    await invoke("toggle_skill", { skillId, enabled });
-  } catch (error) {
-    console.error("[tauri] toggleSkill 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("toggle_skill", { skillId, enabled }), { context: "toggleSkill" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 添加自定义 Skill */
 export async function addCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
-  try {
-    return await invoke<CustomSkillConfig>("add_custom_skill", { config });
-  } catch (error) {
-    console.error("[tauri] addCustomSkill 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<CustomSkillConfig>("add_custom_skill", { config }), { context: "addCustomSkill" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 更新自定义 Skill */
 export async function updateCustomSkill(config: CustomSkillConfig): Promise<CustomSkillConfig> {
-  try {
-    return await invoke<CustomSkillConfig>("update_custom_skill", { config });
-  } catch (error) {
-    console.error("[tauri] updateCustomSkill 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<CustomSkillConfig>("update_custom_skill", { config }), { context: "updateCustomSkill" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 删除自定义 Skill */
 export async function deleteCustomSkill(skillId: string): Promise<void> {
-  try {
-    await invoke("delete_custom_skill", { skillId });
-  } catch (error) {
-    console.error("[tauri] deleteCustomSkill 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("delete_custom_skill", { skillId }), { context: "deleteCustomSkill" });
+  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================
@@ -464,22 +337,15 @@ export async function deleteCustomSkill(skillId: string): Promise<void> {
 
 /** 获取应用设置 */
 export async function getSettings(): Promise<AppSettings> {
-  try {
-    return await invoke<AppSettings>("get_settings");
-  } catch (error) {
-    console.error("[tauri] getSettings 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<AppSettings>("get_settings"), { context: "getSettings" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 更新应用设置 */
 export async function updateSettings(settings: Record<string, unknown>): Promise<void> {
-  try {
-    await invoke("update_settings", { settings });
-  } catch (error) {
-    console.error("[tauri] updateSettings 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("update_settings", { settings }), { context: "updateSettings" });
+  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================
@@ -492,22 +358,17 @@ export async function startAgent(
   prompt: string,
   options?: Record<string, unknown>,
 ): Promise<void> {
-  try {
-    await invoke("start_agent", { sessionId, prompt, options: options ?? null });
-  } catch (error) {
-    console.error("[tauri] startAgent 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("start_agent", { sessionId, prompt, options: options ?? null }), {
+    context: "startAgent",
+    showToast: false, // Agent 错误通过事件系统处理，不重复显示 Toast
+  });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 停止 Agent */
 export async function stopAgent(sessionId: string): Promise<void> {
-  try {
-    await invoke("stop_agent", { sessionId });
-  } catch (error) {
-    console.error("[tauri] stopAgent 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("stop_agent", { sessionId }), { context: "stopAgent" });
+  if (!result.ok) throw result.error.raw;
 }
 
 /** 确认 Agent 操作 */
@@ -517,17 +378,13 @@ export async function confirmOperation(
   approved: boolean,
   feedback?: string,
 ): Promise<void> {
-  try {
-    await invoke("confirm_operation", {
-      sessionId,
-      operationId,
-      approved,
-      feedback: feedback ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] confirmOperation 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("confirm_operation", {
+    sessionId,
+    operationId,
+    approved,
+    feedback: feedback ?? null,
+  }), { context: "confirmOperation" });
+  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================
@@ -536,52 +393,36 @@ export async function confirmOperation(
 
 /** 列出所有 Prompt 模板 */
 export async function listTemplates(): Promise<PromptTemplate[]> {
-  try {
-    return await invoke<PromptTemplate[]>("list_templates");
-  } catch (error) {
-    console.error("[tauri] listTemplates 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PromptTemplate[]>("list_templates"), { context: "listTemplates" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 获取单个 Prompt 模板 */
 export async function getTemplate(templateId: string): Promise<PromptTemplate> {
-  try {
-    return await invoke<PromptTemplate>("get_template", { templateId });
-  } catch (error) {
-    console.error("[tauri] getTemplate 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PromptTemplate>("get_template", { templateId }), { context: "getTemplate" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 创建 Prompt 模板 */
 export async function createTemplate(params: CreateTemplateParams): Promise<PromptTemplate> {
-  try {
-    return await invoke<PromptTemplate>("create_template", { params });
-  } catch (error) {
-    console.error("[tauri] createTemplate 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PromptTemplate>("create_template", { params }), { context: "createTemplate" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 更新 Prompt 模板 */
 export async function updateTemplate(templateId: string, params: UpdateTemplateParams): Promise<PromptTemplate> {
-  try {
-    return await invoke<PromptTemplate>("update_template", { templateId, params });
-  } catch (error) {
-    console.error("[tauri] updateTemplate 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<PromptTemplate>("update_template", { templateId, params }), { context: "updateTemplate" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 删除 Prompt 模板 */
 export async function deleteTemplate(templateId: string): Promise<void> {
-  try {
-    await invoke("delete_template", { templateId });
-  } catch (error) {
-    console.error("[tauri] deleteTemplate 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke("delete_template", { templateId }), { context: "deleteTemplate" });
+  if (!result.ok) throw result.error.raw;
 }
 
 // ================================================================
@@ -593,15 +434,12 @@ export async function getTokenUsageTrend(
   workspaceId?: string,
   days?: number,
 ): Promise<DailyUsageItem[]> {
-  try {
-    return await invoke<DailyUsageItem[]>("get_token_usage_trend", {
-      workspaceId: workspaceId ?? null,
-      days: days ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] getTokenUsageTrend 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<DailyUsageItem[]>("get_token_usage_trend", {
+    workspaceId: workspaceId ?? null,
+    days: days ?? null,
+  }), { context: "getTokenUsageTrend" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 按 Provider/Model 分组获取 Token 用量 */
@@ -609,29 +447,23 @@ export async function getTokenProviderUsage(
   startDate?: string,
   endDate?: string,
 ): Promise<ProviderUsageItem[]> {
-  try {
-    return await invoke<ProviderUsageItem[]>("get_token_provider_usage", {
-      startDate: startDate ?? null,
-      endDate: endDate ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] getTokenProviderUsage 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<ProviderUsageItem[]>("get_token_provider_usage", {
+    startDate: startDate ?? null,
+    endDate: endDate ?? null,
+  }), { context: "getTokenProviderUsage" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 获取 Token 用量概览 */
 export async function getTokenUsageOverview(
   workspaceId?: string,
 ): Promise<TokenUsageOverview> {
-  try {
-    return await invoke<TokenUsageOverview>("get_token_usage_overview", {
-      workspaceId: workspaceId ?? null,
-    });
-  } catch (error) {
-    console.error("[tauri] getTokenUsageOverview 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<TokenUsageOverview>("get_token_usage_overview", {
+    workspaceId: workspaceId ?? null,
+  }), { context: "getTokenUsageOverview" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================
@@ -640,10 +472,7 @@ export async function getTokenUsageOverview(
 
 /** 获取错误日志文件内容 */
 export async function getErrorLog(): Promise<string> {
-  try {
-    return await invoke<string>("get_error_log");
-  } catch (error) {
-    console.error("[tauri] getErrorLog 失败:", error);
-    throw error;
-  }
+  const result = await safeInvoke(() => invoke<string>("get_error_log"), { context: "getErrorLog" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }

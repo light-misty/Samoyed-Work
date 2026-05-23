@@ -16,6 +16,7 @@ import { useWorkspaceStore } from "./stores/useWorkspaceStore";
 import { useFileTreeStore } from "./stores/useFileTreeStore";
 import { useTokenStore } from "./stores/useTokenStore";
 import { useAgent } from "./hooks/useAgent";
+import { parseError } from "./services/errorHandler";
 import * as tauriCmd from "./services/tauri";
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
@@ -85,6 +86,10 @@ export default function App() {
   const confirmNodeIdRef = useRef<string | null>(null);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
+  // 保存最后一次发送的文本，用于错误重试
+  const lastSentTextRef = useRef<string | null>(null);
+  // 保存最后一次发送的选项，用于错误重试
+  const lastSentOptionsRef = useRef<Record<string, unknown> | undefined>(undefined);
 
   useEffect(() => {
     loadSettings();
@@ -200,9 +205,17 @@ export default function App() {
         });
         streamingNodeIdRef.current = null;
       }
+      // 解析错误并添加错误节点到工作流时间线
+      const parsed = parseError(agentError);
+      addNode("error", {
+        code: parsed.code,
+        message: parsed.userMessage,
+        recoverable: parsed.recoverable,
+        module: parsed.module,
+      });
       setExecutionStatus("failed");
     }
-  }, [agentError, updateNode, setExecutionStatus]);
+  }, [agentError, updateNode, setExecutionStatus, addNode]);
 
   // 处理 Agent 被用户停止的情况
   useEffect(() => {
@@ -255,6 +268,9 @@ export default function App() {
     streamingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
+    // 保存发送内容，用于错误重试
+    lastSentTextRef.current = text;
+
     addNode("user", { content: text, attachments: [] });
     setExecutionStatus("running");
 
@@ -262,9 +278,13 @@ export default function App() {
     const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
     const workingDirectory = currentWorkspace?.path;
     const workspaceId = currentWorkspaceId;
+    const options = workingDirectory ? { workingDirectory, workspaceId } : undefined;
+
+    // 保存发送选项，用于错误重试
+    lastSentOptionsRef.current = options;
 
     try {
-      await sendMessage(text, workingDirectory ? { workingDirectory, workspaceId } : undefined);
+      await sendMessage(text, options);
     } catch (err) {
       console.error("[App] 发送消息失败:", err);
       setExecutionStatus("failed");
@@ -413,6 +433,25 @@ export default function App() {
     }
   }, [currentWorkspaceId, loadTree]);
 
+  // 错误重试回调：使用最后一次发送的文本重新发送消息
+  const handleRetryError = useCallback(async () => {
+    const text = lastSentTextRef.current;
+    if (!text) return;
+
+    streamingNodeIdRef.current = null;
+    confirmNodeIdRef.current = null;
+
+    addNode("user", { content: text, attachments: [] });
+    setExecutionStatus("running");
+
+    try {
+      await sendMessage(text, lastSentOptionsRef.current);
+    } catch (err) {
+      console.error("[App] 重试发送消息失败:", err);
+      setExecutionStatus("failed");
+    }
+  }, [addNode, setExecutionStatus, sendMessage]);
+
   // 监听键盘快捷键
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -438,7 +477,7 @@ export default function App() {
       <MainLayout
         mainArea={
           <MainArea
-            workflow={<WorkflowTimeline />}
+            workflow={<WorkflowTimeline onRetryError={handleRetryError} />}
             inputArea={
               <InputArea
                 onSend={handleSend}

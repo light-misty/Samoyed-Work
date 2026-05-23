@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::FutureExt;
 use serde_json::json;
 use tauri::Runtime;
 
@@ -553,7 +554,22 @@ impl<R: Runtime> AgentExecutor<R> {
                     }
 
                     let result = match skill_arc {
-                        Some(skill) => skill.execute(safe_params).await,
+                        Some(skill) => {
+                            // 使用 catch_unwind 保护 Skill 执行，防止 panic 传播导致应用崩溃
+                            let fut = std::panic::AssertUnwindSafe(skill.execute(safe_params));
+                            match fut.catch_unwind().await {
+                                Ok(r) => r,
+                                Err(_) => {
+                                    log::error!("Skill 执行发生 panic: tool={}", tool_call.name);
+                                    crate::models::skill::SkillResult {
+                                        success: false,
+                                        output: None,
+                                        error: Some(format!("技能执行发生内部错误: {}", tool_call.name)),
+                                        duration_ms: 0,
+                                    }
+                                }
+                            }
+                        }
                         None => crate::models::skill::SkillResult {
                             success: false,
                             output: None,

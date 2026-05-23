@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { Icon } from "./Icon";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -15,6 +16,7 @@ interface ErrorBoundaryState {
  * React 错误边界组件
  * 捕获子组件树中的渲染错误，防止整个应用白屏
  * 可通过 fallback 属性自定义错误展示，或使用默认的错误页面
+ * 使用 Tailwind CSS 样式，与应用设计系统一致
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -46,77 +48,29 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       return (
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          padding: "40px",
-          background: "var(--color-bg)",
-          color: "var(--color-text-primary)",
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        }}>
-          <div style={{
-            maxWidth: "480px",
-            textAlign: "center",
-          }}>
+        <div className="flex flex-col items-center justify-center h-screen p-10 bg-bg text-text-primary font-sans">
+          <div className="max-w-[480px] text-center">
             {/* 错误图标 */}
-            <div style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "16px",
-              background: "var(--color-error-bg)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 24px",
-              fontSize: "28px",
-            }}>
-              !
+            <div className="w-16 h-16 rounded-[16px] bg-error-light flex items-center justify-center mx-auto mb-6">
+              <Icon name="error" size={28} className="text-error" />
             </div>
 
-            <h2 style={{
-              fontSize: "18px",
-              fontWeight: 600,
-              marginBottom: "8px",
-            }}>
+            <h2 className="text-lg font-semibold mb-2">
               页面渲染出错
             </h2>
 
-            <p style={{
-              fontSize: "14px",
-              color: "var(--color-text-secondary)",
-              lineHeight: 1.6,
-              marginBottom: "24px",
-            }}>
+            <p className="text-sm text-text-secondary leading-relaxed mb-6">
               应用遇到了一个意外错误，部分功能可能无法正常使用。
               你可以尝试恢复页面或重启应用。
             </p>
 
             {/* 错误详情（可折叠） */}
             {this.state.error && (
-              <details style={{
-                marginBottom: "24px",
-                textAlign: "left",
-                background: "var(--color-bg-sub)",
-                borderRadius: "8px",
-                padding: "12px 16px",
-                fontSize: "12px",
-                fontFamily: "monospace",
-                color: "var(--color-error)",
-                maxHeight: "160px",
-                overflow: "auto",
-              }}>
-                <summary style={{
-                  cursor: "pointer",
-                  fontWeight: 500,
-                  marginBottom: "8px",
-                  color: "var(--color-text-secondary)",
-                }}>
+              <details className="mb-6 text-left bg-bg-sub rounded-[var(--radius-md)] p-3 text-xs font-mono text-error max-h-40 overflow-auto">
+                <summary className="cursor-pointer font-medium mb-2 text-text-secondary font-sans text-[12px]">
                   错误详情
                 </summary>
-                <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                <pre className="m-0 whitespace-pre-wrap break-words">
                   {this.state.error.message}
                   {this.state.error.stack && `\n\n${this.state.error.stack}`}
                 </pre>
@@ -124,36 +78,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             )}
 
             {/* 操作按钮 */}
-            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+            <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleReload}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "6px",
-                  border: "1px solid var(--color-border)",
-                  background: "var(--color-bg)",
-                  color: "var(--color-text-primary)",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
+                className="px-5 py-2 rounded-[var(--radius-sm)] border border-border bg-bg text-text-primary text-[13px] font-medium cursor-pointer transition-all hover:bg-bg-sub"
               >
                 恢复页面
               </button>
               <button
                 onClick={this.handleRestart}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "6px",
-                  border: "none",
-                  background: "var(--color-accent)",
-                  color: "#fff",
-                  fontSize: "13px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
+                className="px-5 py-2 rounded-[var(--radius-sm)] border-none bg-accent text-white text-[13px] font-medium cursor-pointer transition-all hover:brightness-90"
               >
                 重启应用
               </button>

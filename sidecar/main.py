@@ -66,8 +66,8 @@ def handle_request(request: dict) -> dict:
     请求格式:
     {
         "id": "请求唯一ID",
-        "action": "generate|read|modify|delete|convert|analyze",
-        "type": "docx|xlsx|pptx|pdf|md",
+        "action": "generate|read|modify|delete|convert|analyze|ping",
+        "type": "docx|xlsx|pptx|pdf|md|health",
         "params": { ... }
     }
 
@@ -85,6 +85,15 @@ def handle_request(request: dict) -> dict:
     params = request.get("params", {})
 
     logger.info("收到请求: id=%s, action=%s, type=%s", request_id, action, doc_type)
+
+    # 健康检查请求，直接返回成功响应
+    if action == "ping" or doc_type == "health":
+        logger.debug("健康检查请求: id=%s", request_id)
+        return {
+            "id": request_id,
+            "success": True,
+            "data": {"status": "ok"},
+        }
 
     handler = HANDLERS.get(doc_type)
     if handler is None:

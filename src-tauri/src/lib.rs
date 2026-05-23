@@ -33,17 +33,24 @@ pub struct AppState {
 }
 
 pub fn run() {
-    // 安装自定义 panic hook：将 panic 信息记录到日志，而非直接崩溃
-    // 保留默认行为（打印到 stderr + 终止进程），但在终止前确保日志落盘
+    // 安装增强版 panic hook：
+    // 1. 将 panic 信息记录到日志
+    // 2. 尝试向前端发送 runtime:error 事件（如果 app handle 可用）
+    // 3. 保留默认行为（打印到 stderr + 终止进程）
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        log::error!("========== 应用发生 panic ==========");
-        log::error!("panic 位置: {}", info.location().map(|l| l.to_string()).unwrap_or_default());
-        if let Some(s) = info.payload().downcast_ref::<&str>() {
-            log::error!("panic 消息: {}", s);
+        let location = info.location().map(|l| l.to_string()).unwrap_or_default();
+        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            s.to_string()
         } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            log::error!("panic 消息: {}", s);
-        }
+            s.clone()
+        } else {
+            "未知 panic".to_string()
+        };
+
+        log::error!("========== 应用发生 panic ==========");
+        log::error!("panic 位置: {}", location);
+        log::error!("panic 消息: {}", message);
         log::error!("====================================");
         // 调用默认 hook 完成标准 panic 流程（打印到 stderr + 终止）
         default_hook(info);
@@ -69,15 +76,30 @@ pub fn run() {
             crate::utils::logger::init(&log_dir)
                 .map_err(|e| format!("日志系统初始化失败: {}", e))?;
 
-            // 初始化数据库
+            // 初始化数据库（含损坏检测和自动恢复）
             let db_path = app_data_dir.join("docagent.db");
-            let database = crate::db::Database::new(&db_path)
-                .map_err(|e| format!("数据库初始化失败: {}", e))?;
+            let database = match crate::db::Database::new(&db_path) {
+                Ok(db) => db,
+                Err(e) => {
+                    log::error!("数据库初始化失败: {}, 尝试备份并重建...", e);
+                    // 备份损坏的数据库文件
+                    let backup_path = db_path.with_extension("db.corrupted");
+                    let _ = std::fs::rename(&db_path, &backup_path);
+                    log::info!("已将损坏的数据库备份到: {:?}", backup_path);
+                    // 重新创建空数据库
+                    crate::db::Database::new(&db_path)
+                        .map_err(|e| format!("数据库重建失败: {}", e))?
+                }
+            };
 
             // 初始化配置管理器
             let config_manager = crate::config::ConfigManager::new(app_data_dir.clone());
 
-            let llm_config = config_manager.load_llm_config().unwrap_or_default();
+            // 加载 LLM 配置（容错：损坏时使用默认配置）
+            let llm_config = config_manager.load_llm_config().unwrap_or_else(|e| {
+                log::error!("LLM 配置加载失败: {}, 使用默认配置", e);
+                Default::default()
+            });
             let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config)
                 .with_app_handle(Some(app.handle().clone()));
 
@@ -219,6 +241,20 @@ pub fn run() {
                         .map(|(k, v)| (k, v.success))
                         .collect();
                     log::info!("定期健康检查完成: {:?}", summary);
+                }
+            });
+
+            // 启动定期 Sidecar 健康检查（每 3 分钟执行一次）
+            let doc_service_for_health = Arc::clone(&app.state::<AppState>().doc_service);
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(180));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    let healthy = doc_service_for_health.health_check().await;
+                    if !healthy {
+                        log::warn!("Sidecar 定期健康检查: 不健康");
+                    }
                 }
             });
 

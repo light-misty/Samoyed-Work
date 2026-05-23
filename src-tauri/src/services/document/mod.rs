@@ -14,6 +14,9 @@ use serde_json::{json, Value};
 /// 默认请求超时时间（秒）
 const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 120;
 
+/// Sidecar 健康检查请求超时（秒）
+const HEALTH_CHECK_TIMEOUT_SECS: u64 = 10;
+
 /// Sidecar 进程管理器
 pub struct SidecarManager {
     /// Sidecar 进程
@@ -24,6 +27,8 @@ pub struct SidecarManager {
     script_path: String,
     /// 请求超时时间
     request_timeout: Duration,
+    /// 连续健康检查失败次数
+    health_check_failures: Arc<Mutex<u32>>,
 }
 
 impl SidecarManager {
@@ -33,6 +38,7 @@ impl SidecarManager {
             python_path,
             script_path,
             request_timeout: Duration::from_secs(DEFAULT_REQUEST_TIMEOUT_SECS),
+            health_check_failures: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -163,7 +169,7 @@ impl SidecarManager {
     }
 
     /// 内部发送请求实现（无超时、无重试）
-    async fn send_request_inner(&self, request: Value) -> Result<Value, CommandError> {
+    pub async fn send_request_inner(&self, request: Value) -> Result<Value, CommandError> {
         let mut guard = self.process.lock().await;
 
         let child = guard.as_mut().ok_or_else(|| {
@@ -251,6 +257,92 @@ impl DocumentService {
             let error = response["error"].as_str().unwrap_or("未知错误");
             log::error!("文档处理失败: action={}, doc_type={}, 错误: {}", action, doc_type, error);
             Err(CommandError::doc(3010, error.to_string()))
+        }
+    }
+
+    /// 执行 Sidecar 健康检查
+    /// 发送 ping 请求，如果 Sidecar 无响应或响应异常则返回 false
+    /// 连续失败 3 次会自动重启 Sidecar
+    pub async fn health_check(&self) -> bool {
+        let request = json!({
+            "id": uuid::Uuid::new_v4().to_string(),
+            "action": "ping",
+            "type": "health",
+            "params": {},
+        });
+
+        // 先检查进程是否在运行
+        if !self.sidecar.is_running().await {
+            log::warn!("Sidecar 健康检查: 进程未运行");
+            let mut failures = self.sidecar.health_check_failures.lock().await;
+            *failures += 1;
+            if *failures >= 3 {
+                log::warn!("Sidecar 连续 {} 次健康检查失败，尝试重启", *failures);
+                *failures = 0;
+                let _ = self.sidecar.stop().await;
+                if let Err(e) = self.sidecar.start().await {
+                    log::error!("Sidecar 重启失败: {}", e.message);
+                    return false;
+                }
+                log::info!("Sidecar 重启成功");
+            }
+            return false;
+        }
+
+        // 发送 ping 请求
+        let result = tokio::time::timeout(
+            Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
+            self.sidecar.send_request_inner(request),
+        ).await;
+
+        let mut failures = self.sidecar.health_check_failures.lock().await;
+
+        match result {
+            Ok(Ok(response)) => {
+                let success = response["success"].as_bool().unwrap_or(false);
+                if success {
+                    // 健康检查成功，重置失败计数
+                    *failures = 0;
+                    log::debug!("Sidecar 健康检查通过");
+                    true
+                } else {
+                    *failures += 1;
+                    log::warn!("Sidecar 健康检查: 响应异常 (连续失败 {} 次)", *failures);
+                    false
+                }
+            }
+            Ok(Err(e)) => {
+                *failures += 1;
+                log::warn!("Sidecar 健康检查: 请求失败 {} (连续失败 {} 次)", e.message, *failures);
+                if *failures >= 3 {
+                    log::warn!("Sidecar 连续 {} 次健康检查失败，尝试重启", *failures);
+                    *failures = 0;
+                    drop(failures); // 释放锁后再操作
+                    let _ = self.sidecar.stop().await;
+                    if let Err(e) = self.sidecar.start().await {
+                        log::error!("Sidecar 重启失败: {}", e.message);
+                        return false;
+                    }
+                    log::info!("Sidecar 重启成功");
+                }
+                false
+            }
+            Err(_) => {
+                *failures += 1;
+                log::warn!("Sidecar 健康检查: 超时 (连续失败 {} 次)", *failures);
+                if *failures >= 3 {
+                    log::warn!("Sidecar 连续 {} 次健康检查失败，尝试重启", *failures);
+                    *failures = 0;
+                    drop(failures); // 释放锁后再操作
+                    let _ = self.sidecar.stop().await;
+                    if let Err(e) = self.sidecar.start().await {
+                        log::error!("Sidecar 重启失败: {}", e.message);
+                        return false;
+                    }
+                    log::info!("Sidecar 重启成功");
+                }
+                false
+            }
         }
     }
 }

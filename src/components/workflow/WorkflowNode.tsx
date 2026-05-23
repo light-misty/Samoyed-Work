@@ -6,12 +6,15 @@ import { ToolNode } from "./ToolNode";
 import { ResultNode } from "./ResultNode";
 import { ReplyNode } from "./ReplyNode";
 import { ConfirmNode } from "./ConfirmNode";
+import { ErrorNode } from "./ErrorNode";
 
 interface WorkflowNodeRendererProps {
   node: WorkflowNode;
+  /** 错误节点重试回调 */
+  onRetry?: () => void;
 }
 
-export function WorkflowNodeRenderer({ node }: WorkflowNodeRendererProps) {
+export function WorkflowNodeRenderer({ node, onRetry }: WorkflowNodeRendererProps) {
   const { toggleNode } = useWorkflowStore();
   const nt = node.type as WorkflowNodeType;
 
@@ -28,6 +31,8 @@ export function WorkflowNodeRenderer({ node }: WorkflowNodeRendererProps) {
       return <ReplyNode node={node as WorkflowNode<"reply">} onToggle={() => toggleNode(node.id)} />;
     case "confirm":
       return <ConfirmNode node={node as WorkflowNode<"confirm">} onToggle={() => toggleNode(node.id)} />;
+    case "error":
+      return <ErrorNode node={node as WorkflowNode<"error">} onToggle={() => toggleNode(node.id)} onRetry={onRetry} />;
     default:
       return null;
   }

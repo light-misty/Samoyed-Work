@@ -4,12 +4,17 @@ import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
 import { Icon } from "../common/Icon";
 
+interface WorkflowTimelineProps {
+  /** 错误节点重试回调 */
+  onRetryError?: () => void;
+}
+
 /**
  * 工作流时间线组件（虚拟滚动版）
  * 使用 @tanstack/react-virtual 实现虚拟滚动，仅渲染可视区域内的节点
  * 支持动态高度测量和自动滚动到底部
  */
-export function WorkflowTimeline() {
+export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
   const { nodes } = useWorkflowStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   // 追踪是否应自动滚动（用户未手动上滚时自动跟随）
@@ -108,7 +113,7 @@ export function WorkflowTimeline() {
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              <WorkflowNodeRenderer node={node} />
+              <WorkflowNodeRenderer node={node} onRetry={onRetryError} />
             </div>
           );
         })}
