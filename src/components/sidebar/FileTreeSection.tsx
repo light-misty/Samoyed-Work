@@ -382,7 +382,7 @@ function NewItemInput({
 }
 
 /* ---- 主组件 ---- */
-export function FileTreeSection({ onOpenPreview }: { onOpenPreview?: (filePath: string, fileName: string) => void }) {
+export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpenPreview?: (filePath: string, fileName: string) => void; onOpenVersionHistory?: (filePath: string, fileName: string) => void }) {
   const { searchKeyword, setSearchKeyword, getFilteredTree, loadTree, isLoading, activeWorkspaceId } = useFileTreeStore();
   const { workspaces } = useWorkspaceStore();
   const filteredTree = getFilteredTree();
@@ -543,6 +543,11 @@ export function FileTreeSection({ onOpenPreview }: { onOpenPreview?: (filePath: 
           }
         },
       },
+      {
+        label: "版本历史",
+        icon: "clock",
+        onClick: () => onOpenVersionHistory?.(node.path, node.name),
+      },
       { label: "", separator: true, onClick: () => {} },
       {
         label: "重命名",
@@ -567,7 +572,7 @@ export function FileTreeSection({ onOpenPreview }: { onOpenPreview?: (filePath: 
         onClick: () => tauriCmd.showInFileManager(activeWorkspaceId, node.path),
       },
     ];
-  }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview]);
+  }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview, onOpenVersionHistory]);
 
   return (
     <SidebarSection title="工作区文件">

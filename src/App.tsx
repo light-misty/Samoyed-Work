@@ -28,6 +28,9 @@ const SettingsDialog = lazy(() =>
 const HistoryPanel = lazy(() =>
   import("./components/session/HistoryPanel").then((m) => ({ default: m.HistoryPanel }))
 );
+const VersionHistoryPanel = lazy(() =>
+  import("./components/preview/VersionHistoryPanel").then((m) => ({ default: m.VersionHistoryPanel }))
+);
 
 /** 懒加载组件的通用加载占位符 */
 function LazyFallback() {
@@ -45,6 +48,13 @@ export default function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
   const [previewPdfBase64, setPreviewPdfBase64] = useState<string | null>(null);
+  // 差异对比数据
+  const [previewDiffData, setPreviewDiffData] = useState<{ oldContent: string; newContent: string } | null>(null);
+
+  // 版本历史面板状态
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
+  const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
@@ -375,7 +385,33 @@ export default function App() {
     setPreviewTitle("");
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
+    setPreviewDiffData(null);
   }, []);
+
+  // 打开版本历史面板
+  const handleOpenVersionHistory = useCallback((filePath: string, fileName: string) => {
+    setVersionHistoryFilePath(filePath);
+    setVersionHistoryFileName(fileName);
+    setVersionHistoryOpen(true);
+  }, []);
+
+  // 版本对比回调：将两个版本的内容传入 PreviewOverlay 的 DiffView
+  const handleCompareVersions = useCallback((oldContent: string, newContent: string, fileType: string) => {
+    setPreviewTitle("版本差异对比");
+    setPreviewContent(newContent);
+    setPreviewFileType(fileType);
+    setPreviewDiffData({ oldContent, newContent });
+    setPreviewPdfBase64(null);
+    setPreviewOpen(true);
+    setVersionHistoryOpen(false);
+  }, []);
+
+  // 版本回滚完成回调
+  const handleRollbackComplete = useCallback(() => {
+    if (currentWorkspaceId) {
+      loadTree(currentWorkspaceId);
+    }
+  }, [currentWorkspaceId, loadTree]);
 
   // 监听键盘快捷键
   useEffect(() => {
@@ -414,7 +450,7 @@ export default function App() {
         }
         sidebar={
           <>
-            <FileTreeSection onOpenPreview={handleOpenPreview} />
+            <FileTreeSection onOpenPreview={handleOpenPreview} onOpenVersionHistory={handleOpenVersionHistory} />
             <AgentInfoSection />
             <TodoSection
               items={todos?.todos.map((t) => ({
@@ -438,6 +474,7 @@ export default function App() {
           content={previewContent}
           fileType={previewFileType}
           pdfBase64Data={previewPdfBase64}
+          diffData={previewDiffData}
         />
       </Suspense>
       {previewLoading && (
@@ -456,6 +493,19 @@ export default function App() {
       </Suspense>
       <Suspense fallback={<LazyFallback />}>
         <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} onSwitchSession={handleSwitchSession} onDeleteCurrentSession={handleDeleteCurrentSession} />
+      </Suspense>
+      <Suspense fallback={<LazyFallback />}>
+        {versionHistoryOpen && currentWorkspaceId && (
+          <VersionHistoryPanel
+            open={versionHistoryOpen}
+            onClose={() => setVersionHistoryOpen(false)}
+            workspaceId={currentWorkspaceId}
+            filePath={versionHistoryFilePath}
+            fileName={versionHistoryFileName}
+            onCompareVersions={handleCompareVersions}
+            onRollbackComplete={handleRollbackComplete}
+          />
+        )}
       </Suspense>
 
       {/* 全局 Toast 提示容器 */}

@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 
-type IconName =
+export type IconName =
   | "user" | "thinking" | "tool" | "result" | "reply" | "error"
   | "chevron-down" | "chevron-up" | "chevron-left" | "chevron-right"
   | "history" | "plus" | "minus" | "settings" | "send" | "attach" | "template"
@@ -9,7 +9,7 @@ type IconName =
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
-  | "chart";
+  | "chart" | "clock" | "git-compare" | "undo";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -325,6 +325,29 @@ const paths: Record<IconName, React.JSX.Element> = {
       <line x1="18" y1="20" x2="18" y2="10" />
       <line x1="12" y1="20" x2="12" y2="4" />
       <line x1="6" y1="20" x2="6" y2="14" />
+    </g>
+  ),
+  // 时钟
+  clock: (
+    <g key="clock">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </g>
+  ),
+  // 版本对比
+  "git-compare": (
+    <g key="git-compare">
+      <circle cx="18" cy="18" r="3" />
+      <circle cx="6" cy="6" r="3" />
+      <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+      <path d="M11 18H8a2 2 0 0 1-2-2V9" />
+    </g>
+  ),
+  // 撤销/回滚
+  undo: (
+    <g key="undo">
+      <polyline points="1 4 1 10 7 10" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
     </g>
   ),
 };

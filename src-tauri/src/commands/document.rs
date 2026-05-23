@@ -378,6 +378,106 @@ pub async fn show_in_file_manager(
     Ok(())
 }
 
+/// 获取指定版本快照的文档内容，用于版本预览和差异对比
+#[tauri::command]
+pub async fn get_version_content(
+    workspace_id: String,
+    path: String,
+    version_id: String,
+    state: State<'_, AppState>,
+) -> Result<PreviewContent, CommandError> {
+    log::info!("get_version_content: 获取版本内容, workspace_id={}, path={}, version_id={}", workspace_id, path, version_id);
+
+    // 查找快照记录（在块结束时释放 conn，避免跨 await 持有导致 Send 问题）
+    let snapshot_path_str = {
+        let conn = state.db.conn()?;
+        let snapshots = snapshot_repo::list_snapshots(&conn, Some(&workspace_id), Some(&path));
+        let snapshot = snapshots
+            .iter()
+            .find(|s| s.version_id == version_id)
+            .ok_or_else(|| {
+                log::error!("get_version_content: 版本 '{}' 不存在", version_id);
+                CommandError::doc(
+                    DOC_VERSION_NOT_FOUND,
+                    format!("版本 '{}' 不存在", version_id),
+                )
+            })?;
+        snapshot.path.clone()
+    };
+
+    let snapshot_path = PathBuf::from(&snapshot_path_str);
+    if !snapshot_path.exists() {
+        log::error!("get_version_content: 快照文件不存在: {}", snapshot_path_str);
+        return Err(CommandError::doc(
+            DOC_FILE_NOT_FOUND,
+            format!("快照文件不存在: {}", snapshot_path_str),
+        ));
+    }
+
+    // 根据文件扩展名判断文件类型
+    let extension = snapshot_path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+
+    let file_type = match extension.as_str() {
+        "docx" | "doc" => "docx",
+        "xlsx" | "xls" => "xlsx",
+        "pptx" | "ppt" => "pptx",
+        "pdf" => "pdf",
+        "md" | "markdown" => "md",
+        "txt" => "txt",
+        _ => {
+            // 回退：尝试从原始文件路径推断类型
+            let orig_ext = PathBuf::from(&path)
+                .extension()
+                .map(|e| e.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            match orig_ext.as_str() {
+                "docx" | "doc" => "docx",
+                "xlsx" | "xls" => "xlsx",
+                "pptx" | "ppt" => "pptx",
+                "pdf" => "pdf",
+                "md" | "markdown" => "md",
+                "txt" => "txt",
+                _ => "txt",
+            }
+        }
+    };
+
+    log::debug!("get_version_content: 快照文件类型={}", file_type);
+
+    // 读取快照文件内容
+    let content = match file_type {
+        "md" | "txt" => std::fs::read_to_string(&snapshot_path)?,
+        _ => {
+            let sidecar_params = json!({
+                "input_path": snapshot_path.to_string_lossy().to_string(),
+                "options": {
+                    "include_formatting": false,
+                },
+            });
+            match state.doc_service.process("read", file_type, sidecar_params).await {
+                Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "[版本预览] 文档内容解析失败".to_string()),
+                Err(e) => {
+                    log::warn!("get_version_content: Sidecar 解析失败, 降级为占位提示: {}", e.message);
+                    format!("[版本预览] {} 格式文件解析失败: {}", extension.to_uppercase(), e.message)
+                }
+            }
+        }
+    };
+
+    log::info!("get_version_content: 获取完成, file_type={}", file_type);
+    Ok(PreviewContent {
+        path: path.clone(),
+        file_type: file_type.to_string(),
+        content,
+        page_count: None,
+        sheet_names: None,
+        metadata: None,
+    })
+}
+
 /// 获取 PDF 文件的 base64 编码数据，用于前端 pdfjs-dist 渲染
 #[tauri::command]
 pub async fn get_pdf_data(

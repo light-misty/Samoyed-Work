@@ -314,6 +314,20 @@ export async function rollbackVersion(
   }
 }
 
+/** 获取指定版本快照的文档内容，用于版本预览和差异对比 */
+export async function getVersionContent(
+  workspaceId: string,
+  path: string,
+  versionId: string,
+): Promise<PreviewContent> {
+  try {
+    return await invoke<PreviewContent>("get_version_content", { workspaceId, path, versionId });
+  } catch (error) {
+    console.error("[tauri] getVersionContent 失败:", error);
+    throw error;
+  }
+}
+
 /** 创建空文件 */
 export async function createFile(
   workspaceId: string,
