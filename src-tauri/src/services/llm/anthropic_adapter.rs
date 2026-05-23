@@ -85,7 +85,13 @@ impl AnthropicAdapter {
                 "assistant" => {
                     let mut content_blocks: Vec<Value> = Vec::new();
 
-                    // 如果有文本内容，添加 text block
+                    if let Some(rc) = &msg.reasoning_content {
+                        content_blocks.push(json!({
+                            "type": "thinking",
+                            "thinking": rc,
+                        }));
+                    }
+
                     if !msg.content.is_empty() {
                         content_blocks.push(json!({
                             "type": "text",
@@ -372,11 +378,19 @@ impl AnthropicAdapter {
         // 解析 content 数组，提取文本和 tool_use
         let mut text_content = String::new();
         let mut tool_calls: Vec<LlmToolCall> = Vec::new();
+        let mut reasoning_content: Option<String> = None;
 
         if let Some(content_blocks) = value["content"].as_array() {
             for (i, block) in content_blocks.iter().enumerate() {
                 let block_type = block["type"].as_str().unwrap_or("");
                 match block_type {
+                    "thinking" => {
+                        let thinking_text = block["thinking"].as_str().unwrap_or("");
+                        reasoning_content = Some(match reasoning_content {
+                            Some(existing) => existing + thinking_text,
+                            None => thinking_text.to_string(),
+                        });
+                    }
                     "text" => {
                         text_content.push_str(block["text"].as_str().unwrap_or(""));
                     }
@@ -430,6 +444,7 @@ impl AnthropicAdapter {
                         Some(tool_calls)
                     },
                     tool_call_id: None,
+                    reasoning_content,
                 },
                 finish_reason,
             }],
@@ -530,6 +545,7 @@ impl LlmProvider for AnthropicAdapter {
                                             delta: StreamDelta {
                                                 role: Some("assistant".to_string()),
                                                 content: None,
+                                                reasoning_content: None,
                                                 tool_calls: None,
                                             },
                                             finish_reason: None,
@@ -563,6 +579,7 @@ impl LlmProvider for AnthropicAdapter {
                                                     delta: StreamDelta {
                                                         role: None,
                                                         content: None,
+                                                        reasoning_content: None,
                                                         tool_calls: Some(vec![LlmToolCall {
                                                             index: current_tool_index,
                                                             id: tool_id,
@@ -578,8 +595,8 @@ impl LlmProvider for AnthropicAdapter {
                                             }
                                         }
                                         "text" => {
-                                            // 文本块开始，无需特殊处理
-                                            // 文本内容将通过 content_block_delta 事件发送
+                                        }
+                                        "thinking" => {
                                         }
                                         _ => {}
                                     }
@@ -590,7 +607,6 @@ impl LlmProvider for AnthropicAdapter {
 
                                     match delta_type {
                                         "text_delta" => {
-                                            // 文本增量内容
                                             let text = delta["text"].as_str().unwrap_or("");
                                             let chunk = StreamChunk {
                                                 id: String::new(),
@@ -599,6 +615,7 @@ impl LlmProvider for AnthropicAdapter {
                                                     delta: StreamDelta {
                                                         role: None,
                                                         content: Some(text.to_string()),
+                                                        reasoning_content: None,
                                                         tool_calls: None,
                                                     },
                                                     finish_reason: None,
@@ -609,11 +626,9 @@ impl LlmProvider for AnthropicAdapter {
                                             }
                                         }
                                         "input_json_delta" => {
-                                            // 工具调用参数增量（JSON 片段）
                                             let partial_json = delta["partial_json"]
                                                 .as_str()
                                                 .unwrap_or("");
-                                            // 使用 tool_call_counter - 1 获取当前工具调用的索引
                                             let current_tool_index = if tool_call_counter > 0 {
                                                 tool_call_counter - 1
                                             } else {
@@ -626,6 +641,7 @@ impl LlmProvider for AnthropicAdapter {
                                                     delta: StreamDelta {
                                                         role: None,
                                                         content: None,
+                                                        reasoning_content: None,
                                                         tool_calls: Some(vec![LlmToolCall {
                                                             index: current_tool_index,
                                                             id: String::new(),
@@ -640,11 +656,29 @@ impl LlmProvider for AnthropicAdapter {
                                                 return;
                                             }
                                         }
+                                        "thinking_delta" => {
+                                            let thinking_text = delta["thinking"].as_str().unwrap_or("");
+                                            let chunk = StreamChunk {
+                                                id: String::new(),
+                                                choices: vec![StreamChoice {
+                                                    index: 0,
+                                                    delta: StreamDelta {
+                                                        role: None,
+                                                        content: None,
+                                                        reasoning_content: Some(thinking_text.to_string()),
+                                                        tool_calls: None,
+                                                    },
+                                                    finish_reason: None,
+                                                }],
+                                            };
+                                            if tx.send(Ok(chunk)).await.is_err() {
+                                                return;
+                                            }
+                                        }
                                         _ => {}
                                     }
                                 }
                                 "content_block_stop" => {
-                                    // 内容块结束，无需特殊处理
                                 }
                                 "message_delta" => {
                                     // 消息级别更新，包含 stop_reason 和 usage
@@ -664,6 +698,7 @@ impl LlmProvider for AnthropicAdapter {
                                             delta: StreamDelta {
                                                 role: None,
                                                 content: None,
+                                                reasoning_content: None,
                                                 tool_calls: None,
                                             },
                                             finish_reason: stop_reason,
@@ -715,6 +750,7 @@ impl LlmProvider for AnthropicAdapter {
             content: "Hi".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_content: None,
         }];
         let url = self.build_api_url();
         let body = self.build_request_body(&test_messages, &[], false);

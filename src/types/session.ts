@@ -32,6 +32,7 @@ export interface Message {
   role: string;
   content: string;
   toolCalls?: ToolCall[];
+  reasoningContent?: string;
   createdAt: string;
 }
 

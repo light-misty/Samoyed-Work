@@ -323,12 +323,6 @@ impl<R: Runtime> AgentExecutor<R> {
 
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
-            self.emitter.emit_thinking(ThinkingPayload {
-                session_id: ctx.session_id.clone(),
-                step: total_steps + 1,
-                thought: format!("正在分析用户请求并规划操作步骤... (第{}轮)", iteration + 1),
-            }).ok();
-
             let messages = ctx.get_messages();
             log::debug!("调用 LLM 流式接口, session_id={}, 消息数={}", ctx.session_id, messages.len());
             let mut stream_rx = match self.router.chat_stream(&messages, &tools).await {
@@ -350,7 +344,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
             // 收集流式响应
             let mut assistant_content = String::new();
-            // 使用 HashMap 按 index 收集 tool_calls 增量，避免碎片化
+            let mut reasoning_content = String::new();
             let mut collected_tool_calls: HashMap<u32, LlmToolCall> = HashMap::new();
             let mut message_id = String::new();
 
@@ -359,7 +353,16 @@ impl<R: Runtime> AgentExecutor<R> {
                     Ok(chunk) => {
                         message_id = chunk.id.clone();
                         for choice in chunk.choices {
-                            // 处理内容增量
+                            if let Some(rc) = &choice.delta.reasoning_content {
+                                reasoning_content.push_str(rc);
+                                self.emitter.emit_deep_thinking(DeepThinkingPayload {
+                                    session_id: ctx.session_id.clone(),
+                                    step: total_steps,
+                                    thought: rc.clone(),
+                                    is_streaming: true,
+                                }).ok();
+                            }
+
                             if let Some(content) = &choice.delta.content {
                                 assistant_content.push_str(content);
                                 self.emitter.emit_content(ContentPayload {
@@ -410,7 +413,15 @@ impl<R: Runtime> AgentExecutor<R> {
                 .collect::<Vec<_>>();
             collected_tool_calls.sort_by_key(|tc| tc.index);
 
-            // 发送内容结束事件（无论是否有 tool_calls，只要有内容就应发送）
+            if !reasoning_content.is_empty() {
+                self.emitter.emit_deep_thinking(DeepThinkingPayload {
+                    session_id: ctx.session_id.clone(),
+                    step: total_steps,
+                    thought: String::new(),
+                    is_streaming: false,
+                }).ok();
+            }
+
             if !assistant_content.is_empty() {
                 self.emitter.emit_content(ContentPayload {
                     session_id: ctx.session_id.clone(),
@@ -440,7 +451,7 @@ impl<R: Runtime> AgentExecutor<R> {
 
             if has_tool_calls {
                 // 将助手消息（含 tool_calls）添加到上下文
-                ctx.add_assistant_message(&assistant_content, Some(collected_tool_calls.clone()));
+                ctx.add_assistant_message(&assistant_content, Some(collected_tool_calls.clone()), if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
 
                 for tool_call in collected_tool_calls.iter() {
                     if let Some(result) = self.handle_stop_if_needed(
@@ -608,7 +619,7 @@ impl<R: Runtime> AgentExecutor<R> {
             }
 
             if !assistant_content.is_empty() {
-                ctx.add_assistant_message(&assistant_content, None);
+                ctx.add_assistant_message(&assistant_content, None, if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
             }
 
             // 最终回复后增量持久化

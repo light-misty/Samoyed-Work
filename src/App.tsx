@@ -17,6 +17,7 @@ import { useFileTreeStore } from "./stores/useFileTreeStore";
 import { useTokenStore } from "./stores/useTokenStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
+import { generateToolBrief } from "./utils/format";
 import * as tauriCmd from "./services/tauri";
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
@@ -71,7 +72,7 @@ export default function App() {
 
   const {
     error: agentError,
-    lastThinking,
+    deepThinking,
     content,
     currentToolCall,
     lastToolResult,
@@ -88,6 +89,7 @@ export default function App() {
   } = useAgent();
 
   const streamingNodeIdRef = useRef<string | null>(null);
+  const thinkingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
@@ -154,49 +156,97 @@ export default function App() {
     };
   }, [initTokenListener, destroyTokenListener]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：思考过程
   useEffect(() => {
-    if (lastThinking) {
-      addNode("thinking", {
-        content: lastThinking.thought,
-        duration: 0,
-      }, "running");
+    if (deepThinking) {
+      if (!deepThinking.isStreaming && !thinkingNodeIdRef.current) {
+        return;
+      }
+      if (streamingNodeIdRef.current) {
+        const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
+        updateNode(streamingNodeIdRef.current, {
+          status: "completed",
+          data: { content: (node?.data as { content: string })?.content ?? "", isStreaming: false },
+        });
+        streamingNodeIdRef.current = null;
+      }
+      if (!thinkingNodeIdRef.current) {
+        const nodeId = addNode("thinking", {
+          content: deepThinking.thought,
+          duration: 0,
+          isStreaming: deepThinking.isStreaming,
+        }, "running");
+        thinkingNodeIdRef.current = nodeId;
+      } else {
+        // 使用 useAgent 中累积的完整内容替换节点内容，而非追加 delta
+        updateNode(thinkingNodeIdRef.current, {
+          data: {
+            content: deepThinking.thought,
+            duration: 0,
+            isStreaming: deepThinking.isStreaming,
+          },
+          status: deepThinking.isStreaming ? "running" : "completed",
+        });
+        if (!deepThinking.isStreaming) {
+          thinkingNodeIdRef.current = null;
+        }
+      }
     }
-  }, [lastThinking, addNode]);
+  }, [deepThinking, addNode, updateNode]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：Tool 调用开始
   useEffect(() => {
     if (currentToolCall) {
+      if (thinkingNodeIdRef.current) {
+        updateNode(thinkingNodeIdRef.current, { status: "completed" });
+        thinkingNodeIdRef.current = null;
+      }
+      if (streamingNodeIdRef.current) {
+        const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
+        updateNode(streamingNodeIdRef.current, {
+          status: "completed",
+          data: { content: (node?.data as { content: string })?.content ?? "", isStreaming: false },
+        });
+        streamingNodeIdRef.current = null;
+      }
       addNode("tool", {
         toolName: currentToolCall.toolName,
         input: currentToolCall.arguments,
+        briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
       }, "running");
     }
-  }, [currentToolCall, addNode]);
+  }, [currentToolCall, addNode, updateNode]);
 
-  // Agent 事件 -> WorkflowStore 节点映射：Tool 执行结果
   useEffect(() => {
     if (lastToolResult) {
-      addNode("result", {
-        content: lastToolResult.success
-          ? JSON.stringify(lastToolResult.result)
-          : lastToolResult.error || "执行失败",
-        success: lastToolResult.success,
-        filePaths: [],
-      });
+      const toolNodes = useWorkflowStore.getState().nodes.filter((n) => n.type === "tool" && n.status === "running");
+      if (toolNodes.length > 0) {
+        const lastToolNode = toolNodes[toolNodes.length - 1];
+        updateNode(lastToolNode.id, {
+          status: lastToolResult.success ? "completed" : "failed",
+          data: {
+            ...lastToolNode.data,
+            success: lastToolResult.success,
+            error: lastToolResult.success ? undefined : (lastToolResult.error || "执行失败"),
+          },
+        });
+      }
     }
-  }, [lastToolResult, addNode]);
+  }, [lastToolResult, updateNode]);
 
   useEffect(() => {
     if (content) {
+      if (thinkingNodeIdRef.current) {
+        updateNode(thinkingNodeIdRef.current, { status: "completed" });
+        thinkingNodeIdRef.current = null;
+      }
       if (!streamingNodeIdRef.current) {
-        const nodeId = addNode("reply", {
+        const nodeId = addNode("content", {
           content,
+          isStreaming: true,
         }, "running");
         streamingNodeIdRef.current = nodeId;
       } else {
         updateNode(streamingNodeIdRef.current, {
-          data: { content },
+          data: { content, isStreaming: true },
         });
       }
     }
@@ -204,30 +254,39 @@ export default function App() {
 
   useEffect(() => {
     if (doneResult) {
+      if (thinkingNodeIdRef.current) {
+        updateNode(thinkingNodeIdRef.current, { status: "completed" });
+        thinkingNodeIdRef.current = null;
+      }
       if (streamingNodeIdRef.current) {
+        const node = useWorkflowStore.getState().nodes.find((n) => n.id === streamingNodeIdRef.current);
         updateNode(streamingNodeIdRef.current, {
-          data: { content: doneResult.summary || content },
           status: "completed",
+          data: { content: (node?.data as { content: string })?.content ?? doneResult.summary ?? "", isStreaming: false },
         });
         streamingNodeIdRef.current = null;
-      } else {
-        addNode("reply", {
-          content: doneResult.summary || content,
+      } else if (doneResult.summary) {
+        addNode("content", {
+          content: doneResult.summary,
+          isStreaming: false,
         });
       }
       setExecutionStatus("completed");
     }
-  }, [doneResult, content, addNode, updateNode, setExecutionStatus]);
+  }, [doneResult, addNode, updateNode, setExecutionStatus]);
 
   useEffect(() => {
     if (agentError) {
+      if (thinkingNodeIdRef.current) {
+        updateNode(thinkingNodeIdRef.current, { status: "failed" });
+        thinkingNodeIdRef.current = null;
+      }
       if (streamingNodeIdRef.current) {
         updateNode(streamingNodeIdRef.current, {
           status: "failed",
         });
         streamingNodeIdRef.current = null;
       }
-      // 解析错误并添加错误节点到工作流时间线
       const parsed = parseError(agentError);
       addNode("error", {
         code: parsed.code,
@@ -239,9 +298,12 @@ export default function App() {
     }
   }, [agentError, updateNode, setExecutionStatus, addNode]);
 
-  // 处理 Agent 被用户停止的情况
   useEffect(() => {
     if (isStopped) {
+      if (thinkingNodeIdRef.current) {
+        updateNode(thinkingNodeIdRef.current, { status: "cancelled" });
+        thinkingNodeIdRef.current = null;
+      }
       if (streamingNodeIdRef.current) {
         updateNode(streamingNodeIdRef.current, {
           status: "cancelled",
@@ -288,9 +350,9 @@ export default function App() {
     if (!text.trim()) return;
 
     streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
-    // 保存发送内容，用于错误重试
     lastSentTextRef.current = text;
 
     addNode("user", { content: text, attachments: [] });
@@ -334,15 +396,16 @@ export default function App() {
     resetAgent();
     clearCurrentSession();
     streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
   }, [clearNodes, resetAgent, clearCurrentSession]);
 
   // 切换到历史会话：清空当前节点，从后端加载消息并转换为工作流节点
   const handleSwitchSession = useCallback(async (sessionId: string) => {
-    // 清空当前工作流和 Agent 状态
     clearNodes();
     resetAgent();
     streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
     // 更新 session store 中的当前会话 ID
@@ -362,10 +425,10 @@ export default function App() {
 
   // 删除当前会话后的处理：清空工作流或切换到其他会话
   const handleDeleteCurrentSession = useCallback(async (nextSessionId: string | null) => {
-    // 清空当前工作流和 Agent 状态
     clearNodes();
     resetAgent();
     streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
     if (nextSessionId) {
@@ -461,6 +524,7 @@ export default function App() {
     if (!text) return;
 
     streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
 
     addNode("user", { content: text, attachments: [] });

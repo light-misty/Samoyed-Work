@@ -100,6 +100,11 @@ impl GeminiAdapter {
                 // assistant 消息转换为 Gemini model 角色
                 "assistant" => {
                     let mut parts: Vec<Value> = Vec::new();
+                    if let Some(rc) = &msg.reasoning_content {
+                        if !rc.is_empty() {
+                            parts.push(json!({"text": rc, "thought": true}));
+                        }
+                    }
                     if !msg.content.is_empty() {
                         parts.push(json!({"text": msg.content}));
                     }
@@ -181,6 +186,9 @@ impl GeminiAdapter {
             "temperature": self.advanced.temperature,
             "topP": self.advanced.top_p,
             "maxOutputTokens": self.advanced.max_tokens,
+            "thinkingConfig": {
+                "includeThoughts": true
+            }
         });
 
         body
@@ -359,13 +367,17 @@ impl GeminiAdapter {
                         let parts = content_obj["parts"].as_array()?;
 
                         let mut text_content = String::new();
+                        let mut reasoning_content = String::new();
                         let mut tool_calls: Vec<LlmToolCall> = Vec::new();
                         let mut tc_index = 0u32;
 
                         for part in parts {
-                            // 提取文本内容
                             if let Some(text) = part["text"].as_str() {
-                                text_content.push_str(text);
+                                if part["thought"].as_bool().unwrap_or(false) {
+                                    reasoning_content.push_str(text);
+                                } else {
+                                    text_content.push_str(text);
+                                }
                             }
                             // 提取 functionCall
                             if let Some(fc) = part.get("functionCall") {
@@ -406,6 +418,11 @@ impl GeminiAdapter {
                                     Some(tool_calls)
                                 },
                                 tool_call_id: None,
+                                reasoning_content: if reasoning_content.is_empty() {
+                                    None
+                                } else {
+                                    Some(reasoning_content)
+                                },
                             },
                             finish_reason,
                         })
@@ -438,12 +455,17 @@ impl GeminiAdapter {
                         let parts = content_obj["parts"].as_array()?;
 
                         let mut content: Option<String> = None;
+                        let mut reasoning_content: Option<String> = None;
                         let mut tool_calls: Vec<LlmToolCall> = Vec::new();
                         let mut tc_index = 0u32;
 
                         for part in parts {
                             if let Some(text) = part["text"].as_str() {
-                                content = Some(text.to_string());
+                                if part["thought"].as_bool().unwrap_or(false) {
+                                    reasoning_content = Some(text.to_string());
+                                } else {
+                                    content = Some(text.to_string());
+                                }
                             }
                             if let Some(fc) = part.get("functionCall") {
                                 let name = fc["name"].as_str().unwrap_or("").to_string();
@@ -482,6 +504,7 @@ impl GeminiAdapter {
                             delta: StreamDelta {
                                 role,
                                 content,
+                                reasoning_content,
                                 tool_calls: if tool_calls.is_empty() {
                                     None
                                 } else {
@@ -646,6 +669,7 @@ impl LlmProvider for GeminiAdapter {
             content: "Hi".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_content: None,
         }];
         let url = self.build_url();
         let body = self.build_request_body(&test_messages, &[]);

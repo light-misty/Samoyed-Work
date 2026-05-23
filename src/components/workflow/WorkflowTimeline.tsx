@@ -27,15 +27,15 @@ export function WorkflowTimeline({ onRetryError }: WorkflowTimelineProps) {
     // 预估节点高度，用于首次渲染前的布局计算
     estimateSize: (index) => {
       const node = nodes[index];
-      if (!node) return 80;
+      if (!node) return 60;
       switch (node.type) {
         case "user": return 60;
-        case "thinking": return 120;
-        case "tool": return 150;
-        case "result": return 100;
-        case "reply": return 200;
-        case "confirm": return 120;
-        default: return 80;
+        case "thinking": return 80;
+        case "content": return 120;
+        case "tool": return 40;
+        case "confirm": return 100;
+        case "error": return 80;
+        default: return 60;
       }
     },
     // 启用动态测量，当节点内容变化时自动重新计算高度

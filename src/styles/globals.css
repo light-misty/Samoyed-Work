@@ -453,13 +453,6 @@ textarea {
 .dark .wf-node-card:hover {
   border-color: var(--color-border-strong);
 }
-.dark .confirm-dialog {
-  background: var(--color-warning-light);
-}
-.dark .wf-result-file:hover {
-  background: var(--color-accent-light);
-}
-/* 暗色模式下代码块保持深色背景 */
 .dark .md-code-content {
   background: #1a1a2e !important;
 }
@@ -473,7 +466,6 @@ textarea {
   overflow: hidden;
 }
 
-/* 虚拟滚动容器 */
 .workflow-scroll-container {
   height: 100%;
   overflow-y: auto;
@@ -495,17 +487,19 @@ textarea {
   background: var(--color-border);
 }
 
-/* 工作流节点 */
 .wf-node {
   position: relative;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
   animation: nodeIn 0.3s ease;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
 }
 
 .wf-node-dot {
   position: absolute;
   left: -28px;
-  top: 14px;
+  top: 6px;
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -514,222 +508,251 @@ textarea {
   justify-content: center;
   z-index: 2;
   font-size: 10px;
+  flex-shrink: 0;
 }
 
-.wf-node.collapsed .wf-node-body {
-  display: none;
-}
-
-/* 工作流节点卡片 */
 .wf-node-card {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   overflow: hidden;
   transition: border-color 0.15s;
+  flex: 1;
+  min-width: 0;
 }
 
 .wf-node-card:hover {
   border-color: var(--color-border-strong);
 }
 
-/* 卡片头部 */
-.wf-node-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.wf-node-label {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.wf-node-label.user { color: var(--color-accent); }
-.wf-node-label.thinking { color: var(--color-purple); }
-.wf-node-label.tool { color: var(--color-text-secondary); }
-.wf-node-label.result { color: var(--color-success); }
-.wf-node-label.error { color: var(--color-error); }
-.wf-node-label.reply { color: var(--color-accent); }
-
-.wf-node-time {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
-  margin-left: auto;
-}
-
-.wf-node-toggle {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background 0.15s;
-  color: var(--color-text-tertiary);
-}
-
-.wf-node-toggle:hover {
-  background: var(--color-bg-sub);
-}
-
 .wf-node-body {
-  padding: 0 14px 12px;
+  padding: 10px 14px;
 }
 
-/* 用户指令节点 */
 .wf-user-text {
   font-size: 14px;
   line-height: 1.6;
   color: var(--color-text-primary);
-  padding: 4px 0;
 }
 
-/* 思考节点 */
-.wf-thinking-text {
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--color-text-secondary);
+.wf-thinking-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.wf-thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
   font-style: italic;
-  padding: 4px 0;
 }
 
-.wf-thinking-text .cursor-blink {
+.wf-thinking-toggle:hover {
+  color: var(--color-text-secondary);
+}
+
+.wf-thinking-content {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-tertiary);
+  line-height: 1.7;
+  padding-left: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wf-thinking-content .cursor-blink {
   display: inline-block;
   width: 2px;
-  height: 14px;
-  background: var(--color-accent);
+  height: 12px;
+  background: var(--color-purple);
   margin-left: 2px;
   vertical-align: middle;
   animation: blink 1s step-end infinite;
 }
 
-/* Tool 调用节点 */
-.wf-tool-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.wf-tool-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 3px 8px;
-  background: var(--color-bg-sub);
-  border-radius: 4px;
-  color: var(--color-text-primary);
-  width: fit-content;
-}
-
-.wf-tool-name .tool-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--color-accent-light);
-  color: var(--color-accent);
-  font-family: var(--font-sans);
-}
-
-.wf-tool-args {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  background: var(--color-bg-sub);
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-/* 执行结果节点 */
-.wf-result-text {
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 4px 0;
-}
-
-.wf-result-text.success { color: var(--color-success); }
-.wf-result-text.error { color: var(--color-error); }
-
-.wf-result-file {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: var(--color-accent-light);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--color-accent);
-  cursor: pointer;
-  margin-top: 4px;
-  transition: background 0.15s;
-}
-
-.wf-result-file:hover {
-  background: var(--color-accent-light);
-}
-
-/* 最终回复节点 */
-.wf-reply-text {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--color-text-primary);
-  padding: 4px 0;
-}
-
-.wf-reply-text code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 2px 6px;
-  background: var(--color-bg-sub);
-  border-radius: 3px;
-}
-
-/* 确认对话框 */
-.confirm-dialog {
+.wf-content-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-quaternary);
+  flex-shrink: 0;
   margin-top: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-warning);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-light);
+  margin-right: 8px;
 }
 
-.confirm-dialog-title {
+.wf-content-text-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.wf-content-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.wf-content-text code {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-sub);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-accent);
+}
+
+.wf-content-text strong {
+  font-weight: 600;
+}
+
+.wf-content-text em {
+  font-style: italic;
+}
+
+.wf-content-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background: var(--color-accent);
+  margin-left: 1px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+.wf-tool-brief {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  padding: 2px 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-tool-brief .font-mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.wf-tool-error {
+  color: var(--color-error);
+  font-size: 12px;
+}
+
+.wf-confirm-flat {
+  padding: 2px 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-warning);
   margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
-.confirm-dialog-desc {
+.wf-confirm-desc {
   font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.5;
   margin-bottom: 10px;
 }
 
-.confirm-dialog-actions {
+.wf-confirm-actions {
   display: flex;
   gap: 8px;
 }
 
-/* 按钮样式 */
+.wf-confirm-result {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.wf-confirm-result.confirmed {
+  color: var(--color-success);
+}
+
+.wf-confirm-result.cancelled {
+  color: var(--color-error);
+}
+
+.wf-error-flat {
+  padding: 2px 0;
+  border-left: 3px solid var(--color-error);
+  padding-left: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.wf-error-message {
+  font-size: 13px;
+  color: var(--color-error);
+  line-height: 1.6;
+}
+
+.wf-error-details {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.wf-error-details summary {
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  padding: 2px 0;
+  user-select: none;
+}
+
+.wf-error-details summary:hover {
+  color: var(--color-text-secondary);
+}
+
+.wf-error-detail-content {
+  padding: 6px 10px;
+  margin-top: 4px;
+  background: var(--color-bg-sub);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  line-height: 1.8;
+}
+
+.wf-error-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+}
+
+.wf-error-retry-btn:hover {
+  filter: brightness(0.9);
+}
+
 .btn {
   padding: 6px 14px;
   border-radius: var(--radius-sm);

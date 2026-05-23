@@ -16,6 +16,14 @@ export interface ThinkingPayload {
   thought: string;
 }
 
+/** Agent 深度思考链增量（Extended Thinking / reasoning_content） */
+export interface DeepThinkingPayload {
+  sessionId: string;
+  step: number;
+  thought: string;
+  isStreaming: boolean;
+}
+
 /** Agent 回复内容增量 */
 export interface ContentPayload {
   sessionId: string;
@@ -149,6 +157,15 @@ export function onAgentThinking(
   handler: (payload: ThinkingPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<ThinkingPayload>("agent:thinking", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听 Agent 深度思考链增量事件 */
+export function onAgentDeepThinking(
+  handler: (payload: DeepThinkingPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<DeepThinkingPayload>("agent:deep_thinking", (event) => {
     handler(event.payload);
   });
 }

@@ -1,4 +1,4 @@
-export type { WorkflowNodeType, NodeStatus, ExecutionStatus, WorkflowNode, UserNodeData, ThinkingNodeData, ToolNodeData, ResultNodeData, ReplyNodeData, ConfirmNodeData, ErrorNodeData, NodeDataMap, Attachment, DiffStats } from "./workflow";
+export type { WorkflowNodeType, NodeStatus, ExecutionStatus, WorkflowNode, UserNodeData, ThinkingNodeData, ContentNodeData, ToolNodeData, ConfirmNodeData, ErrorNodeData, NodeDataMap, Attachment, DiffStats } from "./workflow";
 export type { Session, SessionSummary, SessionDetail, Message, ToolCall as SessionToolCall, TokenUsage, CreateSessionParams, SessionFilter } from "./session";
 export type { WorkspaceInfo, WorkspaceConfig, FileNode, SearchOptions, SearchResult } from "./workspace";
 export type { PreviewContent, DocumentMetadata, VersionInfo } from "./document";

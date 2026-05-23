@@ -75,6 +75,9 @@ pub struct ChatMessage {
     /// tool 消息对应的调用 ID
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    /// 深度思考链内容（Claude extended thinking / DeepSeek reasoning_content）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
 }
 
 /// LLM 聊天请求
@@ -139,6 +142,9 @@ pub struct StreamChoice {
 pub struct StreamDelta {
     pub role: Option<String>,
     pub content: Option<String>,
+    /// 深度思考链增量（Extended Thinking / reasoning_content）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     pub tool_calls: Option<Vec<LlmToolCall>>,
 }
 

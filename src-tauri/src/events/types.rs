@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 // ================================================================
 
 pub const AGENT_THINKING: &str = "agent:thinking";
+pub const AGENT_DEEP_THINKING: &str = "agent:deep_thinking";
 pub const AGENT_CONTENT: &str = "agent:content";
 pub const AGENT_TOOL_CALL: &str = "agent:tool_call";
 pub const AGENT_TOOL_RESULT: &str = "agent:tool_result";
@@ -36,6 +37,16 @@ pub struct ThinkingPayload {
     /// 当前思考步骤序号
     pub step: u32,
     pub thought: String,
+}
+
+/// Agent 深度思考链增量（Extended Thinking / reasoning_content）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepThinkingPayload {
+    pub session_id: String,
+    pub step: u32,
+    pub thought: String,
+    pub is_streaming: bool,
 }
 
 /// Agent 回复内容增量

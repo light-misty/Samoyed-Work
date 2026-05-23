@@ -230,6 +230,7 @@ fn persist_messages_to_db(
             tool_args_ref,
             tool_result_ref,
             None,
+            msg.reasoning_content.as_deref(),
             0,
             0,
         )?;

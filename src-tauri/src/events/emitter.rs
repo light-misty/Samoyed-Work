@@ -50,6 +50,11 @@ impl<R: Runtime> AgentEmitter<R> {
         self.emit_event(types::AGENT_THINKING, payload, false)
     }
 
+    /// 发射 Agent 深度思考链增量事件（非关键）
+    pub fn emit_deep_thinking(&self, payload: types::DeepThinkingPayload) -> Result<(), CommandError> {
+        self.emit_event(types::AGENT_DEEP_THINKING, payload, false)
+    }
+
     /// 发射 Agent 回复内容增量事件（非关键）
     pub fn emit_content(&self, payload: types::ContentPayload) -> Result<(), CommandError> {
         self.emit_event(types::AGENT_CONTENT, payload, false)

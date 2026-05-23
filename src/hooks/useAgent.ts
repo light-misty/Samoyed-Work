@@ -1,15 +1,9 @@
-/**
- * Agent 交互 Hook
- * 使用 React hooks 封装 Agent 调用逻辑
- * 管理 isLoading、error、sessionId 状态
- * 自动监听所有 Agent 事件并更新状态
- * 组件卸载时取消所有事件监听
- */
 import { useState, useCallback, useEffect, useRef } from "react";
 
 import * as tauriCmd from "../services/tauri";
 import {
   onAgentThinking,
+  onAgentDeepThinking,
   onAgentContent,
   onAgentToolCall,
   onAgentToolResult,
@@ -19,6 +13,7 @@ import {
   onAgentError,
   onAgentStopped,
   type ThinkingPayload,
+  type DeepThinkingPayload,
   type ToolCallPayload,
   type ToolResultPayload,
   type ConfirmPayload,
@@ -26,48 +21,32 @@ import {
   type DonePayload,
 } from "../services/event";
 
-/** Agent Hook 返回值类型 */
 export interface UseAgentReturn {
-  /** 是否正在执行 */
   isLoading: boolean;
-  /** 错误信息 */
   error: string | null;
-  /** 当前会话 ID */
   sessionId: string | null;
-  /** 最后一条思考内容 */
   lastThinking: ThinkingPayload | null;
-  /** 累积的内容 */
+  deepThinking: DeepThinkingPayload | null;
   content: string;
-  /** 当前 Tool 调用 */
   currentToolCall: ToolCallPayload | null;
-  /** 最后一个 Tool 结果 */
   lastToolResult: ToolResultPayload | null;
-  /** 待确认的操作 */
   pendingConfirmation: ConfirmPayload | null;
-  /** Todo 列表 */
   todos: TodoUpdatePayload | null;
-  /** 执行完成结果 */
   doneResult: DonePayload | null;
-  /** 是否已被用户主动停止 */
   isStopped: boolean;
-  /** 发送消息，启动 Agent */
   sendMessage: (prompt: string, options?: Record<string, unknown>) => Promise<void>;
-  /** 停止 Agent */
   stopAgent: () => Promise<void>;
-  /** 确认操作 */
   confirmOperation: (operationId: string, approved: boolean, feedback?: string) => Promise<void>;
-  /** 重置状态 */
   reset: () => void;
-  /** 外部设置当前会话 ID（用于切换历史会话） */
   setSessionId: (id: string) => void;
 }
 
-/** 初始状态 */
 const initialState = {
   isLoading: false,
   error: null as string | null,
   sessionId: null as string | null,
   lastThinking: null as ThinkingPayload | null,
+  deepThinking: null as DeepThinkingPayload | null,
   content: "",
   currentToolCall: null as ToolCallPayload | null,
   lastToolResult: null as ToolResultPayload | null,
@@ -77,15 +56,12 @@ const initialState = {
   isStopped: false,
 };
 
-/**
- * Agent 交互 Hook
- * 封装 Agent 调用逻辑，自动管理事件监听和状态更新
- */
 export function useAgent(): UseAgentReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [lastThinking, setLastThinking] = useState<ThinkingPayload | null>(null);
+  const [deepThinking, setDeepThinking] = useState<DeepThinkingPayload | null>(null);
   const [content, setContent] = useState("");
   const [currentToolCall, setCurrentToolCall] = useState<ToolCallPayload | null>(null);
   const [lastToolResult, setLastToolResult] = useState<ToolResultPayload | null>(null);
@@ -94,30 +70,58 @@ export function useAgent(): UseAgentReturn {
   const [doneResult, setDoneResult] = useState<DonePayload | null>(null);
   const [isStopped, setIsStopped] = useState(false);
 
-  // 保存事件取消监听函数的引用
   const unlistenRefs = useRef<(() => void)[]>([]);
-  // 使用 ref 追踪最新的 sessionId，供事件处理器过滤使用
   const sessionIdRef = useRef<string | null>(null);
+  const contentEpochRef = useRef(0);
+  const lastContentEpochRef = useRef(0);
+  // 深度思考链内容累积：后端每次发送增量 delta，在 ref 中同步累积避免 React 批量渲染丢失
+  const deepThinkingContentRef = useRef("");
+  // 追踪上一次深度思考的 step，用于检测新一轮思考开始
+  const lastDeepThinkingStepRef = useRef(0);
 
-  // 同步 sessionId 到 ref，确保事件处理器始终能访问最新值
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // 注册所有 Agent 事件监听
   useEffect(() => {
+    let cancelled = false;
+
     const registerListeners = async () => {
       const unlisteners = await Promise.all([
         onAgentThinking((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;
           setLastThinking(payload);
         }),
+        onAgentDeepThinking((payload) => {
+          if (payload.sessionId !== sessionIdRef.current) return;
+          if (payload.isStreaming) {
+            // step 变化表示新一轮思考开始，重置累积内容并递增 epoch
+            if (payload.step !== lastDeepThinkingStepRef.current) {
+              lastDeepThinkingStepRef.current = payload.step;
+              deepThinkingContentRef.current = "";
+              contentEpochRef.current += 1;
+            }
+            // 同步累积增量 delta，避免 React 批量渲染导致中间 chunk 丢失
+            deepThinkingContentRef.current += payload.thought;
+          }
+          // 将累积的完整内容传递给状态，而非仅传递当前 delta
+          setDeepThinking({
+            ...payload,
+            thought: deepThinkingContentRef.current,
+          });
+        }),
         onAgentContent((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;
-          setContent((prev) => prev + payload.content);
+          if (contentEpochRef.current !== lastContentEpochRef.current) {
+            lastContentEpochRef.current = contentEpochRef.current;
+            setContent(payload.content);
+          } else {
+            setContent((prev) => prev + payload.content);
+          }
         }),
         onAgentToolCall((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;
+          contentEpochRef.current += 1;
           setCurrentToolCall(payload);
         }),
         onAgentToolResult((payload) => {
@@ -146,30 +150,33 @@ export function useAgent(): UseAgentReturn {
         onAgentStopped((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;
           setIsLoading(false);
-          // 用户主动停止，不视为错误，设置停止标志
           setIsStopped(true);
         }),
       ]);
+
+      if (cancelled) {
+        unlisteners.forEach((fn) => fn());
+        return;
+      }
 
       unlistenRefs.current = unlisteners;
     };
 
     registerListeners();
 
-    // 组件卸载时取消所有事件监听
     return () => {
+      cancelled = true;
       unlistenRefs.current.forEach((unlisten) => unlisten());
       unlistenRefs.current = [];
     };
   }, []);
 
-  /** 发送消息，启动 Agent */
   const sendMessage = useCallback(
     async (prompt: string, options?: Record<string, unknown>) => {
-      // 重置状态
       setError(null);
       setContent("");
       setLastThinking(null);
+      setDeepThinking(null);
       setCurrentToolCall(null);
       setLastToolResult(null);
       setPendingConfirmation(null);
@@ -177,15 +184,17 @@ export function useAgent(): UseAgentReturn {
       setDoneResult(null);
       setIsStopped(false);
       setIsLoading(true);
+      contentEpochRef.current += 1;
+      lastContentEpochRef.current = contentEpochRef.current;
+      deepThinkingContentRef.current = "";
+      lastDeepThinkingStepRef.current = 0;
 
       try {
-        // 如果没有会话 ID，先创建一个新会话
         let sid = sessionId;
         if (!sid) {
           const session = await tauriCmd.createSession({});
           sid = session.id;
           setSessionId(sid);
-          // 立即同步 ref，避免事件在 useEffect 同步前到达时被过滤
           sessionIdRef.current = sid;
         }
 
@@ -198,7 +207,6 @@ export function useAgent(): UseAgentReturn {
     [sessionId],
   );
 
-  /** 停止 Agent */
   const stopAgent = useCallback(async () => {
     if (!sessionId) return;
 
@@ -209,7 +217,6 @@ export function useAgent(): UseAgentReturn {
     }
   }, [sessionId]);
 
-  /** 确认操作 */
   const confirmOperation = useCallback(
     async (operationId: string, approved: boolean, feedback?: string) => {
       if (!sessionId) return;
@@ -224,12 +231,12 @@ export function useAgent(): UseAgentReturn {
     [sessionId],
   );
 
-  /** 重置所有状态 */
   const reset = useCallback(() => {
     setIsLoading(initialState.isLoading);
     setError(initialState.error);
     setSessionId(initialState.sessionId);
     setLastThinking(initialState.lastThinking);
+    setDeepThinking(initialState.deepThinking);
     setContent(initialState.content);
     setCurrentToolCall(initialState.currentToolCall);
     setLastToolResult(initialState.lastToolResult);
@@ -237,9 +244,10 @@ export function useAgent(): UseAgentReturn {
     setTodos(initialState.todos);
     setDoneResult(initialState.doneResult);
     setIsStopped(initialState.isStopped);
+    deepThinkingContentRef.current = "";
+    lastDeepThinkingStepRef.current = 0;
   }, []);
 
-  /** 外部设置当前会话 ID（用于切换历史会话后同步 Agent 状态） */
   const setSessionIdExternal = useCallback((id: string) => {
     setSessionId(id);
     sessionIdRef.current = id;
@@ -250,6 +258,7 @@ export function useAgent(): UseAgentReturn {
     error,
     sessionId,
     lastThinking,
+    deepThinking,
     content,
     currentToolCall,
     lastToolResult,

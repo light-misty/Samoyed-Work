@@ -21,6 +21,8 @@ pub struct Message {
     pub role: MessageRole,
     pub content: String,
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_content: Option<String>,
     pub created_at: String,
 }
 

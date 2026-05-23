@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap } from "../types";
 import type { Message } from "../types/session";
+import { generateToolBrief } from "../utils/format";
 
 interface WorkflowState {
   nodes: WorkflowNode[];
@@ -89,17 +90,14 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     set({ confirmHandler: handler });
   },
 
-  // 从后端消息列表加载工作流节点（用于历史会话恢复）
   loadFromMessages: (messages) => {
     nodeCounter = 0;
     const nodes: WorkflowNode[] = [];
 
     for (const msg of messages) {
-      // 使用消息的实际创建时间，而非当前时间
       const msgTimestamp = new Date(msg.createdAt).getTime();
 
       if (msg.role === "user") {
-        // 用户消息 -> user 节点
         nodes.push({
           id: `node_${++nodeCounter}`,
           type: "user",
@@ -109,9 +107,28 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           isExpanded: true,
         });
       } else if (msg.role === "assistant") {
-        // 助手消息可能包含 tool_calls 和/或文本内容
+        if (msg.reasoningContent && msg.reasoningContent.trim()) {
+          nodes.push({
+            id: `node_${++nodeCounter}`,
+            type: "thinking",
+            status: "completed",
+            timestamp: msgTimestamp,
+            data: { content: msg.reasoningContent, duration: 0, isStreaming: false },
+            isExpanded: true,
+          });
+        }
+        // LLM 响应中 content 在 tool_calls 之前输出，因此 content 节点应排在 tool 节点之前
+        if (msg.content && msg.content.trim()) {
+          nodes.push({
+            id: `node_${++nodeCounter}`,
+            type: "content",
+            status: "completed",
+            timestamp: msgTimestamp,
+            data: { content: msg.content },
+            isExpanded: true,
+          });
+        }
         if (msg.toolCalls && msg.toolCalls.length > 0) {
-          // 每个 tool_call 生成一个 tool 节点
           for (const tc of msg.toolCalls) {
             nodes.push({
               id: `node_${++nodeCounter}`,
@@ -120,38 +137,14 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
               timestamp: msgTimestamp,
               data: {
                 toolName: tc.name,
+                briefDescription: generateToolBrief(tc.name, (tc.arguments ?? {}) as Record<string, unknown>),
                 input: (tc.arguments ?? {}) as Record<string, unknown>,
+                success: true,
               },
               isExpanded: true,
             });
           }
         }
-        // 有文本内容时生成 reply 节点
-        if (msg.content && msg.content.trim()) {
-          nodes.push({
-            id: `node_${++nodeCounter}`,
-            type: "reply",
-            status: "completed",
-            timestamp: msgTimestamp,
-            data: { content: msg.content },
-            isExpanded: true,
-          });
-        }
-      } else if (msg.role === "tool") {
-        // 工具结果 -> result 节点
-        const isSuccess = !msg.content.startsWith("错误:");
-        nodes.push({
-          id: `node_${++nodeCounter}`,
-          type: "result",
-          status: "completed",
-          timestamp: msgTimestamp,
-          data: {
-            content: msg.content,
-            success: isSuccess,
-            filePaths: [],
-          },
-          isExpanded: true,
-        });
       }
     }
 

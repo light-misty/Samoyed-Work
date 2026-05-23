@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 
 export type IconName =
-  | "user" | "thinking" | "tool" | "result" | "reply" | "error"
+  | "user" | "thinking" | "tool" | "error"
   | "chevron-down" | "chevron-up" | "chevron-left" | "chevron-right"
   | "history" | "plus" | "minus" | "settings" | "send" | "attach" | "template"
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
@@ -35,18 +35,6 @@ const paths: Record<IconName, React.JSX.Element> = {
   tool: (
     <g key="tool">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </g>
-  ),
-  // 结果
-  result: (
-    <g key="result">
-      <polyline points="20 6 9 17 4 12" />
-    </g>
-  ),
-  // 回复
-  reply: (
-    <g key="reply">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </g>
   ),
   // 错误
@@ -391,7 +379,7 @@ export function Icon({ name, size = 18, className = "", ...props }: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={name === "dot" ? 0 : name === "check" || name === "result" ? 2.5 : 2}
+      strokeWidth={name === "dot" ? 0 : name === "check" ? 2.5 : 2}
       width={size}
       height={size}
       className={className}

@@ -3,7 +3,6 @@ use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::{Message, MessageRole, ToolCall};
 
-/// 创建新消息
 #[allow(clippy::too_many_arguments)]
 pub fn create_message(
     conn: &Connection,
@@ -15,6 +14,7 @@ pub fn create_message(
     tool_args: Option<&str>,
     tool_result: Option<&str>,
     thinking_content: Option<&str>,
+    reasoning_content: Option<&str>,
     input_tokens: i64,
     output_tokens: i64,
 ) -> Result<(), CommandError> {
@@ -22,8 +22,8 @@ pub fn create_message(
     conn.execute(
         "INSERT INTO session_messages
             (id, session_id, role, content, tool_name, tool_args, tool_result,
-             thinking_content, input_tokens, output_tokens, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+             thinking_content, reasoning_content, input_tokens, output_tokens, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             id,
             session_id,
@@ -33,6 +33,7 @@ pub fn create_message(
             tool_args,
             tool_result,
             thinking_content,
+            reasoning_content,
             input_tokens,
             output_tokens,
             now,
@@ -41,11 +42,10 @@ pub fn create_message(
     Ok(())
 }
 
-/// 查询指定会话的所有消息，按创建时间升序排列
 pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
     let mut stmt = match conn.prepare(
         "SELECT id, session_id, role, content, tool_name, tool_args, tool_result,
-                thinking_content, input_tokens, output_tokens, created_at
+                thinking_content, reasoning_content, input_tokens, output_tokens, created_at
          FROM session_messages
          WHERE session_id = ?1
          ORDER BY created_at ASC",
@@ -72,16 +72,16 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
         let tool_name: Option<String> = row.get(4).ok().flatten();
         let tool_args: Option<String> = row.get(5).ok().flatten();
         let tool_result: Option<String> = row.get(6).ok().flatten();
+        let reasoning_content: Option<String> = row.get(8).ok().flatten();
         let msg_id: String = match row.get(0) {
             Ok(v) => v,
             Err(_) => continue,
         };
-        let created_at: String = match row.get(10) {
+        let created_at: String = match row.get(11) {
             Ok(v) => v,
             Err(_) => continue,
         };
 
-        // 将数据库 role 映射到 MessageRole 枚举
         let message_role = match role_str.as_str() {
             "user" => MessageRole::User,
             "assistant" => MessageRole::Assistant,
@@ -89,7 +89,6 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
             _ => MessageRole::User,
         };
 
-        // 当 role 为 tool 时，构造 ToolCall 对象
         let tool_calls = if role_str == "tool" {
             let name = tool_name.unwrap_or_default();
             let arguments = tool_args
@@ -104,13 +103,8 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
                 result: result_val,
             }])
         } else if role_str == "assistant" {
-            // 助手消息可能包含 tool_calls
-            // 存储格式：
-            //   单个 tool_call: tool_name = "名称", tool_args = "参数JSON"
-            //   多个 tool_calls: tool_name = "[\"名称1\",\"名称2\"]", tool_args = "[\"参数1\",\"参数2\"]"
             match (tool_name, tool_args) {
                 (Some(ref name_str), Some(ref args_str)) => {
-                    // 尝试解析为多个 tool_calls（名称是 JSON 数组）
                     if let Ok(names) = serde_json::from_str::<Vec<String>>(name_str) {
                         if let Ok(args_list) = serde_json::from_str::<Vec<String>>(args_str) {
                             let calls: Vec<ToolCall> = names.iter().zip(args_list.iter())
@@ -135,7 +129,6 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
                             None
                         }
                     } else {
-                        // 单个 tool_call：tool_name 是名称字符串，tool_args 是参数 JSON
                         let arguments = serde_json::from_str(args_str)
                             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
                         Some(vec![ToolCall {
@@ -149,21 +142,21 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
                 _ => None,
             }
         } else {
-            None }
-;
+            None
+        };
 
         result.push(Message {
             id: msg_id,
             role: message_role,
             content,
             tool_calls,
+            reasoning_content,
             created_at,
         });
     }
     result
 }
 
-/// 删除指定会话的所有消息
 pub fn delete_messages_by_session(
     conn: &Connection,
     session_id: &str,

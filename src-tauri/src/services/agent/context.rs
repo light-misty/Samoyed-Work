@@ -39,16 +39,18 @@ impl AgentContext {
             content: content.to_string(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_content: None,
         });
     }
 
     /// 添加助手消息
-    pub fn add_assistant_message(&mut self, content: &str, tool_calls: Option<Vec<LlmToolCall>>) {
+    pub fn add_assistant_message(&mut self, content: &str, tool_calls: Option<Vec<LlmToolCall>>, reasoning_content: Option<String>) {
         self.messages.push(ChatMessage {
             role: "assistant".to_string(),
             content: content.to_string(),
             tool_calls,
             tool_call_id: None,
+            reasoning_content,
         });
     }
 
@@ -59,6 +61,7 @@ impl AgentContext {
             content: content.to_string(),
             tool_calls: None,
             tool_call_id: Some(call_id.to_string()),
+            reasoning_content: None,
         });
     }
 
@@ -69,6 +72,7 @@ impl AgentContext {
             content: self.system_prompt.clone(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_content: None,
         }];
         all.extend(self.messages.clone());
         all

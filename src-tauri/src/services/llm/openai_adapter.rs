@@ -73,6 +73,9 @@ impl OpenAiAdapter {
                     "role": m.role,
                     "content": m.content,
                 });
+                if let Some(rc) = &m.reasoning_content {
+                    msg["reasoning_content"] = json!(rc);
+                }
                 if let Some(tool_calls) = &m.tool_calls {
                     msg["tool_calls"] = json!(tool_calls.iter().map(|tc| {
                         json!({
@@ -240,6 +243,7 @@ impl OpenAiAdapter {
                                 content,
                                 tool_calls,
                                 tool_call_id: None,
+                                reasoning_content: message["reasoning_content"].as_str().map(String::from),
                             },
                             finish_reason,
                         }
@@ -336,6 +340,7 @@ impl LlmProvider for OpenAiAdapter {
                                                         let delta = &c["delta"];
                                                         let role = delta["role"].as_str().map(String::from);
                                                         let content = delta["content"].as_str().map(String::from);
+                                                        let reasoning_content = delta["reasoning_content"].as_str().map(String::from);
                                                         let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
                                                             tc_arr.iter().map(|tc| {
                                                                 let index = tc["index"].as_u64().unwrap_or(0) as u32;
@@ -353,6 +358,7 @@ impl LlmProvider for OpenAiAdapter {
                                                             delta: StreamDelta {
                                                                 role,
                                                                 content,
+                                                                reasoning_content,
                                                                 tool_calls,
                                                             },
                                                             finish_reason,
@@ -394,6 +400,7 @@ impl LlmProvider for OpenAiAdapter {
             content: "Hi".to_string(),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_content: None,
         }];
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
         let body = self.build_request_body(&test_messages, &[], false);

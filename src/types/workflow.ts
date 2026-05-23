@@ -1,10 +1,8 @@
-// ===== 工作流节点类型定义 =====
-
 export type NodeStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export type ExecutionStatus = "idle" | "running" | "stopping" | "paused" | "completed" | "failed" | "cancelled";
 
-export type WorkflowNodeType = "user" | "thinking" | "tool" | "result" | "reply" | "confirm" | "error";
+export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error";
 
 export interface Attachment {
   id: string;
@@ -22,23 +20,20 @@ export interface UserNodeData {
 export interface ThinkingNodeData {
   content: string;
   duration: number;
+  isStreaming?: boolean;
+}
+
+export interface ContentNodeData {
+  content: string;
+  isStreaming?: boolean;
 }
 
 export interface ToolNodeData {
   toolName: string;
-  toolBadge?: string;
+  briefDescription: string;
   input: Record<string, unknown>;
-  output?: Record<string, unknown>;
-}
-
-export interface ResultNodeData {
-  content: string;
-  success: boolean;
-  filePaths: string[];
-}
-
-export interface ReplyNodeData {
-  content: string;
+  success?: boolean;
+  error?: string;
 }
 
 export interface ConfirmNodeData {
@@ -49,24 +44,18 @@ export interface ConfirmNodeData {
   confirmed: boolean | null;
 }
 
-/** 错误节点数据，用于在工作流中展示可恢复的错误信息 */
 export interface ErrorNodeData {
-  /** 错误码 */
   code: number;
-  /** 用户友好的错误描述 */
   message: string;
-  /** 是否可恢复（可重试） */
   recoverable: boolean;
-  /** 错误所属模块 */
   module: string;
 }
 
 export interface NodeDataMap {
   user: UserNodeData;
   thinking: ThinkingNodeData;
+  content: ContentNodeData;
   tool: ToolNodeData;
-  result: ResultNodeData;
-  reply: ReplyNodeData;
   confirm: ConfirmNodeData;
   error: ErrorNodeData;
 }
