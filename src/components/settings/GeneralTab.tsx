@@ -4,6 +4,8 @@ import { useSessionStore } from "../../stores/useSessionStore";
 import { useToastStore } from "../../stores/useToastStore";
 import type { AppSettings } from "../../types";
 import * as tauriCmd from "../../services/tauri";
+import { check as checkUpdate } from "@tauri-apps/plugin-updater";
+import { getVersion } from "@tauri-apps/api/app";
 
 export function GeneralTab() {
   const { settings, updateSettings } = useSettingsStore();
@@ -11,6 +13,15 @@ export function GeneralTab() {
   const addToast = useToastStore((s) => s.addToast);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [exportingLog, setExportingLog] = useState(false);
+  // 更新相关状态
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState<string>("");
+  const [updateCheckResult, setUpdateCheckResult] = useState<"upToDate" | "available" | "error" | null>(null);
+
+  // 获取当前版本号
+  useState(() => {
+    getVersion().then((v) => setCurrentVersion(v)).catch(() => setCurrentVersion("0.1.0"));
+  });
 
   return (
     <div>
@@ -226,6 +237,81 @@ export function GeneralTab() {
         </div>
       </div>
 
+      {/* 更新设置 */}
+      <div className="settings-section">
+        <div className="section-header">
+          <span className="section-title">更新设置</span>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">更新通道</div>
+            <div className="setting-desc">稳定版经过充分测试，测试版包含最新功能</div>
+          </div>
+          <select
+            className="setting-select"
+            value={settings.update.channel}
+            onChange={(e) => updateSettings({ update: { channel: e.target.value as "stable" | "beta" } })}
+          >
+            <option value="stable">稳定版</option>
+            <option value="beta">测试版</option>
+          </select>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">自动检查更新</div>
+            <div className="setting-desc">应用启动时自动检查是否有新版本</div>
+          </div>
+          <label className="setting-toggle">
+            <input
+              type="checkbox"
+              checked={settings.update.autoCheck}
+              onChange={(e) => updateSettings({ update: { autoCheck: e.target.checked } })}
+            />
+            <span className="setting-toggle-slider" />
+          </label>
+        </div>
+
+        <div className="setting-row">
+          <div className="setting-info">
+            <div className="setting-label">手动检查更新</div>
+            <div className="setting-desc">
+              {updateCheckResult === "upToDate" && "当前已是最新版本"}
+              {updateCheckResult === "available" && "发现新版本，请查看更新通知"}
+              {updateCheckResult === "error" && "检查失败，请稍后重试"}
+              {!updateCheckResult && `当前版本: v${currentVersion}`}
+            </div>
+          </div>
+          <button
+            className="dm-btn"
+            disabled={checkingUpdate}
+            onClick={async () => {
+              setCheckingUpdate(true);
+              setUpdateCheckResult(null);
+              try {
+                const result = await checkUpdate();
+                if (result) {
+                  setUpdateCheckResult("available");
+                  addToast("success", `发现新版本 v${result.version}`);
+                } else {
+                  setUpdateCheckResult("upToDate");
+                  addToast("success", "当前已是最新版本");
+                }
+              } catch (err) {
+                console.error("[GeneralTab] 检查更新失败:", err);
+                setUpdateCheckResult("error");
+                addToast("error", "检查更新失败");
+              } finally {
+                setCheckingUpdate(false);
+              }
+            }}
+          >
+            {checkingUpdate ? "检查中..." : "检查更新"}
+          </button>
+        </div>
+      </div>
+
       {/* 关于 */}
       <div className="settings-section">
         <div className="section-header">
@@ -234,7 +320,7 @@ export function GeneralTab() {
 
         <div className="about-card">
           <div className="about-name">DocAgent</div>
-          <div className="about-version">v0.1.0</div>
+          <div className="about-version">v{currentVersion || "0.1.0"}</div>
           <div className="about-desc">
             基于 AI Agent 的智能文档处理桌面应用
           </div>
@@ -405,6 +491,48 @@ export function GeneralTab() {
         .about-meta-value {
           font-size: 12px;
           color: var(--color-text-secondary);
+        }
+        .setting-toggle {
+          position: relative;
+          display: inline-block;
+          width: 36px;
+          height: 20px;
+          flex-shrink: 0;
+          cursor: pointer;
+        }
+        .setting-toggle input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+          position: absolute;
+        }
+        .setting-toggle-slider {
+          position: absolute;
+          inset: 0;
+          background: var(--color-border-strong);
+          border-radius: 10px;
+          transition: all 0.2s;
+        }
+        .setting-toggle-slider::before {
+          content: '';
+          position: absolute;
+          width: 16px;
+          height: 16px;
+          left: 2px;
+          top: 2px;
+          background: #fff;
+          border-radius: 50%;
+          transition: all 0.2s;
+        }
+        .setting-toggle input:checked + .setting-toggle-slider {
+          background: var(--color-accent);
+        }
+        .setting-toggle input:checked + .setting-toggle-slider::before {
+          transform: translateX(16px);
+        }
+        .setting-toggle input:focus-visible + .setting-toggle-slider {
+          outline: 2px solid var(--color-accent);
+          outline-offset: 2px;
         }
       `}</style>
     </div>

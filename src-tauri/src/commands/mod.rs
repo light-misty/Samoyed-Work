@@ -8,3 +8,5 @@ pub mod agent;
 pub mod template;
 pub mod token;
 pub mod log;
+#[cfg(desktop)]
+pub mod update;

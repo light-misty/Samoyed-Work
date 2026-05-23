@@ -56,9 +56,17 @@ pub fn run() {
         default_hook(info);
     }));
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_dialog::init());
+
+    // 桌面端插件：更新和进程管理（需在 Builder 级别注册，构建脚本才能发现权限定义）
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
+    builder
         .setup(|app| {
             // 初始化应用数据目录
             let app_data_dir = app
@@ -320,6 +328,11 @@ pub fn run() {
             commands::token::get_token_usage_overview,
             // 日志命令
             commands::log::get_error_log,
+            // 更新命令
+            #[cfg(desktop)]
+            commands::update::check_update,
+            #[cfg(desktop)]
+            commands::update::download_and_install_update,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

@@ -8,6 +8,7 @@ export type ConfirmationLevel = "always" | "editOnly" | "never";
 export type ExceedAction = "warn" | "block" | "fallback";
 export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
+export type UpdateChannel = "stable" | "beta";
 
 export interface GeneralSettings {
   authorName: string;
@@ -44,6 +45,11 @@ export interface Shortcuts {
   quickPrompt: string;
 }
 
+export interface UpdateSettings {
+  channel: UpdateChannel;
+  autoCheck: boolean;
+}
+
 export interface AppSettings {
   general: GeneralSettings;
   appearance: AppearanceSettings;
@@ -52,6 +58,7 @@ export interface AppSettings {
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
   disabledSkills: string[];
+  update: UpdateSettings;
 }
 
 // ----- LLM 相关类型 -----

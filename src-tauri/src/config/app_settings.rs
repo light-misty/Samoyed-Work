@@ -229,6 +229,45 @@ impl Default for Shortcuts {
     }
 }
 
+/// 更新通道
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateChannel {
+    Stable,
+    Beta,
+}
+
+impl Default for UpdateChannel {
+    fn default() -> Self {
+        UpdateChannel::Stable
+    }
+}
+
+/// 更新设置
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSettings {
+    /// 更新通道：stable / beta
+    #[serde(default)]
+    pub channel: UpdateChannel,
+    /// 是否自动检查更新
+    #[serde(default = "default_auto_check")]
+    pub auto_check: bool,
+}
+
+fn default_auto_check() -> bool {
+    true
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self {
+            channel: UpdateChannel::default(),
+            auto_check: default_auto_check(),
+        }
+    }
+}
+
 /// 应用设置，包含所有可配置项
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -248,6 +287,9 @@ pub struct AppSettings {
     /// 已禁用的 Skill ID 列表
     #[serde(default)]
     pub disabled_skills: Vec<String>,
+    /// 更新设置
+    #[serde(default)]
+    pub update: UpdateSettings,
 }
 
 /// 获取应用设置文件路径
@@ -370,5 +412,9 @@ pub fn merge_with_defaults(
             },
         },
         disabled_skills: user_settings.disabled_skills.clone(),
+        update: UpdateSettings {
+            channel: user_settings.update.channel.clone(),
+            auto_check: user_settings.update.auto_check,
+        },
     }
 }

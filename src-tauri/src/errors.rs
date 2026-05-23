@@ -83,6 +83,20 @@ pub const FS_ENCODING_ERROR: u32 = 6008;
 // ============================================================
 pub const RUNTIME_EVENT_EMIT_ERROR: u32 = 7001;
 
+// ============================================================
+// 更新相关错误码 (8000-8999)
+// ============================================================
+/// 更新检查失败
+pub const UPDATE_CHECK_FAILED: u32 = 8001;
+/// 更新下载失败
+pub const UPDATE_DOWNLOAD_FAILED: u32 = 8002;
+/// 更新安装失败
+pub const UPDATE_INSTALL_FAILED: u32 = 8003;
+/// 没有可用更新
+pub const UPDATE_NO_UPDATE_AVAILABLE: u32 = 8004;
+/// 更新网络错误
+pub const UPDATE_NETWORK_ERROR: u32 = 8005;
+
 /// 统一命令错误类型，所有 Tauri 命令的错误均通过此结构体返回
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CommandError {
@@ -128,6 +142,11 @@ impl CommandError {
 
     /// 快捷创建文件系统错误
     pub fn fs(code: u32, message: impl Into<String>) -> Self {
+        Self::new(code, message)
+    }
+
+    /// 快捷创建更新错误
+    pub fn update(code: u32, message: impl Into<String>) -> Self {
         Self::new(code, message)
     }
 }

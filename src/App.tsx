@@ -32,6 +32,9 @@ const HistoryPanel = lazy(() =>
 const VersionHistoryPanel = lazy(() =>
   import("./components/preview/VersionHistoryPanel").then((m) => ({ default: m.VersionHistoryPanel }))
 );
+const UpdateNotification = lazy(() =>
+  import("./components/common/UpdateNotification").then((m) => ({ default: m.UpdateNotification }))
+);
 
 /** 懒加载组件的通用加载占位符 */
 function LazyFallback() {
@@ -41,6 +44,7 @@ function LazyFallback() {
 export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [updateNotificationOpen, setUpdateNotificationOpen] = useState(false);
 
   // 文档预览状态
   const [previewTitle, setPreviewTitle] = useState("");
@@ -60,6 +64,7 @@ export default function App() {
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
   const { loadSettings, initThemeListener } = useSettingsStore();
+  const settings = useSettingsStore((s) => s.settings);
   const { loadWorkspaces, currentWorkspaceId, workspaces } = useWorkspaceStore();
   const { loadTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
   const { initTokenListener, destroyTokenListener } = useTokenStore();
@@ -99,6 +104,23 @@ export default function App() {
     const cleanup = initThemeListener();
     return cleanup;
   }, []);
+
+  // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞）
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!settings.update.autoCheck) return;
+      try {
+        const { check } = await import("@tauri-apps/plugin-updater");
+        const result = await check();
+        if (result) {
+          setUpdateNotificationOpen(true);
+        }
+      } catch {
+        // 静默处理检查失败
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [settings.update.autoCheck]);
 
   // 当 Agent 创建新会话时，同步刷新 session store 并选中新会话
   useEffect(() => {
@@ -549,6 +571,14 @@ export default function App() {
 
       {/* 全局 Toast 提示容器 */}
       <ToastContainer />
+
+      {/* 更新通知组件（懒加载） */}
+      <Suspense fallback={<LazyFallback />}>
+        <UpdateNotification
+          open={updateNotificationOpen}
+          onClose={() => setUpdateNotificationOpen(false)}
+        />
+      </Suspense>
 
       <style>{`
         .app { display: flex; flex-direction: column; height: 100vh; }
