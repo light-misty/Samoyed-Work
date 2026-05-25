@@ -56,60 +56,63 @@
 }
 
 /* ===== 全局样式 ===== */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* 将基础样式放入 @layer base，确保 Tailwind utilities 能正确覆盖 */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-html,
-body,
-#root {
-  height: 100%;
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--color-text-primary);
-  background: var(--color-bg);
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
-}
+  html,
+  body,
+  #root {
+    height: 100%;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--color-text-primary);
+    background: var(--color-bg);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
 
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-  font-size: inherit;
-  color: inherit;
-  transition: opacity 0.15s, transform 0.1s;
-}
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: inherit;
+    color: inherit;
+    transition: opacity 0.15s, transform 0.1s;
+  }
 
-/* 按钮按下反馈 */
-button:active:not(:disabled) {
-  transform: scale(0.97);
-}
+  /* 按钮按下反馈 */
+  button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 
-/* 焦点可见性（键盘导航时显示焦点环） */
-button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
+  /* 焦点可见性（键盘导航时显示焦点环） */
+  button:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 
-input:focus-visible,
-textarea:focus-visible {
-  outline: none;
-}
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
 
-input,
-textarea {
-  font-family: inherit;
-  font-size: inherit;
-  color: inherit;
-  border: none;
-  outline: none;
-  background: none;
+  input,
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    border: none;
+    outline: none;
+    background: none;
+  }
 }
 
 /* 滚动条 */
