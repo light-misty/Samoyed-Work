@@ -8,5 +8,6 @@ pub mod agent;
 pub mod template;
 pub mod token;
 pub mod log;
+pub mod devtools;
 #[cfg(desktop)]
 pub mod update;

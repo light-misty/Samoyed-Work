@@ -2,6 +2,7 @@ import { Icon } from "../common/Icon";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { WindowControls } from "./WindowControls";
+import { toggleDevtools } from "../../services/tauri";
 
 interface TopBarProps {
   onToggleHistory: () => void;
@@ -17,6 +18,15 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
   const hasProvider = !!activeProvider;
   const statusText = hasProvider ? activeProvider.model : "未连接";
   const statusColor = hasProvider ? "bg-success" : "bg-text-tertiary";
+
+  // 切换开发人员工具
+  const handleToggleDevtools = async () => {
+    try {
+      await toggleDevtools();
+    } catch {
+      // 非 Tauri 环境或生产构建忽略错误
+    }
+  };
 
   return (
     <div role="banner" data-tauri-drag-region className="flex items-center h-[52px] pr-4 border-b border-border bg-bg flex-shrink-0 gap-3 z-[100]" style={{ paddingLeft: '24px' }}>
@@ -43,6 +53,14 @@ export function TopBar({ onToggleHistory, onNewSession }: TopBarProps) {
 
       {/* 操作按钮 */}
       <div className="flex items-center gap-1" role="toolbar" aria-label="操作工具栏">
+        <button
+          className="topbar-btn"
+          title="开发人员工具"
+          aria-label="开发人员工具"
+          onClick={handleToggleDevtools}
+        >
+          <Icon name="devtools" />
+        </button>
         <button
           className="topbar-btn"
           title="历史会话"
