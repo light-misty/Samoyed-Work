@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { Icon } from "../common/Icon";
@@ -10,18 +10,40 @@ const MIN_WINDOW_HEIGHT = 600;
 export function WindowControls() {
   const [isMaximized, setIsMaximized] = useState(true);
 
+  // 检查窗口是否处于最大化状态
+  const checkMaximized = useCallback(async () => {
+    try {
+      const maximized = await getCurrentWindow().isMaximized();
+      setIsMaximized(maximized);
+    } catch {
+      // 非 Tauri 环境忽略错误
+    }
+  }, []);
+
   useEffect(() => {
     // 初始化时检查窗口状态
-    const checkMaximized = async () => {
+    checkMaximized();
+
+    // 监听窗口尺寸变化事件，同步最大化状态
+    // 当用户拖动标题栏取消最大化、双击标题栏切换最大化等操作时，
+    // 窗口会触发 resize 事件，此时需要重新检查 isMaximized 状态
+    let unlisten: (() => void) | null = null;
+
+    const setupListener = async () => {
       try {
-        const maximized = await getCurrentWindow().isMaximized();
-        setIsMaximized(maximized);
+        unlisten = await getCurrentWindow().onResized(() => {
+          checkMaximized();
+        });
       } catch {
         // 非 Tauri 环境忽略错误
       }
     };
-    checkMaximized();
-  }, []);
+    setupListener();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [checkMaximized]);
 
   // 最小化窗口
   const handleMinimize = async () => {
