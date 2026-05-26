@@ -14,7 +14,7 @@ import { HelpTab } from "./HelpTab";
 const tabs = [
   { id: "llm" as const, label: "LLM 配置", icon: "settings" },
   { id: "workspace" as const, label: "工作区管理", icon: "folder" },
-  { id: "skill" as const, label: "Skills 管理", icon: "tool" },
+  { id: "skill" as const, label: "Tools 和 Skills管理", icon: "tool" },
   { id: "template" as const, label: "Prompt 模板", icon: "template" },
   { id: "usage" as const, label: "Token 用量", icon: "chart" },
   { id: "appearance" as const, label: "外观设置", icon: "theme" },

@@ -137,7 +137,7 @@ impl CustomSkillLoader {
         let configs = self.load_all();
         for config in configs {
             let skill = PromptBasedSkill::from_config(config);
-            registry.register(Box::new(skill));
+            registry.register_custom(Box::new(skill));
         }
     }
 }

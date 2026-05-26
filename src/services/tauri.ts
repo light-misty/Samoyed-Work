@@ -23,6 +23,7 @@ import type {
   PreviewContent,
   VersionInfo,
   SkillInfo,
+  ToolInfo,
   CustomSkillConfig,
   AppSettings,
   PromptTemplate,
@@ -285,6 +286,17 @@ export async function showInFileManager(
 ): Promise<void> {
   const result = await safeInvoke(() => invoke("show_in_file_manager", { workspaceId, path }), { context: "showInFileManager" });
   if (!result.ok) throw result.error.raw;
+}
+
+// ================================================================
+// Tool 命令
+// ================================================================
+
+/** 列出所有 Tool */
+export async function listTools(): Promise<ToolInfo[]> {
+  const result = await safeInvoke(() => invoke<ToolInfo[]>("list_tools"), { context: "listTools" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================

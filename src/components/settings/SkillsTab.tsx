@@ -7,7 +7,7 @@ import { addCustomSkill, updateCustomSkill, deleteCustomSkill, listCustomSkills 
 import type { CustomSkillConfig } from "../../types";
 
 export function SkillsTab() {
-  const { skills, toggleSkill, refreshSkills } = useSettingsStore();
+  const { skills, tools, toggleSkill, refreshSkills } = useSettingsStore();
   const [customSkills, setCustomSkills] = useState<CustomSkillConfig[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<CustomSkillConfig | null>(null);
@@ -42,13 +42,10 @@ export function SkillsTab() {
   // 保存自定义 Skill（创建或更新）
   const handleSave = async (config: CustomSkillConfig) => {
     if (editingSkill) {
-      // 更新
       await updateCustomSkill(config);
     } else {
-      // 创建
       await addCustomSkill(config);
     }
-    // 刷新列表
     await loadCustomSkills();
     await refreshSkills();
   };
@@ -74,29 +71,48 @@ export function SkillsTab() {
 
   return (
     <div>
-      {/* 内置 Skills */}
+      {/* 内置 Tools */}
       <div className="section-header">
+        <span className="section-title">内置 Tools</span>
+        <span className="section-badge">{tools.length}</span>
+      </div>
+
+      <div className="skills-list">
+        {tools.map((t) => (
+          <div key={t.id} className="skill-item">
+            <div className="skill-item-info">
+              <div className="skill-name-row">
+                <span className="skill-name">{t.name}</span>
+                <span className="skill-tool-badge">Tool</span>
+              </div>
+              <div className="skill-desc">{t.description}</div>
+            </div>
+            <div className="tool-always-on">
+              始终启用
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 内置 Skills */}
+      <div className="section-header" style={{ marginTop: 24 }}>
         <span className="section-title">内置 Skills</span>
-        <span className="section-badge">{builtinSkills.filter((s) => s.enabled).length} / {builtinSkills.length}</span>
+        <span className="section-badge">{builtinSkills.length}</span>
       </div>
 
       <div className="skills-list">
         {builtinSkills.map((s) => (
           <div key={s.id} className="skill-item">
             <div className="skill-item-info">
-              <div className="skill-name">{s.name}</div>
+              <div className="skill-name-row">
+                <span className="skill-name">{s.name}</span>
+                <span className="skill-skill-badge">Skill</span>
+              </div>
               <div className="skill-desc">{s.description}</div>
             </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                className="toggle-input"
-                checked={s.enabled}
-                onChange={() => toggleSkill(s.id)}
-              />
-              <span className="toggle-track" />
-              <span className="toggle-thumb" />
-            </label>
+            <div className="tool-always-on">
+              始终启用
+            </div>
           </div>
         ))}
       </div>
@@ -117,7 +133,6 @@ export function SkillsTab() {
         {customSkills.length > 0 ? (
           <div className="skills-list">
             {customSkills.map((cs) => {
-              // 从 registry 中获取启用状态
               const registryInfo = customSkillInfos.find((s) => s.id === cs.id);
               const enabled = registryInfo?.enabled ?? true;
               return (
@@ -233,6 +248,22 @@ export function SkillsTab() {
           align-items: center;
           gap: 6px;
         }
+        .skill-tool-badge {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 1px 6px;
+          border-radius: 4px;
+          background: var(--color-accent-bg);
+          color: var(--color-accent);
+        }
+        .skill-skill-badge {
+          font-size: 10px;
+          font-weight: 500;
+          padding: 1px 6px;
+          border-radius: 4px;
+          background: var(--color-purple-light);
+          color: var(--color-purple);
+        }
         .skill-custom-badge {
           font-size: 10px;
           font-weight: 500;
@@ -240,6 +271,11 @@ export function SkillsTab() {
           border-radius: 4px;
           background: var(--color-purple-light);
           color: var(--color-purple);
+        }
+        .tool-always-on {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+          flex-shrink: 0;
         }
         .skill-desc {
           font-size: 11px;

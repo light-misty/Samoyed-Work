@@ -2,8 +2,18 @@ use tauri::State;
 
 use crate::errors::CommandError;
 use crate::models::skill::{CustomSkillConfig, SkillInfo};
+use crate::models::tool::ToolInfo;
 use crate::services::skill::custom::{create_custom_skill_config, update_custom_skill_config_timestamp};
 use crate::AppState;
+
+/// 列出所有 Tool（内置工具）
+#[tauri::command]
+pub async fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolInfo>, CommandError> {
+    log::info!("list_tools: 查询所有 Tool");
+    let tools = state.tool_registry.list_tools();
+    log::info!("list_tools: 查询完成, 共 {} 个 Tool", tools.len());
+    Ok(tools)
+}
 
 /// 列出所有 Skill（内置 + 自定义）
 #[tauri::command]
@@ -27,6 +37,7 @@ pub async fn list_custom_skills(state: State<'_, AppState>) -> Result<Vec<Custom
 }
 
 /// 切换 Skill 启用/禁用状态，并持久化到配置
+/// 仅允许切换自定义 Skill，对内置 Skill 调用时返回错误
 #[tauri::command]
 pub async fn toggle_skill(
     skill_id: String,
@@ -35,10 +46,13 @@ pub async fn toggle_skill(
 ) -> Result<(), CommandError> {
     log::info!("toggle_skill: skill_id={}, enabled={}", skill_id, enabled);
 
-    // 更新注册表中的状态
+    // 更新注册表中的状态（内置 Skill 会被拒绝）
     let disabled_list = {
         let mut registry = state.skill_registry.lock().await;
-        registry.toggle_skill(&skill_id, enabled)
+        registry.toggle_skill(&skill_id, enabled).map_err(|e| {
+            log::warn!("toggle_skill 被拒绝: {}", e);
+            CommandError::agent(crate::errors::AGENT_SKILL_DISABLED, e)
+        })?
     };
 
     // 持久化到配置文件
@@ -97,7 +111,7 @@ pub async fn add_custom_skill(
     {
         let mut registry = state.skill_registry.lock().await;
         let skill = crate::services::skill::custom::PromptBasedSkill::from_config(config.clone());
-        registry.register(Box::new(skill));
+        registry.register_custom(Box::new(skill));
     }
 
     log::info!("add_custom_skill: 添加成功, id={}", config.id);
@@ -138,7 +152,7 @@ pub async fn update_custom_skill(
         // SkillRegistry 目前没有 unregister 方法，需要先移除再添加
         // 由于 register 会覆盖同名 Skill，直接注册即可
         let skill = crate::services::skill::custom::PromptBasedSkill::from_config(config.clone());
-        registry.register(Box::new(skill));
+        registry.register_custom(Box::new(skill));
     }
 
     log::info!("update_custom_skill: 更新成功, id={}", config.id);

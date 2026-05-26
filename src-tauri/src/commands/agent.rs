@@ -39,6 +39,7 @@ pub async fn start_agent(
     let prompt_clone = prompt.clone();
 
     let llm_router = Arc::clone(&state.llm_router);
+    let tool_registry = Arc::clone(&state.tool_registry);
     let skill_registry = Arc::clone(&state.skill_registry);
     let active_agents = Arc::clone(&state.active_agents);
     let db = Arc::clone(&state.db);
@@ -86,6 +87,7 @@ pub async fn start_agent(
             &sid,
             &prompt_clone,
             &router_snapshot,
+            &tool_registry,
             &skill_registry,
             &emitter,
             max_iterations,
@@ -245,6 +247,7 @@ async fn run_agent(
     session_id: &str,
     prompt: &str,
     llm_router: &Arc<crate::services::llm::router::LlmRouter>,
+    tool_registry: &Arc<crate::services::tool::registry::ToolRegistry>,
     skill_registry: &Arc<tokio::sync::Mutex<crate::services::skill::registry::SkillRegistry>>,
     emitter: &AgentEmitter<tauri::Wry>,
     max_iterations: u32,
@@ -304,6 +307,7 @@ async fn run_agent(
 
     let executor = AgentExecutor::new(
         Arc::clone(llm_router),
+        Arc::clone(tool_registry),
         Arc::clone(skill_registry),
         emitter.clone(),
         Arc::clone(confirm_channels),

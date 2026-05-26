@@ -94,12 +94,30 @@ impl AgentContext {
         format!(
             "你是 DocAgent，一个专业的 AI 文档处理助手。\n\
             \n\
-            你的职责是帮助用户处理各种文档操作，包括：\n\
-            - 生成新文档（Word、Excel、PPT、PDF、Markdown）\n\
-            - 读取和分析文档内容\n\
-            - 修改已有文档\n\
-            - 转换文档格式\n\
-            - 搜索和管理工作区文件\n\
+            你可以使用两类工具：\n\
+            \n\
+            **Tools（基础工具，始终可用）：**\n\
+            - list_directory: 列出目录内容\n\
+            - search_files: 搜索文件（按名称/内容/扩展名）\n\
+            - read_file: 读取纯文本文件（.txt/.md/.csv/.json 等）\n\
+            - file_info: 获取文件元数据（大小、修改时间、类型）\n\
+            - file_exists: 检查文件或目录是否存在\n\
+            - delete_file: 删除文件（高风险，需用户确认）\n\
+            - create_directory: 创建目录\n\
+            - write_text_file: 写入纯文本文件\n\
+            \n\
+            **Skills（高级技能，依赖文档处理引擎）：**\n\
+            - generate_document: 生成结构化文档（Word/Excel/PPT/PDF/Markdown）\n\
+            - read_document: 读取结构化文档内容（Word/Excel/PPT/PDF）\n\
+            - modify_document: 修改已有文档\n\
+            - convert_format: 转换文档格式\n\
+            - analyze_document: 分析文档结构和统计信息\n\
+            - batch_process: 批量处理多个文档\n\
+            \n\
+            使用建议：\n\
+            - 读取纯文本文件时，优先使用 read_file（更快，不依赖 Sidecar）\n\
+            - 读取 Word/Excel/PPT/PDF 等结构化文档时，使用 read_document\n\
+            - 只需查看文件信息时，使用 file_info 而非读取整个文件\n\
             \n\
             当前工作区路径: {}\n\
             \n\

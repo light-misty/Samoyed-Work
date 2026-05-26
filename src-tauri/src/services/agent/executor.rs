@@ -12,10 +12,11 @@ use crate::events::types::*;
 use crate::models::llm::{ChatMessage, LlmToolCall};
 use crate::services::llm::router::LlmRouter;
 use crate::services::skill::registry::SkillRegistry;
+use crate::services::tool::registry::ToolRegistry;
 use crate::ConfirmDecision;
 use super::context::AgentContext;
 
-const HIGH_RISK_SKILLS: &[&str] = &["delete_document", "modify_document", "batch_process"];
+const HIGH_RISK_SKILLS: &[&str] = &["delete_file", "modify_document", "batch_process"];
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 
 pub struct ExecutionResult {
@@ -36,6 +37,7 @@ type SnapshotFn = Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError>
 
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
+    tool_registry: Arc<ToolRegistry>,
     registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
     emitter: AgentEmitter<R>,
     confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
@@ -50,12 +52,14 @@ pub struct AgentExecutor<R: Runtime> {
 impl<R: Runtime> AgentExecutor<R> {
     pub fn new(
         router: Arc<LlmRouter>,
+        tool_registry: Arc<ToolRegistry>,
         registry: Arc<tokio::sync::Mutex<SkillRegistry>>,
         emitter: AgentEmitter<R>,
         confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     ) -> Self {
         Self {
             router,
+            tool_registry,
             registry,
             emitter,
             confirm_channels,
@@ -137,7 +141,7 @@ impl<R: Runtime> AgentExecutor<R> {
     /// batch_process: 多文件路径列表
     fn extract_snapshot_paths(&self, skill_name: &str, params: &serde_json::Value) -> Vec<String> {
         match skill_name {
-            "modify_document" | "delete_document" => {
+            "modify_document" | "delete_file" => {
                 vec![params["path"].as_str().unwrap_or("").to_string()]
             }
             "convert_format" => {
@@ -177,14 +181,14 @@ impl<R: Runtime> AgentExecutor<R> {
     ) -> Result<bool, CommandError> {
         let operation_id = format!("confirm_{}", uuid::Uuid::new_v4());
 
-        let risk_level = if tool_name == "delete_document" {
+        let risk_level = if tool_name == "delete_file" {
             "critical"
         } else {
             "high"
         };
 
         let description = match tool_name {
-            "delete_document" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
+            "delete_file" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
             "modify_document" => format!("修改文件: {}", arguments["path"].as_str().unwrap_or("未知")),
             "batch_process" => format!("批量处理 {} 个文件", arguments["paths"].as_array().map(|a| a.len()).unwrap_or(0)),
             _ => format!("执行高风险操作: {}", tool_name),
@@ -284,9 +288,14 @@ impl<R: Runtime> AgentExecutor<R> {
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
+        // 合并 Tool + Skill 的工具定义
         let tool_defs_json = {
-            let reg = self.registry.lock().await;
-            reg.tool_definitions()
+            let tool_defs = self.tool_registry.tool_definitions();
+            let skill_defs = {
+                let reg = self.registry.lock().await;
+                reg.tool_definitions()
+            };
+            [tool_defs, skill_defs].concat()
         };
         let tools: Vec<crate::models::llm::ToolDefinition> = tool_defs_json
             .iter()
@@ -517,20 +526,21 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let tool_start = std::time::Instant::now();
 
-                    // 短暂持锁获取技能 Arc 引用，然后释放锁再执行
-                    // 避免在 Sidecar 通信等耗时操作期间阻塞注册表
-                    let skill_arc = {
+                    // 先查 ToolRegistry（基础操作优先），再查 SkillRegistry（高级技能）
+                    let tool_arc = self.tool_registry.get_arc(&tool_call.name);
+                    let skill_arc = if tool_arc.is_none() {
                         let reg = self.registry.lock().await;
                         reg.get_arc(&tool_call.name)
+                    } else {
+                        None
                     };
 
-                    // 对需要路径安全校验的 Skill，注入工作区根目录
-                    // 防止 LLM 提供恶意路径绕过校验
-                    // 同时为文档操作 Skill 注入工作区根目录，用于将相对路径解析为绝对路径
+                    // 对需要路径安全校验的 Tool/Skill，注入工作区根目录
                     let mut safe_params = params;
                     let needs_workspace_root = matches!(
                         tool_call.name.as_str(),
-                        "delete_document" | "search_documents" | "list_workspace"
+                        "list_directory" | "search_files" | "read_file" | "file_info"
+                        | "file_exists" | "delete_file" | "create_directory" | "write_text_file"
                         | "generate_document" | "read_document" | "modify_document" | "analyze_document"
                         | "convert_format" | "batch_process"
                     );
@@ -539,13 +549,12 @@ impl<R: Runtime> AgentExecutor<R> {
                     }
 
                     // 在文件修改/删除操作前自动创建版本快照
-                    // 确保用户可以回滚到修改前的版本
                     if let Some(ref snapshot_fn) = self.snapshot_fn {
                         let files_to_snapshot = self.extract_snapshot_paths(&tool_call.name, &safe_params);
                         for file_path in &files_to_snapshot {
                             if !file_path.is_empty() {
                                 let operation = match tool_call.name.as_str() {
-                                    "delete_document" => "delete",
+                                    "delete_file" => "delete",
                                     "modify_document" => "modify",
                                     "batch_process" => "batch_modify",
                                     "convert_format" => "convert",
@@ -556,7 +565,6 @@ impl<R: Runtime> AgentExecutor<R> {
                                         log::info!("版本快照已创建: file={}, operation={}", file_path, operation);
                                     }
                                     Err(e) => {
-                                        // 快照创建失败不阻塞操作，仅记录警告
                                         log::warn!("版本快照创建失败: file={}, 错误: {}", file_path, e.message);
                                     }
                                 }
@@ -564,29 +572,49 @@ impl<R: Runtime> AgentExecutor<R> {
                         }
                     }
 
-                    let result = match skill_arc {
-                        Some(skill) => {
-                            // 使用 catch_unwind 保护 Skill 执行，防止 panic 传播导致应用崩溃
-                            let fut = std::panic::AssertUnwindSafe(skill.execute(safe_params));
-                            match fut.catch_unwind().await {
-                                Ok(r) => r,
-                                Err(_) => {
-                                    log::error!("Skill 执行发生 panic: tool={}", tool_call.name);
-                                    crate::models::skill::SkillResult {
-                                        success: false,
-                                        output: None,
-                                        error: Some(format!("技能执行发生内部错误: {}", tool_call.name)),
-                                        duration_ms: 0,
-                                    }
+                    // 执行 Tool 或 Skill
+                    let result = if let Some(tool) = tool_arc {
+                        // 执行 Tool
+                        let fut = std::panic::AssertUnwindSafe(tool.execute(safe_params));
+                        match fut.catch_unwind().await {
+                            Ok(r) => crate::models::skill::SkillResult {
+                                success: r.success,
+                                output: r.output,
+                                error: r.error,
+                                duration_ms: r.duration_ms,
+                            },
+                            Err(_) => {
+                                log::error!("Tool 执行发生 panic: tool={}", tool_call.name);
+                                crate::models::skill::SkillResult {
+                                    success: false,
+                                    output: None,
+                                    error: Some(format!("工具执行发生内部错误: {}", tool_call.name)),
+                                    duration_ms: 0,
                                 }
                             }
                         }
-                        None => crate::models::skill::SkillResult {
+                    } else if let Some(skill) = skill_arc {
+                        // 执行 Skill
+                        let fut = std::panic::AssertUnwindSafe(skill.execute(safe_params));
+                        match fut.catch_unwind().await {
+                            Ok(r) => r,
+                            Err(_) => {
+                                log::error!("Skill 执行发生 panic: tool={}", tool_call.name);
+                                crate::models::skill::SkillResult {
+                                    success: false,
+                                    output: None,
+                                    error: Some(format!("技能执行发生内部错误: {}", tool_call.name)),
+                                    duration_ms: 0,
+                                }
+                            }
+                        }
+                    } else {
+                        crate::models::skill::SkillResult {
                             success: false,
                             output: None,
-                            error: Some(format!("技能不存在: {}", tool_call.name)),
+                            error: Some(format!("工具或技能不存在: {}", tool_call.name)),
                             duration_ms: 0,
-                        },
+                        }
                     };
 
                     let duration_ms = tool_start.elapsed().as_millis() as u64;

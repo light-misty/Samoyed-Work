@@ -113,6 +113,19 @@ export interface SkillInfo {
   supportedTypes: string[];
 }
 
+// ----- Tool 相关类型 -----
+
+export interface ToolInfo {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  isBuiltin: boolean;
+  enabled: boolean;
+  version: string;
+  paramsSchema?: unknown;
+}
+
 export interface CustomSkillConfig {
   id: string;
   name: string;

@@ -3,6 +3,7 @@ import type {
   AppSettings,
   ProviderInfo,
   SkillInfo,
+  ToolInfo,
   PromptTemplate,
   CreateTemplateParams,
   UpdateTemplateParams,
@@ -83,6 +84,7 @@ interface SettingsState {
   llmProviders: ProviderInfo[];
   activeProviderId: string | null;
   skills: SkillInfo[];
+  tools: ToolInfo[];
   templates: PromptTemplate[];
   isSettingsOpen: boolean;
   activeSettingsTab: SettingsTab;
@@ -97,8 +99,11 @@ interface SettingsState {
   loadSettings: () => Promise<void>;
   loadProviders: () => Promise<void>;
   loadSkills: () => Promise<void>;
+  loadTools: () => Promise<void>;
   /** 刷新 Skill 列表（loadSkills 的别名，语义更清晰） */
   refreshSkills: () => Promise<void>;
+  /** 刷新 Tool 列表（loadTools 的别名，语义更清晰） */
+  refreshTools: () => Promise<void>;
   /** 初始化 Provider 切换事件监听 */
   initProviderSwitchListener: () => Promise<() => void>;
   /** 从后端加载模板列表 */
@@ -120,6 +125,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   llmProviders: [],
   activeProviderId: null,
   skills: [],
+  tools: [],
   templates: [],
   isSettingsOpen: false,
   activeSettingsTab: "llm",
@@ -176,10 +182,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 从后端加载设置、Provider 列表和 Skill 列表
   loadSettings: async () => {
     try {
-      const [settings, providers, skills] = await Promise.all([
+      const [settings, providers, skills, tools] = await Promise.all([
         tauriCmd.getSettings(),
         tauriCmd.listProviders(),
         tauriCmd.listSkills(),
+        tauriCmd.listTools(),
       ]);
       const defaultProvider = providers.find((p) => p.isDefault);
       set({
@@ -187,6 +194,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         llmProviders: providers,
         activeProviderId: defaultProvider?.id ?? null,
         skills,
+        tools,
       });
       // 设置加载完成后应用外观
       get().applyAppearance();
@@ -224,6 +232,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 刷新 Skill 列表
   refreshSkills: async () => {
     await get().loadSkills();
+  },
+
+  // 从后端加载 Tool 列表
+  loadTools: async () => {
+    try {
+      const tools = await tauriCmd.listTools();
+      set({ tools });
+    } catch (error) {
+      console.error("[SettingsStore] 加载 Tool 列表失败:", error);
+    }
+  },
+
+  // 刷新 Tool 列表
+  refreshTools: async () => {
+    await get().loadTools();
   },
 
   // 初始化 Provider 切换事件监听，返回取消监听函数

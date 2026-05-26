@@ -96,6 +96,18 @@ pub const UPDATE_NO_UPDATE_AVAILABLE: u32 = 8004;
 /// 更新网络错误
 pub const UPDATE_NETWORK_ERROR: u32 = 8005;
 
+// ============================================================
+// Tool 相关错误码 (9000-9999)
+// ============================================================
+/// 工具不存在
+pub const TOOL_NOT_FOUND: u32 = 9001;
+/// 工具参数无效
+pub const TOOL_INVALID_PARAMS: u32 = 9002;
+/// 工具执行失败
+pub const TOOL_EXECUTION_ERROR: u32 = 9003;
+/// 工具路径越界
+pub const TOOL_PATH_OUT_OF_BOUNDS: u32 = 9004;
+
 /// 统一命令错误类型，所有 Tauri 命令的错误均通过此结构体返回
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CommandError {
@@ -146,6 +158,11 @@ impl CommandError {
 
     /// 快捷创建更新错误
     pub fn update(code: u32, message: impl Into<String>) -> Self {
+        Self::new(code, message)
+    }
+
+    /// 快捷创建工具错误
+    pub fn tool(code: u32, message: impl Into<String>) -> Self {
         Self::new(code, message)
     }
 }
