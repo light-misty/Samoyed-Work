@@ -31,6 +31,16 @@ pub struct AdvancedConfig {
     pub max_retries: u32,
     #[serde(default)]
     pub extra_headers: HashMap<String, String>,
+    /// 是否将 reasoning_content 折叠到 content 字段中发送
+    /// true: 不支持 reasoning_content 输入的 Provider（OpenAI/Ollama），将思考内容用 <agent-reasoning> 标签包裹后合并到 content
+    /// false: 支持 reasoning_content 输入的 Provider（DeepSeek），保持原样发送
+    #[serde(default = "default_reasoning_in_content")]
+    pub reasoning_in_content: bool,
+}
+
+/// reasoning_in_content 默认值：true（安全默认，将思考内容折叠到 content）
+fn default_reasoning_in_content() -> bool {
+    true
 }
 
 impl Default for AdvancedConfig {
@@ -42,6 +52,7 @@ impl Default for AdvancedConfig {
             timeout_seconds: 60,
             max_retries: 3,
             extra_headers: HashMap::new(),
+            reasoning_in_content: true,
         }
     }
 }

@@ -81,7 +81,7 @@ impl LlmRouter {
         let mut default_id = None;
 
         for provider in &config.providers {
-            let advanced = provider.advanced.clone();
+            let mut advanced = provider.advanced.clone();
             let provider_type_str = match provider.provider_type {
                 ProviderType::OpenAI => "openai",
                 ProviderType::Anthropic => "anthropic",
@@ -89,6 +89,17 @@ impl LlmRouter {
                 ProviderType::Custom => "custom",
                 ProviderType::Gemini => "gemini",
             };
+
+            // 根据 Provider 类型和 API base URL 自动检测 reasoning_in_content 配置
+            // DeepSeek API 支持 reasoning_content 输入字段，OpenAI/Ollama 不支持
+            // 通过 API base URL 中是否包含 "deepseek" 来自动检测
+            let is_deepseek = provider.api_base_url.to_lowercase().contains("deepseek");
+            if is_deepseek {
+                // DeepSeek API 原生支持 reasoning_content 输入，不需要折叠到 content
+                advanced.reasoning_in_content = false;
+                log::info!("检测到 DeepSeek Provider, 设置 reasoning_in_content=false, id={}", provider.id);
+            }
+
             let adapter: Box<dyn LlmProvider> = match provider.provider_type {
                 ProviderType::OpenAI | ProviderType::Custom => {
                     Box::new(OpenAiAdapter::new(

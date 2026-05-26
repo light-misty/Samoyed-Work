@@ -10,7 +10,7 @@ interface WorkflowState {
   autoScroll: boolean;
   confirmHandler: ((approved: boolean) => Promise<void>) | null;
 
-  addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus) => string;
+  addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
   removeNode: (id: string) => void;
   clearNodes: () => void;
@@ -31,7 +31,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   autoScroll: true,
   confirmHandler: null,
 
-  addNode: (type, data, status = "completed") => {
+  addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
     set((state) => ({
       nodes: [
@@ -43,6 +43,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           timestamp: Date.now(),
           data: data as NodeDataMap[typeof type],
           isExpanded: true,
+          iteration,
         } as WorkflowNode,
       ],
     }));
@@ -93,6 +94,8 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   loadFromMessages: (messages) => {
     nodeCounter = 0;
     const nodes: WorkflowNode[] = [];
+    // 追踪当前迭代轮次：每条 assistant 消息代表一次迭代
+    let iterationCounter = 0;
 
     for (const msg of messages) {
       const msgTimestamp = new Date(msg.createdAt).getTime();
@@ -107,6 +110,10 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
           isExpanded: true,
         });
       } else if (msg.role === "assistant") {
+        // 每条 assistant 消息递增迭代计数
+        iterationCounter += 1;
+        const currentIteration = iterationCounter;
+
         if (msg.reasoningContent && msg.reasoningContent.trim()) {
           nodes.push({
             id: `node_${++nodeCounter}`,
@@ -115,6 +122,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
             timestamp: msgTimestamp,
             data: { content: msg.reasoningContent, duration: 0, isStreaming: false },
             isExpanded: true,
+            iteration: currentIteration,
           });
         }
         // LLM 响应中 content 在 tool_calls 之前输出，因此 content 节点应排在 tool 节点之前
@@ -126,6 +134,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
             timestamp: msgTimestamp,
             data: { content: msg.content },
             isExpanded: true,
+            iteration: currentIteration,
           });
         }
         if (msg.toolCalls && msg.toolCalls.length > 0) {
@@ -142,6 +151,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
                 success: true,
               },
               isExpanded: true,
+              iteration: currentIteration,
             });
           }
         }

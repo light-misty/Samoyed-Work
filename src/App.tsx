@@ -91,6 +91,8 @@ export default function App() {
   const streamingNodeIdRef = useRef<string | null>(null);
   const thinkingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
+  // 追踪当前迭代轮次，用于将 iteration 传递给 content/tool 节点
+  const currentIterationRef = useRef<number | undefined>(undefined);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
   // 保存最后一次发送的文本，用于错误重试
@@ -158,6 +160,10 @@ export default function App() {
 
   useEffect(() => {
     if (deepThinking) {
+      // 更新当前迭代轮次追踪
+      if (deepThinking.iteration !== undefined) {
+        currentIterationRef.current = deepThinking.iteration;
+      }
       if (!deepThinking.isStreaming && !thinkingNodeIdRef.current) {
         return;
       }
@@ -174,7 +180,7 @@ export default function App() {
           content: deepThinking.thought,
           duration: 0,
           isStreaming: deepThinking.isStreaming,
-        }, "running");
+        }, "running", deepThinking.iteration);
         thinkingNodeIdRef.current = nodeId;
       } else {
         // 使用 useAgent 中累积的完整内容替换节点内容，而非追加 delta
@@ -185,6 +191,7 @@ export default function App() {
             isStreaming: deepThinking.isStreaming,
           },
           status: deepThinking.isStreaming ? "running" : "completed",
+          iteration: deepThinking.iteration,
         });
         if (!deepThinking.isStreaming) {
           thinkingNodeIdRef.current = null;
@@ -207,11 +214,13 @@ export default function App() {
         });
         streamingNodeIdRef.current = null;
       }
+      // 优先使用 ToolCallPayload 中的 iteration，否则使用当前追踪的 iteration
+      const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
       addNode("tool", {
         toolName: currentToolCall.toolName,
         input: currentToolCall.arguments,
         briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
-      }, "running");
+      }, "running", toolIteration);
     }
   }, [currentToolCall, addNode, updateNode]);
 
@@ -242,7 +251,7 @@ export default function App() {
         const nodeId = addNode("content", {
           content,
           isStreaming: true,
-        }, "running");
+        }, "running", currentIterationRef.current);
         streamingNodeIdRef.current = nodeId;
       } else {
         updateNode(streamingNodeIdRef.current, {

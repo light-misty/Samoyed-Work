@@ -332,7 +332,8 @@ impl<R: Runtime> AgentExecutor<R> {
 
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
-            let messages = ctx.get_messages();
+            let current_iteration = iteration + 1;
+            let messages = ctx.get_messages_for_iteration(current_iteration);
             log::debug!("调用 LLM 流式接口, session_id={}, 消息数={}", ctx.session_id, messages.len());
             let mut stream_rx = match self.router.chat_stream(&messages, &tools).await {
                 Ok(rx) => rx,
@@ -369,6 +370,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     step: total_steps,
                                     thought: rc.clone(),
                                     is_streaming: true,
+                                    iteration: Some(current_iteration),
                                 }).ok();
                             }
 
@@ -379,6 +381,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     message_id: message_id.clone(),
                                     content: content.clone(),
                                     is_streaming: true,
+                                    iteration: Some(current_iteration),
                                 }).ok();
                             }
 
@@ -428,6 +431,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     step: total_steps,
                     thought: String::new(),
                     is_streaming: false,
+                    iteration: Some(current_iteration),
                 }).ok();
             }
 
@@ -437,6 +441,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     message_id: message_id.clone(),
                     content: String::new(),
                     is_streaming: false,
+                    iteration: Some(current_iteration),
                 }).ok();
             }
 
@@ -491,6 +496,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             call_id: tool_call.id.clone(),
                             tool_name: format!("{} (等待确认)", tool_call.name),
                             arguments: params.clone(),
+                            iteration: Some(current_iteration),
                         }).ok();
 
                         let approved = self.request_confirmation(
@@ -521,6 +527,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             call_id: tool_call.id.clone(),
                             tool_name: tool_call.name.clone(),
                             arguments: params.clone(),
+                            iteration: Some(current_iteration),
                         }).ok();
                     }
 

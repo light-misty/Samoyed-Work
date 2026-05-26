@@ -1,6 +1,11 @@
 use crate::models::llm::{ChatMessage, LlmToolCall};
 use super::prompts::document_design::get_all_design_guides;
 
+/// reasoning_content 压缩阈值（字符数），超过此长度的早期思考内容将被截断
+const REASONING_COMPRESS_THRESHOLD: usize = 500;
+/// 压缩后保留的字符数
+const REASONING_COMPRESS_KEEP: usize = 200;
+
 /// Agent 执行上下文
 /// 管理对话历史和系统提示词
 pub struct AgentContext {
@@ -79,6 +84,61 @@ impl AgentContext {
         all
     }
 
+    /// 获取针对指定迭代轮次优化后的消息列表
+    /// 与 get_messages 的区别：
+    /// 1. 压缩早期迭代的 reasoning_content（保留最近 1 轮完整，更早轮次截取前 200 字符）
+    /// 2. 迭代 > 1 时在系统提示词后追加上下文提示，告知 LLM 这是继续推理
+    pub fn get_messages_for_iteration(&self, current_iteration: u32) -> Vec<ChatMessage> {
+        // 构建系统提示词，迭代 > 1 时追加继续推理提示
+        let system_content = if current_iteration > 1 {
+            format!(
+                "{}\n\n注意：你正在继续执行之前的任务。以下是之前步骤的执行结果，请直接基于这些结果继续操作，无需重复之前的分析。",
+                self.system_prompt
+            )
+        } else {
+            self.system_prompt.clone()
+        };
+
+        let mut all = vec![ChatMessage {
+            role: "system".to_string(),
+            content: system_content,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+        }];
+
+        // 找出最后一条包含 reasoning_content 的 assistant 消息的索引
+        let last_reasoning_idx = self.messages.iter().rposition(|m| {
+            m.role == "assistant" && m.reasoning_content.is_some()
+        });
+
+        // 遍历消息，压缩早期的 reasoning_content
+        for (i, msg) in self.messages.iter().enumerate() {
+            let mut compressed_msg = msg.clone();
+
+            if let Some(rc) = &msg.reasoning_content {
+                // 判断是否为"最近一轮"的 reasoning_content
+                let is_latest = last_reasoning_idx.is_none_or(|idx| i == idx);
+
+                if !is_latest && rc.len() > REASONING_COMPRESS_THRESHOLD {
+                    // 压缩早期的 reasoning_content：保留前 N 个字符 + 省略标记
+                    let kept = rc.chars().take(REASONING_COMPRESS_KEEP).collect::<String>();
+                    compressed_msg.reasoning_content = Some(format!("{}...(已省略)", kept));
+                    log::debug!(
+                        "压缩早期 reasoning_content: 原始长度={}, 压缩后长度={}, 消息索引={}",
+                        rc.len(),
+                        compressed_msg.reasoning_content.as_ref().unwrap().len(),
+                        i
+                    );
+                }
+            }
+
+            all.push(compressed_msg);
+        }
+
+        all
+    }
+
     /// 获取尚未持久化的消息列表（增量持久化用）
     /// 返回从 persisted_count 开始的新消息切片
     pub fn get_unpersisted_messages(&self) -> &[ChatMessage] {
@@ -137,5 +197,122 @@ impl AgentContext {
             workspace_path,
             design_guides
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 辅助函数：生成指定字符数的字符串
+    fn make_long_string(char_count: usize) -> String {
+        "a".repeat(char_count)
+    }
+
+    /// 测试第一轮迭代时系统提示词不追加继续推理提示
+    #[test]
+    fn test_get_messages_for_iteration_first_iteration() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        ctx.add_assistant_message("你好！", None, None);
+
+        let messages = ctx.get_messages_for_iteration(1);
+
+        // 系统消息应该是原始系统提示词，不包含继续推理提示
+        assert_eq!(messages[0].role, "system");
+        assert_eq!(messages[0].content, "你是助手");
+        assert!(!messages[0].content.contains("继续执行之前的任务"));
+    }
+
+    /// 测试后续迭代时系统提示词追加继续推理提示
+    #[test]
+    fn test_get_messages_for_iteration_later_iteration() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        ctx.add_assistant_message("你好！", None, None);
+
+        let messages = ctx.get_messages_for_iteration(2);
+
+        // 系统消息应该包含继续推理提示
+        assert_eq!(messages[0].role, "system");
+        assert!(messages[0].content.contains("继续执行之前的任务"));
+        assert!(messages[0].content.starts_with("你是助手"));
+    }
+
+    /// 测试早期 reasoning_content 超过阈值时被压缩
+    #[test]
+    fn test_get_messages_for_iteration_compress_reasoning() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+
+        // 早期的 assistant 消息，reasoning_content 超过阈值（600 > 500）
+        let long_reasoning = make_long_string(600);
+        ctx.add_assistant_message("回复1", None, Some(long_reasoning));
+
+        // 最近一条有 reasoning_content 的消息（使其成为"最近一轮"）
+        ctx.add_user_message("继续");
+        ctx.add_assistant_message("回复2", None, Some("短推理".to_string()));
+
+        let messages = ctx.get_messages_for_iteration(1);
+
+        // 消息布局: [system, user, assistant(早期), user, assistant(最近)]
+        let early_assistant = &messages[2];
+
+        // 早期 reasoning_content 应该被压缩，包含省略标记
+        let compressed = early_assistant.reasoning_content.as_ref().unwrap();
+        assert!(compressed.contains("...(已省略)"));
+
+        // 压缩后应该以原始内容的前 200 字符开头
+        let expected_prefix = make_long_string(REASONING_COMPRESS_KEEP);
+        assert!(compressed.starts_with(&expected_prefix));
+    }
+
+    /// 测试最近一轮的 reasoning_content 保持完整
+    #[test]
+    fn test_get_messages_for_iteration_keep_latest_reasoning() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+
+        // 早期长 reasoning
+        let long_reasoning = make_long_string(600);
+        ctx.add_assistant_message("回复1", None, Some(long_reasoning));
+
+        // 最近一条长 reasoning（超过阈值但不应被压缩，因为是最新的）
+        let latest_reasoning = make_long_string(700);
+        ctx.add_user_message("继续");
+        ctx.add_assistant_message("回复2", None, Some(latest_reasoning.clone()));
+
+        let messages = ctx.get_messages_for_iteration(1);
+
+        // 消息布局: [system, user, assistant(早期), user, assistant(最近)]
+        let latest_assistant = &messages[4];
+
+        // 最近一条 assistant 消息的 reasoning_content 应该保持完整
+        assert_eq!(latest_assistant.reasoning_content.as_ref().unwrap(), &latest_reasoning);
+        assert!(!latest_assistant.reasoning_content.as_ref().unwrap().contains("...(已省略)"));
+    }
+
+    /// 测试短 reasoning_content 不被压缩
+    #[test]
+    fn test_get_messages_for_iteration_short_reasoning_not_compressed() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+
+        // 短 reasoning（不超过阈值 500）
+        let short_reasoning = "这是一个简短的推理过程".to_string();
+        ctx.add_assistant_message("回复1", None, Some(short_reasoning.clone()));
+
+        // 最近一条也有 reasoning，使早期的成为"非最新"
+        ctx.add_user_message("继续");
+        ctx.add_assistant_message("回复2", None, Some("最新推理".to_string()));
+
+        let messages = ctx.get_messages_for_iteration(1);
+
+        // 消息布局: [system, user, assistant(早期), user, assistant(最近)]
+        let early_assistant = &messages[2];
+
+        // 短 reasoning 不应该被压缩
+        assert_eq!(early_assistant.reasoning_content.as_ref().unwrap(), &short_reasoning);
+        assert!(!early_assistant.reasoning_content.as_ref().unwrap().contains("...(已省略)"));
     }
 }

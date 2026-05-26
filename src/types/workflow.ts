@@ -68,6 +68,8 @@ export interface WorkflowNode<T extends WorkflowNodeType = WorkflowNodeType> {
   data: NodeDataMap[T];
   isExpanded: boolean;
   error?: string;
+  /** 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示 */
+  iteration?: number;
 }
 
 export interface DiffStats {

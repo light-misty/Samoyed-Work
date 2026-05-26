@@ -47,6 +47,9 @@ pub struct DeepThinkingPayload {
     pub step: u32,
     pub thought: String,
     pub is_streaming: bool,
+    /// 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<u32>,
 }
 
 /// Agent 回复内容增量
@@ -58,6 +61,9 @@ pub struct ContentPayload {
     pub content: String,
     /// 是否为流式输出的中间片段
     pub is_streaming: bool,
+    /// 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<u32>,
 }
 
 /// Tool 调用开始
@@ -68,6 +74,9 @@ pub struct ToolCallPayload {
     pub call_id: String,
     pub tool_name: String,
     pub arguments: serde_json::Value,
+    /// 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iteration: Option<u32>,
 }
 
 /// Tool 执行结果

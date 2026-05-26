@@ -22,6 +22,8 @@ export interface DeepThinkingPayload {
   step: number;
   thought: string;
   isStreaming: boolean;
+  /** 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示 */
+  iteration?: number;
 }
 
 /** Agent 回复内容增量 */
@@ -30,6 +32,8 @@ export interface ContentPayload {
   messageId: string;
   content: string;
   isStreaming: boolean;
+  /** 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示 */
+  iteration?: number;
 }
 
 /** Tool 调用开始 */
@@ -38,6 +42,8 @@ export interface ToolCallPayload {
   callId: string;
   toolName: string;
   arguments: Record<string, unknown>;
+  /** 当前迭代轮次序号（从 1 开始），用于前端按迭代分组展示 */
+  iteration?: number;
 }
 
 /** Tool 执行结果 */

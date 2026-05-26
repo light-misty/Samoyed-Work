@@ -73,9 +73,25 @@ impl OpenAiAdapter {
                     "role": m.role,
                     "content": m.content,
                 });
+
                 if let Some(rc) = &m.reasoning_content {
-                    msg["reasoning_content"] = json!(rc);
+                    if self.advanced.reasoning_in_content {
+                        // 不支持 reasoning_content 输入的 Provider（OpenAI/Ollama）：
+                        // 将思考内容用 <agent-reasoning> 标签包裹后合并到 content 字段
+                        // 使用不常见的标签名避免被 LLM 误解为用户指令
+                        let merged_content = format!(
+                            "<agent-reasoning>\n{}\n</agent-reasoning>\n{}",
+                            rc,
+                            m.content
+                        );
+                        msg["content"] = json!(merged_content);
+                    } else {
+                        // 支持 reasoning_content 输入的 Provider（DeepSeek）：
+                        // 保持原样发送 reasoning_content 字段
+                        msg["reasoning_content"] = json!(rc);
+                    }
                 }
+
                 if let Some(tool_calls) = &m.tool_calls {
                     msg["tool_calls"] = json!(tool_calls.iter().map(|tc| {
                         json!({
@@ -434,5 +450,99 @@ impl LlmProvider for OpenAiAdapter {
                 })
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::llm_config::AdvancedConfig;
+
+    /// 辅助函数：创建指定 reasoning_in_content 的 AdvancedConfig
+    fn advanced_with_reasoning_in_content(val: bool) -> AdvancedConfig {
+        AdvancedConfig {
+            reasoning_in_content: val,
+            ..AdvancedConfig::default()
+        }
+    }
+
+    /// 辅助函数：创建 OpenAiAdapter
+    fn create_adapter(advanced: AdvancedConfig) -> OpenAiAdapter {
+        OpenAiAdapter::new(
+            "https://api.openai.com/v1".to_string(),
+            "test-key".to_string(),
+            "gpt-4".to_string(),
+            advanced,
+        )
+    }
+
+    /// 测试 reasoning_in_content=true 时，reasoning_content 被折叠到 content 字段
+    #[test]
+    fn test_build_request_body_reasoning_in_content_true() {
+        let adapter = create_adapter(advanced_with_reasoning_in_content(true));
+        let messages = vec![ChatMessage {
+            role: "assistant".to_string(),
+            content: "这是回复内容".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: Some("这是思考过程".to_string()),
+        }];
+
+        let body = adapter.build_request_body(&messages, &[], false);
+        let msg = &body["messages"][0];
+
+        // reasoning_content 应该被合并到 content 中，使用 <agent-reasoning> 标签
+        let content = msg["content"].as_str().unwrap();
+        assert!(content.contains("<agent-reasoning>"));
+        assert!(content.contains("这是思考过程"));
+        assert!(content.contains("</agent-reasoning>"));
+        assert!(content.contains("这是回复内容"));
+
+        // 不应该有独立的 reasoning_content 字段
+        assert!(msg.get("reasoning_content").is_none());
+    }
+
+    /// 测试 reasoning_in_content=false 时，reasoning_content 保持原样发送
+    #[test]
+    fn test_build_request_body_reasoning_in_content_false() {
+        let adapter = create_adapter(advanced_with_reasoning_in_content(false));
+        let messages = vec![ChatMessage {
+            role: "assistant".to_string(),
+            content: "这是回复内容".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: Some("这是思考过程".to_string()),
+        }];
+
+        let body = adapter.build_request_body(&messages, &[], false);
+        let msg = &body["messages"][0];
+
+        // content 应该保持原样
+        assert_eq!(msg["content"].as_str().unwrap(), "这是回复内容");
+
+        // reasoning_content 应该作为独立字段发送
+        assert_eq!(msg["reasoning_content"].as_str().unwrap(), "这是思考过程");
+    }
+
+    /// 测试没有 reasoning_content 时正常构建请求体
+    #[test]
+    fn test_build_request_body_no_reasoning_content() {
+        let adapter = create_adapter(AdvancedConfig::default());
+        let messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: "你好".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+        }];
+
+        let body = adapter.build_request_body(&messages, &[], false);
+        let msg = &body["messages"][0];
+
+        // content 应该保持原样
+        assert_eq!(msg["content"].as_str().unwrap(), "你好");
+
+        // 不应该有 reasoning_content 字段
+        assert!(msg.get("reasoning_content").is_none());
     }
 }
