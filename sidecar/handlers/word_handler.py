@@ -11,12 +11,28 @@ from docx import Document
 from docx.shared import Inches, Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 
 class WordHandler:
     """Word (.docx) 文档处理器"""
 
     logger = logging.getLogger(__name__)
+
+    # 颜色编码映射表：根据 colorType 字段应用对应颜色
+    COLOR_MAP = {
+        "input": RGBColor(0x00, 0x70, 0xC0),      # 蓝色 - 输入
+        "formula": RGBColor(0x00, 0x00, 0x00),     # 黑色 - 公式
+        "cross_ref": RGBColor(0x00, 0x80, 0x00),   # 绿色 - 交叉引用
+        "external": RGBColor(0xFF, 0x00, 0x00),    # 红色 - 外部引用
+    }
+
+    # 页面尺寸预设（DXA 单位，1 inch = 1440 DXA，1 DXA = 635 EMU）
+    PAGE_SIZES = {
+        "letter": {"width": 12240, "height": 15840},  # US Letter: 8.5 x 11 inches
+        "a4": {"width": 11906, "height": 16838},       # A4: 21.0 x 29.7 cm
+    }
 
     def generate(self, params: dict) -> dict:
         """生成 Word 文档
@@ -27,11 +43,27 @@ class WordHandler:
             content: 文档内容（结构化或纯文本）
             author: 作者
             template: 模板路径（可选）
+            pageSize: 页面尺寸 "letter" | "a4"（可选）
+            header: 页眉文本（可选）
+            footer: 页脚文本（可选）
+            pageNumber: 是否显示页码（默认 true）
+            includeToc: 是否包含目录（默认 false）
+            colorCoding: 是否启用颜色编码（默认 true）
+            bookmarks: 书签列表 [{id, text}]（可选）
+            hyperlinks: 超链接列表 [{text, url, anchor}]（可选）
         """
         path = params.get("path", "")
         title = params.get("title", "")
         content = params.get("content", "")
         author = params.get("author", "")
+        page_size = params.get("pageSize", None)
+        header_text = params.get("header", None)
+        footer_text = params.get("footer", None)
+        page_number = params.get("pageNumber", True)
+        include_toc = params.get("includeToc", False)
+        color_coding = params.get("colorCoding", True)
+        bookmarks = params.get("bookmarks", []) or []
+        hyperlinks = params.get("hyperlinks", []) or []
 
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
@@ -44,6 +76,10 @@ class WordHandler:
 
         doc = Document()
 
+        # 设置页面尺寸
+        if page_size:
+            self._set_page_size(doc, page_size)
+
         # 设置文档属性
         if author:
             doc.core_properties.author = author
@@ -54,6 +90,11 @@ class WordHandler:
         if title:
             heading = doc.add_heading(title, level=0)
 
+        # 添加目录（在标题之后、正文之前）
+        if include_toc:
+            doc.add_heading("目录", level=1)
+            self._add_toc(doc)
+
         # 处理内容
         if isinstance(content, str):
             # 纯文本内容，按段落分割
@@ -63,7 +104,35 @@ class WordHandler:
         elif isinstance(content, list):
             # 结构化内容
             for item in content:
-                self._add_content_block(doc, item)
+                self._add_content_block(doc, item, color_coding=color_coding)
+
+        # 添加书签
+        bookmark_id_counter = 0
+        for bm in bookmarks:
+            bm_id = bm.get("id", f"bookmark_{bookmark_id_counter}")
+            bm_text = bm.get("text", "")
+            p = doc.add_paragraph()
+            self._add_bookmark(p, bm_id, bm_text, bookmark_id_counter)
+            bookmark_id_counter += 1
+
+        # 添加超链接
+        for hl in hyperlinks:
+            hl_text = hl.get("text", "")
+            hl_url = hl.get("url", None)
+            hl_anchor = hl.get("anchor", None)
+            p = doc.add_paragraph()
+            if hl_url:
+                self._add_hyperlink(p, hl_text, hl_url)
+            elif hl_anchor:
+                self._add_internal_link(p, hl_text, hl_anchor)
+
+        # 添加页眉
+        if header_text:
+            self._add_header(doc, header_text)
+
+        # 添加页脚（含可选页码）
+        if footer_text or page_number:
+            self._add_footer(doc, footer_text or "", page_number)
 
         doc.save(path)
         self.logger.info("generate: Word 文档已生成, path=%s", path)
@@ -134,7 +203,14 @@ class WordHandler:
                 [{"type": "replace", "old": "...", "new": "..."},  # 全文搜索替换
                  {"type": "replace", "index": 1, "text": "..."},   # 按段落索引替换整段
                  {"type": "add_paragraph", "text": "...", "position": 0},
-                 {"type": "add_table", "rows": 3, "cols": 2, "data": [[...]]}]
+                 {"type": "add_table", "rows": 3, "cols": 2, "data": [[...]]},
+                 {"type": "addHeader", "text": "页眉文本"},         # 添加页眉
+                 {"type": "addFooter", "text": "页脚文本", "pageNumber": true},  # 添加页脚
+                 {"type": "addBookmark", "id": "chapter1", "text": "第一章"},  # 添加书签
+                 {"type": "addHyperlink", "text": "点击跳转", "url": "https://..."},  # 添加外部超链接
+                 {"type": "addHyperlink", "text": "跳转", "anchor": "chapter1"},  # 添加内部书签链接
+                 {"type": "setPageSize", "size": "a4"},  # 设置页面尺寸
+                 {"type": "addToc"}]  # 添加目录
         """
         path = params.get("path", "")
         operations = params.get("operations", [])
@@ -206,6 +282,61 @@ class WordHandler:
                         for j, cell_text in enumerate(row_data):
                             if j < cols:
                                 table.rows[i].cells[j].text = str(cell_text)
+                modified_count += 1
+
+            elif op_type == "addHeader":
+                # 添加页眉
+                header_text = op.get("text", "")
+                self._add_header(doc, header_text)
+                modified_count += 1
+
+            elif op_type == "addFooter":
+                # 添加页脚（含可选页码）
+                footer_text = op.get("text", "")
+                page_number = op.get("pageNumber", True)
+                self._add_footer(doc, footer_text, page_number)
+                modified_count += 1
+
+            elif op_type == "addBookmark":
+                # 添加书签
+                bm_id = op.get("id", "")
+                bm_text = op.get("text", "")
+                if bm_id:
+                    p = doc.add_paragraph()
+                    # 使用哈希值生成唯一数字 ID
+                    numeric_id = abs(hash(bm_id)) % 10000
+                    self._add_bookmark(p, bm_id, bm_text, numeric_id)
+                    modified_count += 1
+                else:
+                    self.logger.warning("modify: addBookmark 缺少 id 字段")
+
+            elif op_type == "addHyperlink":
+                # 添加超链接（外部URL或内部书签锚点）
+                hl_text = op.get("text", "")
+                hl_url = op.get("url", None)
+                hl_anchor = op.get("anchor", None)
+                p = doc.add_paragraph()
+                if hl_url:
+                    self._add_hyperlink(p, hl_text, hl_url)
+                    modified_count += 1
+                elif hl_anchor:
+                    self._add_internal_link(p, hl_text, hl_anchor)
+                    modified_count += 1
+                else:
+                    self.logger.warning("modify: addHyperlink 缺少 url 或 anchor 字段")
+
+            elif op_type == "setPageSize":
+                # 设置页面尺寸
+                size = op.get("size", "")
+                if size:
+                    self._set_page_size(doc, size)
+                    modified_count += 1
+                else:
+                    self.logger.warning("modify: setPageSize 缺少 size 字段")
+
+            elif op_type == "addToc":
+                # 添加目录
+                self._add_toc(doc)
                 modified_count += 1
 
         doc.save(path)
@@ -417,14 +548,26 @@ class WordHandler:
             },
         }
 
-    def _add_content_block(self, doc: Document, block: dict):
-        """添加结构化内容块"""
+    def _add_content_block(self, doc: Document, block: dict, color_coding: bool = True):
+        """添加结构化内容块
+
+        Args:
+            doc: Document 对象
+            block: 内容块字典
+            color_coding: 是否启用颜色编码（默认 True）
+        """
         block_type = block.get("type", "paragraph")
 
         if block_type == "heading":
             level = block.get("level", 1)
             text = block.get("text", "")
-            doc.add_heading(text, level=level)
+            heading = doc.add_heading(text, level=level)
+            # 颜色编码：根据 colorType 应用颜色
+            if color_coding and "colorType" in block:
+                color = self.COLOR_MAP.get(block["colorType"])
+                if color:
+                    for run in heading.runs:
+                        run.font.color.rgb = color
 
         elif block_type == "paragraph":
             text = block.get("text", "")
@@ -442,6 +585,12 @@ class WordHandler:
                 }
                 if alignment in align_map:
                     p.alignment = align_map[alignment]
+            # 颜色编码：根据 colorType 应用颜色
+            if color_coding and "colorType" in block:
+                color = self.COLOR_MAP.get(block["colorType"])
+                if color:
+                    for run in p.runs:
+                        run.font.color.rgb = color
 
         elif block_type == "table":
             headers = block.get("headers", [])
@@ -490,3 +639,250 @@ class WordHandler:
                     doc.add_picture(image_path, width=Inches(width))
                 else:
                     doc.add_picture(image_path)
+
+    def _set_page_size(self, doc: Document, size: str):
+        """设置文档页面尺寸
+
+        Args:
+            doc: Document 对象
+            size: 页面尺寸标识 "letter" | "a4"
+        """
+        size_lower = size.lower() if size else ""
+        if size_lower not in self.PAGE_SIZES:
+            self.logger.warning("_set_page_size: 不支持的页面尺寸: %s, 支持的值: %s", size, list(self.PAGE_SIZES.keys()))
+            return
+
+        # DXA 转换为 EMU：1 DXA = 635 EMU
+        dxa_to_emu = 635
+        page_size = self.PAGE_SIZES[size_lower]
+        section = doc.sections[0]
+        section.page_width = page_size["width"] * dxa_to_emu
+        section.page_height = page_size["height"] * dxa_to_emu
+        self.logger.debug("_set_page_size: 设置页面尺寸为 %s (%d x %d DXA)", size_lower, page_size["width"], page_size["height"])
+
+    def _add_header(self, doc: Document, text: str):
+        """添加页眉
+
+        Args:
+            doc: Document 对象
+            text: 页眉文本
+        """
+        section = doc.sections[0]
+        header = section.header
+        # 断开与上一节的链接，确保可以独立设置
+        header.is_linked_to_previous = False
+        # 使用已有段落或新建段落
+        if header.paragraphs:
+            paragraph = header.paragraphs[0]
+        else:
+            paragraph = header.add_paragraph()
+        paragraph.text = text
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        self.logger.debug("_add_header: 已添加页眉: %s", text[:50])
+
+    def _add_footer(self, doc: Document, text: str, page_number: bool = True):
+        """添加页脚（含可选页码）
+
+        Args:
+            doc: Document 对象
+            text: 页脚文本
+            page_number: 是否显示页码（默认 True）
+        """
+        section = doc.sections[0]
+        footer = section.footer
+        # 断开与上一节的链接
+        footer.is_linked_to_previous = False
+        # 使用已有段落或新建段落
+        if footer.paragraphs:
+            paragraph = footer.paragraphs[0]
+        else:
+            paragraph = footer.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # 添加页脚文本
+        if text:
+            paragraph.add_run(text)
+
+        # 添加页码域代码
+        if page_number:
+            if text:
+                paragraph.add_run(" ")
+            # fldChar begin
+            run_begin = paragraph.add_run()
+            fldChar_begin = OxmlElement('w:fldChar')
+            fldChar_begin.set(qn('w:fldCharType'), 'begin')
+            run_begin._r.append(fldChar_begin)
+
+            # instrText: PAGE 域代码
+            run_instr = paragraph.add_run()
+            instrText = OxmlElement('w:instrText')
+            instrText.set(qn('xml:space'), 'preserve')
+            instrText.text = ' PAGE '
+            run_instr._r.append(instrText)
+
+            # fldChar separate
+            run_sep = paragraph.add_run()
+            fldChar_sep = OxmlElement('w:fldChar')
+            fldChar_sep.set(qn('w:fldCharType'), 'separate')
+            run_sep._r.append(fldChar_sep)
+
+            # 占位文本（Word 打开时会自动替换为实际页码）
+            run_placeholder = paragraph.add_run("1")
+
+            # fldChar end
+            run_end = paragraph.add_run()
+            fldChar_end = OxmlElement('w:fldChar')
+            fldChar_end.set(qn('w:fldCharType'), 'end')
+            run_end._r.append(fldChar_end)
+
+        self.logger.debug("_add_footer: 已添加页脚, text=%s, pageNumber=%s", text[:50] if text else "", page_number)
+
+    def _add_bookmark(self, paragraph, bookmark_id: str, text: str, numeric_id: int = 0):
+        """在段落中添加书签
+
+        Args:
+            paragraph: 段落对象
+            bookmark_id: 书签名称（字符串标识）
+            text: 书签包围的文本
+            numeric_id: 书签数字 ID（XML 中 w:id 需要整数）
+        """
+        # 创建书签起始元素
+        bookmark_start = OxmlElement('w:bookmarkStart')
+        bookmark_start.set(qn('w:id'), str(numeric_id))
+        bookmark_start.set(qn('w:name'), bookmark_id)
+
+        # 创建书签结束元素
+        bookmark_end = OxmlElement('w:bookmarkEnd')
+        bookmark_end.set(qn('w:id'), str(numeric_id))
+
+        # 添加文本 run
+        run = paragraph.add_run(text)
+
+        # 将 bookmarkStart 插入到 run 之前，bookmarkEnd 插入到 run 之后
+        run._r.addprevious(bookmark_start)
+        run._r.addnext(bookmark_end)
+
+        self.logger.debug("_add_bookmark: 已添加书签 id=%s, text=%s", bookmark_id, text[:50])
+
+    def _add_hyperlink(self, paragraph, text: str, url: str):
+        """添加外部超链接
+
+        python-docx 没有原生超链接 API，需要通过 OxmlElement 操作 XML 实现。
+
+        Args:
+            paragraph: 段落对象
+            text: 超链接显示文本
+            url: 超链接目标 URL
+        """
+        # 获取文档 part，添加外部关系
+        part = paragraph.part
+        r_id = part.relate_to(
+            url,
+            'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+            is_external=True
+        )
+
+        # 创建超链接 XML 元素
+        hyperlink = OxmlElement('w:hyperlink')
+        hyperlink.set(qn('r:id'), r_id)
+
+        # 创建 run 元素（含样式：蓝色+下划线）
+        new_run = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+
+        # 蓝色字体
+        color_elem = OxmlElement('w:color')
+        color_elem.set(qn('w:val'), '0563C1')
+        rPr.append(color_elem)
+
+        # 下划线
+        u_elem = OxmlElement('w:u')
+        u_elem.set(qn('w:val'), 'single')
+        rPr.append(u_elem)
+
+        new_run.append(rPr)
+
+        # 文本内容
+        t_elem = OxmlElement('w:t')
+        t_elem.text = text
+        new_run.append(t_elem)
+
+        hyperlink.append(new_run)
+        paragraph._p.append(hyperlink)
+
+        self.logger.debug("_add_hyperlink: 已添加超链接 text=%s, url=%s", text[:50], url[:80])
+
+    def _add_internal_link(self, paragraph, text: str, anchor: str):
+        """添加内部书签链接
+
+        Args:
+            paragraph: 段落对象
+            text: 链接显示文本
+            anchor: 目标书签名称（对应 bookmarkStart 的 w:name）
+        """
+        # 创建超链接 XML 元素（使用 w:anchor 而非 r:id）
+        hyperlink = OxmlElement('w:hyperlink')
+        hyperlink.set(qn('w:anchor'), anchor)
+
+        # 创建 run 元素（含样式：蓝色+下划线）
+        new_run = OxmlElement('w:r')
+        rPr = OxmlElement('w:rPr')
+
+        # 蓝色字体
+        color_elem = OxmlElement('w:color')
+        color_elem.set(qn('w:val'), '0563C1')
+        rPr.append(color_elem)
+
+        # 下划线
+        u_elem = OxmlElement('w:u')
+        u_elem.set(qn('w:val'), 'single')
+        rPr.append(u_elem)
+
+        new_run.append(rPr)
+
+        # 文本内容
+        t_elem = OxmlElement('w:t')
+        t_elem.text = text
+        new_run.append(t_elem)
+
+        hyperlink.append(new_run)
+        paragraph._p.append(hyperlink)
+
+        self.logger.debug("_add_internal_link: 已添加内部链接 text=%s, anchor=%s", text[:50], anchor)
+
+    def _add_toc(self, doc: Document):
+        """添加目录（TOC 域代码）
+
+        注意：目录内容在 Word 中打开后需要手动更新域（右键 -> 更新域）才会显示。
+        """
+        paragraph = doc.add_paragraph()
+
+        # fldChar begin
+        run_begin = paragraph.add_run()
+        fldChar_begin = OxmlElement('w:fldChar')
+        fldChar_begin.set(qn('w:fldCharType'), 'begin')
+        run_begin._r.append(fldChar_begin)
+
+        # instrText: TOC 域指令
+        run_instr = paragraph.add_run()
+        instrText = OxmlElement('w:instrText')
+        instrText.set(qn('xml:space'), 'preserve')
+        instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
+        run_instr._r.append(instrText)
+
+        # fldChar separate
+        run_sep = paragraph.add_run()
+        fldChar_sep = OxmlElement('w:fldChar')
+        fldChar_sep.set(qn('w:fldCharType'), 'separate')
+        run_sep._r.append(fldChar_sep)
+
+        # 占位提示文本
+        run_placeholder = paragraph.add_run('（请右键点击此处，选择"更新域"以生成目录）')
+
+        # fldChar end
+        run_end = paragraph.add_run()
+        fldChar_end = OxmlElement('w:fldChar')
+        fldChar_end.set(qn('w:fldCharType'), 'end')
+        run_end._r.append(fldChar_end)
+
+        self.logger.debug("_add_toc: 已添加目录域代码")

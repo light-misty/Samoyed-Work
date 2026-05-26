@@ -15,6 +15,7 @@ from handlers.excel_handler import ExcelHandler
 from handlers.ppt_handler import PptHandler
 from handlers.pdf_handler import PdfHandler
 from handlers.markdown_handler import MarkdownHandler
+from handlers.validator import DocumentValidator
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ HANDLERS = {
     "txt": MarkdownHandler(),
 }
 
+# 文档验证器实例
+_validator = DocumentValidator()
+
 
 def handle_request(request: dict) -> dict:
     """处理文档操作请求
@@ -94,6 +98,28 @@ def handle_request(request: dict) -> dict:
             "success": True,
             "data": {"status": "ok"},
         }
+
+    # 验证请求，使用 DocumentValidator
+    if action == "validate":
+        logger.info("验证请求: id=%s, type=%s", request_id, doc_type)
+        file_path = params.get("path", "")
+        if "input_path" in params and "path" not in params:
+            file_path = params["input_path"]
+        options = params.get("options", {})
+        try:
+            result = _validator.validate(file_path, doc_type, options)
+            return {
+                "id": request_id,
+                "success": True,
+                "data": result,
+            }
+        except Exception as e:
+            logger.error("验证失败: id=%s, error=%s: %s", request_id, type(e).__name__, e)
+            return {
+                "id": request_id,
+                "success": False,
+                "error": f"验证失败: {type(e).__name__}: {e}",
+            }
 
     handler = HANDLERS.get(doc_type)
     if handler is None:

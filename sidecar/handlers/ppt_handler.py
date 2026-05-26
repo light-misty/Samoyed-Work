@@ -5,17 +5,27 @@
 import os
 import html
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
 
 
 class PptHandler:
     """PowerPoint (.pptx) 文档处理器"""
 
     logger = logging.getLogger(__name__)
+
+    # 颜色方案定义: primary=主色, secondary=辅色, accent=强调色
+    COLOR_SCHEMES = {
+        "midnight": {"primary": "1E2761", "secondary": "CADCFC", "accent": "FFFFFF"},
+        "forest": {"primary": "2C5F2D", "secondary": "97BC62", "accent": "F5F5F5"},
+        "coral": {"primary": "F96167", "secondary": "F9E795", "accent": "2F3C7E"},
+        "ocean": {"primary": "065A82", "secondary": "1C7293", "accent": "21295C"},
+        "charcoal": {"primary": "36454F", "secondary": "F2F2F2", "accent": "212121"},
+    }
 
     def generate(self, params: dict) -> dict:
         """生成 PPT 文档
@@ -26,11 +36,19 @@ class PptHandler:
                 [{"title": "...", "content": "...", "layout": "title_slide"}]
             content: 文档内容（当 slides 为空时，从 content 构建）
             title: 文档标题（当 slides 为空时，作为标题幻灯片的标题）
+            colorScheme: 颜色方案名称 "midnight"|"forest"|"coral"|"ocean"|"charcoal"
+            fonts: 字体配置 {"title": "Arial Black", "body": "Arial"}
+            margins: 边距配置 {"top": 0.5, "right": 0.5, "bottom": 0.5, "left": 0.5}（单位: inch）
         """
         path = params.get("path", "")
         slides = params.get("slides", [])
         content = params.get("content", "")
         title = params.get("title", "")
+        # 新增参数: 颜色方案、字体、边距
+        color_scheme = params.get("colorScheme", "")
+        fonts = params.get("fonts", {})
+        margins = params.get("margins", {})
+
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
@@ -57,9 +75,22 @@ class PptHandler:
 
         prs = Presentation()
 
-        for slide_info in slides:
-            title = slide_info.get("title", "")
-            content = slide_info.get("content", "")
+        # 解析边距参数，默认值均为 1.0 inch
+        margin_top = Inches(margins.get("top", 1.0))
+        margin_right = Inches(margins.get("right", 1.0))
+        margin_bottom = Inches(margins.get("bottom", 1.0))
+        margin_left = Inches(margins.get("left", 1.0))
+
+        # 解析字体参数
+        title_font = fonts.get("title", "")
+        body_font = fonts.get("body", "")
+
+        # 解析颜色方案
+        scheme_colors = self.COLOR_SCHEMES.get(color_scheme, None)
+
+        for slide_idx, slide_info in enumerate(slides):
+            slide_title = slide_info.get("title", "")
+            slide_content = slide_info.get("content", "")
             layout_name = slide_info.get("layout", "title_slide")
 
             # 选择布局
@@ -72,16 +103,88 @@ class PptHandler:
             slide_layout = prs.slide_layouts[layout_idx]
             slide = prs.slides.add_slide(slide_layout)
 
+            # 是否为标题页（第一张幻灯片）
+            is_title_slide = (slide_idx == 0)
+
+            # 应用颜色方案到幻灯片
+            if scheme_colors:
+                self._apply_color_scheme(slide, color_scheme, is_title_slide)
+
+            # 计算文本框位置和大小（考虑边距）
+            slide_width = prs.slide_width
+            slide_height = prs.slide_height
+            text_left = margin_left
+            text_width = slide_width - margin_left - margin_right
+
             # 设置标题
             if slide.shapes.title:
-                slide.shapes.title.text = title
+                slide.shapes.title.text = slide_title
+                # 设置标题字体
+                if title_font or scheme_colors:
+                    title_color = None
+                    if scheme_colors:
+                        # 深色背景上标题使用强调色（通常为白色/浅色）
+                        title_color = scheme_colors["accent"]
+                    self._set_shape_font(
+                        slide.shapes.title,
+                        font_name=title_font or None,
+                        font_size=Pt(40),
+                        color=title_color,
+                    )
+            else:
+                # 如果没有标题占位符，手动添加标题文本框
+                if slide_title:
+                    title_color = scheme_colors["accent"] if scheme_colors else None
+                    self._add_text_box(
+                        slide,
+                        text=slide_title,
+                        left=text_left,
+                        top=margin_top,
+                        width=text_width,
+                        height=Inches(1.5),
+                        font_name=title_font or None,
+                        font_size=Pt(40),
+                        color=title_color,
+                        alignment=PP_ALIGN.LEFT,
+                    )
 
             # 设置内容
-            if content and len(slide.placeholders) > 1:
+            if slide_content and len(slide.placeholders) > 1:
                 for placeholder in slide.placeholders:
                     if placeholder.placeholder_format.idx == 1:
-                        placeholder.text = content
+                        placeholder.text = slide_content
+                        # 设置正文字体
+                        if body_font or scheme_colors:
+                            body_color = None
+                            if scheme_colors and not is_title_slide:
+                                # 内容页正文使用深色文字
+                                body_color = scheme_colors["accent"]
+                            self._set_shape_font(
+                                placeholder,
+                                font_name=body_font or None,
+                                font_size=Pt(16),
+                                color=body_color,
+                            )
                         break
+            elif slide_content:
+                # 如果没有内容占位符，手动添加内容文本框
+                content_top = margin_top + Inches(1.8)
+                content_height = slide_height - content_top - margin_bottom
+                body_color = None
+                if scheme_colors and not is_title_slide:
+                    body_color = scheme_colors["accent"]
+                self._add_text_box(
+                    slide,
+                    text=slide_content,
+                    left=text_left,
+                    top=content_top,
+                    width=text_width,
+                    height=content_height,
+                    font_name=body_font or None,
+                    font_size=Pt(16),
+                    color=body_color,
+                    alignment=PP_ALIGN.LEFT,
+                )
 
         prs.save(path)
         self.logger.info("generate: PPT 文档已生成, path=%s, 幻灯片数=%d", path, len(slides))
@@ -128,7 +231,18 @@ class PptHandler:
         }
 
     def modify(self, params: dict) -> dict:
-        """修改 PPT 文档"""
+        """修改 PPT 文档
+
+        params:
+            path: 文件路径
+            operations: 操作列表，支持以下操作类型:
+                - add_slide: 添加幻灯片
+                - replace_text: 替换文本
+                - applyColorScheme: 应用颜色方案 {type, scheme}
+                - setFont: 设置字体 {type, element, font, size}
+                - setMargins: 设置边距 {type, top, right, bottom, left}
+                - setSlideBackground: 设置幻灯片背景色 {type, slideIndex, color}
+        """
         path = params.get("path", "")
         operations = params.get("operations", [])
         if not path:
@@ -166,6 +280,99 @@ class PptHandler:
                                     if old_text in run.text:
                                         run.text = run.text.replace(old_text, new_text)
                                         modified_count += 1
+
+            elif op_type == "applyColorScheme":
+                # 应用颜色方案到所有幻灯片
+                scheme_name = op.get("scheme", "")
+                if scheme_name not in self.COLOR_SCHEMES:
+                    self.logger.warning("modify: 未知颜色方案: %s", scheme_name)
+                    continue
+                for slide_idx, slide in enumerate(prs.slides):
+                    is_title = (slide_idx == 0)
+                    self._apply_color_scheme(slide, scheme_name, is_title)
+                    modified_count += 1
+
+            elif op_type == "setFont":
+                # 设置字体: element="title"|"body", font=字体名, size=字号
+                element = op.get("element", "body")
+                font_name = op.get("font", "")
+                font_size = op.get("size", 0)
+                color_hex = op.get("color", "")
+
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if not shape.has_text_frame:
+                            continue
+                        # 判断形状是否为目标元素
+                        is_title_shape = (
+                            shape == slide.shapes.title
+                            or (hasattr(shape, "placeholder_format")
+                                and hasattr(shape.placeholder_format, "type")
+                                and shape.placeholder_format.type in (1, 3))
+                        )
+                        # element="title" 时仅修改标题，"body" 时修改非标题，"all" 时修改所有
+                        if element == "title" and not is_title_shape:
+                            continue
+                        if element == "body" and is_title_shape:
+                            continue
+
+                        size_pt = Pt(font_size) if font_size else None
+                        color_rgb = color_hex if color_hex else None
+                        self._set_shape_font(
+                            shape,
+                            font_name=font_name or None,
+                            font_size=size_pt,
+                            color=color_rgb,
+                        )
+                        modified_count += 1
+
+            elif op_type == "setMargins":
+                # 设置边距: 调整所有文本框的位置和大小
+                margin_top = op.get("top", 1.0)
+                margin_right = op.get("right", 1.0)
+                margin_bottom = op.get("bottom", 1.0)
+                margin_left = op.get("left", 1.0)
+
+                slide_width = prs.slide_width
+                slide_height = prs.slide_height
+                new_left = Inches(margin_left)
+                new_width = slide_width - Inches(margin_left) - Inches(margin_right)
+
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if not shape.has_text_frame:
+                            continue
+                        # 根据形状位置判断是标题还是正文
+                        is_title_shape = (
+                            shape == slide.shapes.title
+                            or (hasattr(shape, "placeholder_format")
+                                and hasattr(shape.placeholder_format, "type")
+                                and shape.placeholder_format.type in (1, 3))
+                        )
+                        # 设置水平位置和宽度
+                        shape.left = new_left
+                        shape.width = new_width
+                        # 设置垂直位置
+                        if is_title_shape:
+                            shape.top = Inches(margin_top)
+                        else:
+                            # 正文形状保持与标题的相对位置
+                            shape.top = max(shape.top, Inches(margin_top) + Inches(1.5))
+                        modified_count += 1
+
+            elif op_type == "setSlideBackground":
+                # 设置指定幻灯片的背景色
+                slide_index = op.get("slideIndex", -1)
+                bg_color = op.get("color", "")
+                if slide_index < 0 or slide_index >= len(prs.slides):
+                    self.logger.warning("modify: 幻灯片索引越界: %d", slide_index)
+                    continue
+                if not bg_color:
+                    self.logger.warning("modify: 未指定背景颜色")
+                    continue
+                slide = prs.slides[slide_index]
+                self._set_slide_background(slide, bg_color)
+                modified_count += 1
 
         prs.save(path)
         self.logger.info("modify: PPT 文档修改完成, path=%s, 修改数=%d", path, modified_count)
@@ -242,6 +449,144 @@ class PptHandler:
                 "content": content,
                 "format": target_format,
             }
+
+    # ------------------------------------------------------------------ #
+    #  辅助方法
+    # ------------------------------------------------------------------ #
+
+    def _set_slide_background(self, slide, color_hex: str):
+        """设置幻灯片背景色
+
+        Args:
+            slide: pptx.slide 对象
+            color_hex: 十六进制颜色值，如 "1E2761"
+        """
+        background = slide.background
+        fill = background.fill
+        fill.solid()
+        fill.fore_color.rgb = RGBColor.from_string(color_hex)
+
+    def _apply_color_scheme(self, slide, scheme_name: str, is_title_slide: bool = False):
+        """应用颜色方案到幻灯片
+
+        标题页使用主色背景 + 强调色文字，内容页使用辅色背景 + 强调色文字
+
+        Args:
+            slide: pptx.slide 对象
+            scheme_name: 颜色方案名称
+            is_title_slide: 是否为标题页
+        """
+        scheme = self.COLOR_SCHEMES.get(scheme_name)
+        if not scheme:
+            self.logger.warning("_apply_color_scheme: 未知颜色方案: %s", scheme_name)
+            return
+
+        if is_title_slide:
+            # 标题页: 主色背景
+            self._set_slide_background(slide, scheme["primary"])
+            # 标题使用强调色
+            if slide.shapes.title:
+                self._set_shape_font(
+                    slide.shapes.title,
+                    color=scheme["accent"],
+                    font_size=Pt(44),
+                )
+        else:
+            # 内容页: 辅色背景
+            self._set_slide_background(slide, scheme["secondary"])
+            # 标题使用强调色
+            if slide.shapes.title:
+                self._set_shape_font(
+                    slide.shapes.title,
+                    color=scheme["accent"],
+                    font_size=Pt(36),
+                )
+            # 正文使用强调色
+            for shape in slide.shapes:
+                if shape.has_text_frame and shape != slide.shapes.title:
+                    self._set_shape_font(
+                        shape,
+                        color=scheme["accent"],
+                        font_size=Pt(14),
+                    )
+
+    def _set_shape_font(self, shape, font_name: Optional[str] = None,
+                        font_size=None, color: Optional[str] = None):
+        """设置形状文本的字体属性
+
+        Args:
+            shape: pptx.shape 对象
+            font_name: 字体名称，如 "Arial Black"
+            font_size: 字号，如 Pt(36)
+            color: 十六进制颜色值，如 "FFFFFF"
+        """
+        if not shape.has_text_frame:
+            return
+        for para in shape.text_frame.paragraphs:
+            # 如果段落没有 runs，创建一个
+            if not para.runs:
+                if para.text:
+                    # 将现有文本转为 run 以便设置字体
+                    run = para.add_run()
+                    run.text = para.text
+                    # 清空段落文本避免重复
+                    para.text = ""
+                else:
+                    continue
+            for run in para.runs:
+                if font_name:
+                    run.font.name = font_name
+                if font_size:
+                    run.font.size = font_size
+                if color:
+                    run.font.color.rgb = RGBColor.from_string(color)
+
+    def _add_text_box(self, slide, text: str,
+                      left, top, width, height,
+                      font_name: Optional[str] = None,
+                      font_size=None,
+                      color: Optional[str] = None,
+                      alignment=PP_ALIGN.LEFT):
+        """添加文本框到幻灯片
+
+        Args:
+            slide: pptx.slide 对象
+            text: 文本内容
+            left: 左边距
+            top: 上边距
+            width: 宽度
+            height: 高度
+            font_name: 字体名称
+            font_size: 字号
+            color: 十六进制颜色值
+            alignment: 对齐方式
+        """
+        txBox = slide.shapes.add_textbox(left, top, width, height)
+        tf = txBox.text_frame
+        tf.word_wrap = True
+
+        # 按换行符拆分段落
+        lines = text.split("\n")
+        for i, line in enumerate(lines):
+            if i == 0:
+                para = tf.paragraphs[0]
+            else:
+                para = tf.add_paragraph()
+            para.alignment = alignment
+            run = para.add_run()
+            run.text = line
+            if font_name:
+                run.font.name = font_name
+            if font_size:
+                run.font.size = font_size
+            if color:
+                run.font.color.rgb = RGBColor.from_string(color)
+
+        return txBox
+
+    # ------------------------------------------------------------------ #
+    #  转换相关私有方法
+    # ------------------------------------------------------------------ #
 
     def _extract_slides_text(self, prs: Presentation) -> list[dict]:
         """从 PPT 中提取每张幻灯片的标题和内容文本

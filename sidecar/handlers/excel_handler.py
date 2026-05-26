@@ -12,6 +12,7 @@ from typing import Any
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import CellIsRule
 
 
 class ExcelHandler:
@@ -19,20 +20,56 @@ class ExcelHandler:
 
     logger = logging.getLogger(__name__)
 
+    # 数字格式映射表
+    NUMBER_FORMAT_MAP = {
+        "currency": "$#,##0",
+        "currency_decimal": "$#,##0.00",
+        "percent": "0.0%",
+        "text": "@",
+        "number": "#,##0",
+        "number_decimal": "#,##0.00",
+        "zero_dash": '#,##0;(#,##0);"-"',
+    }
+
+    # 颜色编码映射表：类型 -> (字体颜色, 背景填充)
+    # 字体颜色使用 openpyxl 的 aRGB 格式（不带 # 前缀）
+    COLOR_CODING_MAP = {
+        "input": ("0000FF", None),        # 蓝色字体 - 手动输入的值
+        "formula": ("000000", None),      # 黑色字体 - 公式计算
+        "cross_ref": ("008000", None),    # 绿色字体 - 跨表引用
+        "external": ("FF0000", None),     # 红色字体 - 外部引用
+        "assumption": (None, "FFFF00"),   # 黄色背景 - 假设值
+    }
+
     def generate(self, params: dict) -> dict:
         """生成 Excel 文档
 
         params:
             path: 输出文件路径
             sheets: 工作表列表
-                [{"name": "Sheet1", "data": [[...]], "headers": [...]}]
+                [{"name": "Sheet1", "data": [[...]], "headers": [...],
+                  "cells": [{row, col, value, formula}],
+                  "formulas": [{row, col, formula}]}]
             content: 文档内容（当 sheets 为空时，从 content 构建）
             title: 文档标题（当 sheets 为空时，作为默认工作表名）
+            useFormulas: 是否使用公式（默认 true），当为 true 时 cells 中有 formula 字段的单元格写入公式
+            numberFormats: 数字格式列表 [{range: "B2:B10", format: "currency"}]
+            colorCoding: 是否启用颜色编码（默认 true）
+            conditionalFormats: 条件格式列表 [{range: "C2:C10", rule: "greaterThan", value: 100, color: "FF0000"}]
         """
         path = params.get("path", "")
         sheets = params.get("sheets", [])
         content = params.get("content", "")
         title = params.get("title", "")
+        # 新增参数：是否使用公式（默认 true）
+        use_formulas = params.get("useFormulas", True)
+        # 新增参数：数字格式列表
+        number_formats = params.get("numberFormats", [])
+        # 新增参数：是否启用颜色编码（默认 true）
+        color_coding = params.get("colorCoding", True)
+        # 新增参数：条件格式列表
+        conditional_formats = params.get("conditionalFormats", [])
+
         if not path:
             self.logger.error("generate: 缺少输出文件路径")
             return {"error": "缺少输出文件路径"}
@@ -67,6 +104,10 @@ class ExcelHandler:
             sheet_name = sheet_info.get("name", "Sheet1")
             data = sheet_info.get("data", [])
             headers = sheet_info.get("headers", [])
+            # 新增：cells 字段，支持 {row, col, value, formula}
+            cells = sheet_info.get("cells", [])
+            # 新增：formulas 字段，支持 {row, col, formula} 批量写入公式
+            formulas = sheet_info.get("formulas", [])
 
             ws = wb.create_sheet(title=sheet_name)
 
@@ -83,6 +124,42 @@ class ExcelHandler:
                 for col_idx, value in enumerate(row_data, 1):
                     ws.cell(row=row_idx, column=col_idx, value=value)
 
+            # 写入 cells 字段中的单元格（支持公式）
+            if cells and use_formulas:
+                for cell_info in cells:
+                    row = cell_info.get("row", 1)
+                    col = cell_info.get("col", 1)
+                    formula = cell_info.get("formula", "")
+                    value = cell_info.get("value", "")
+                    # 当 formula 存在时优先写入公式
+                    if formula:
+                        ws.cell(row=row, column=col, value=formula)
+                    else:
+                        ws.cell(row=row, column=col, value=value)
+            elif cells:
+                # 不使用公式时，仅写入值
+                for cell_info in cells:
+                    row = cell_info.get("row", 1)
+                    col = cell_info.get("col", 1)
+                    value = cell_info.get("value", "")
+                    ws.cell(row=row, column=col, value=value)
+
+            # 批量写入 formulas 字段中的公式
+            if formulas and use_formulas:
+                for formula_info in formulas:
+                    row = formula_info.get("row", 1)
+                    col = formula_info.get("col", 1)
+                    formula = formula_info.get("formula", "")
+                    if formula:
+                        ws.cell(row=row, column=col, value=formula)
+
+            # 应用颜色编码
+            if color_coding:
+                self._apply_color_coding(ws, {
+                    "cells": cells,
+                    "formulas": formulas,
+                })
+
             # 自动调整列宽
             for col in ws.columns:
                 max_length = 0
@@ -91,6 +168,16 @@ class ExcelHandler:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
                 ws.column_dimensions[col_letter].width = min(max_length + 2, 50)
+
+        # 应用数字格式（全局级别，按 range 指定范围）
+        if number_formats:
+            for ws in wb.worksheets:
+                self._apply_number_formats(ws, number_formats)
+
+        # 应用条件格式（全局级别）
+        if conditional_formats:
+            for ws in wb.worksheets:
+                self._apply_conditional_formats(ws, conditional_formats)
 
         wb.save(path)
         self.logger.info("generate: Excel 文档已生成, path=%s, 工作表数=%d", path, len(sheets))
@@ -167,6 +254,15 @@ class ExcelHandler:
         params:
             path: 文件路径
             operations: 修改操作列表
+                支持的操作类型:
+                - set_cell: 设置单元格值
+                - add_sheet: 添加工作表
+                - delete_sheet: 删除工作表
+                - set_range: 设置区域数据
+                - setFormula: 设置公式
+                - setFormat: 设置数字格式
+                - setColorCoding: 设置颜色编码
+                - addConditionalFormat: 添加条件格式
         """
         path = params.get("path", "")
         operations = params.get("operations", [])
@@ -219,6 +315,66 @@ class ExcelHandler:
                     for j, value in enumerate(row_data):
                         ws.cell(row=start_row + i, column=start_col + j, value=value)
                     modified_count += 1
+
+            # 新增操作：设置公式
+            elif op_type == "setFormula":
+                sheet = op.get("sheet", wb.active.title if wb.active else "Sheet1")
+                if sheet in wb.sheetnames:
+                    ws = wb[sheet]
+                    row = op.get("row", 1)
+                    col = op.get("col", 1)
+                    formula = op.get("formula", "")
+                    if formula:
+                        ws.cell(row=row, column=col, value=formula)
+                        modified_count += 1
+                        self.logger.info("modify: setFormula - sheet=%s, row=%d, col=%d, formula=%s",
+                                         sheet, row, col, formula)
+
+            # 新增操作：设置数字格式
+            elif op_type == "setFormat":
+                sheet = op.get("sheet", wb.active.title if wb.active else "Sheet1")
+                if sheet in wb.sheetnames:
+                    ws = wb[sheet]
+                    fmt_range = op.get("range", "")
+                    fmt = op.get("format", "")
+                    if fmt_range and fmt:
+                        self._apply_number_formats(ws, [{"range": fmt_range, "format": fmt}])
+                        modified_count += 1
+                        self.logger.info("modify: setFormat - sheet=%s, range=%s, format=%s",
+                                         sheet, fmt_range, fmt)
+
+            # 新增操作：设置颜色编码
+            elif op_type == "setColorCoding":
+                sheet = op.get("sheet", wb.active.title if wb.active else "Sheet1")
+                if sheet in wb.sheetnames:
+                    ws = wb[sheet]
+                    color_range = op.get("range", "")
+                    color_type = op.get("colorType", "input")
+                    if color_range:
+                        self._apply_color_coding_by_range(ws, color_range, color_type)
+                        modified_count += 1
+                        self.logger.info("modify: setColorCoding - sheet=%s, range=%s, colorType=%s",
+                                         sheet, color_range, color_type)
+
+            # 新增操作：添加条件格式
+            elif op_type == "addConditionalFormat":
+                sheet = op.get("sheet", wb.active.title if wb.active else "Sheet1")
+                if sheet in wb.sheetnames:
+                    ws = wb[sheet]
+                    fmt_range = op.get("range", "")
+                    rule = op.get("rule", "")
+                    value = op.get("value", "")
+                    color = op.get("color", "FF0000")
+                    if fmt_range and rule:
+                        self._apply_conditional_formats(ws, [{
+                            "range": fmt_range,
+                            "rule": rule,
+                            "value": value,
+                            "color": color,
+                        }])
+                        modified_count += 1
+                        self.logger.info("modify: addConditionalFormat - sheet=%s, range=%s, rule=%s",
+                                         sheet, fmt_range, rule)
 
         wb.save(path)
         self.logger.info("modify: Excel 文档修改完成, path=%s, 修改数=%d", path, modified_count)
@@ -339,6 +495,175 @@ class ExcelHandler:
             "sheet_count": len(wb.sheetnames),
             "sheets": sheets_info,
         }
+
+    def _apply_number_formats(self, ws, formats: list) -> None:
+        """应用数字格式到工作表
+
+        Args:
+            ws: openpyxl 工作表对象
+            formats: 数字格式列表 [{range: "B2:B10", format: "currency"}]
+                     format 支持预设名称或自定义格式字符串
+        """
+        for fmt_info in formats:
+            fmt_range = fmt_info.get("range", "")
+            fmt_name = fmt_info.get("format", "")
+            if not fmt_range or not fmt_name:
+                continue
+
+            # 查找预设格式，未找到则视为自定义格式字符串
+            number_format = self.NUMBER_FORMAT_MAP.get(fmt_name, fmt_name)
+
+            # 遍历范围内的所有单元格，设置数字格式
+            try:
+                for row in ws[fmt_range]:
+                    for cell in row:
+                        cell.number_format = number_format
+            except Exception as e:
+                self.logger.warning("_apply_number_formats: 应用数字格式失败, range=%s, format=%s, error=%s",
+                                    fmt_range, fmt_name, e)
+
+    def _apply_color_coding(self, ws, color_coding_config: dict) -> None:
+        """应用颜色编码到工作表
+
+        根据 cells 和 formulas 中的信息，为不同类型的单元格设置颜色：
+        - 有 formula 的单元格: formula 类型（黑色字体）
+        - 有 value 无 formula 的单元格: input 类型（蓝色字体）
+
+        Args:
+            ws: openpyxl 工作表对象
+            color_coding_config: 颜色编码配置 {"cells": [...], "formulas": [...]}
+        """
+        cells = color_coding_config.get("cells", [])
+        formulas = color_coding_config.get("formulas", [])
+
+        # 收集公式单元格的位置，用于区分公式和输入值
+        formula_positions = set()
+        for formula_info in formulas:
+            row = formula_info.get("row", 1)
+            col = formula_info.get("col", 1)
+            formula_positions.add((row, col))
+
+        # 为 cells 中的单元格应用颜色编码
+        for cell_info in cells:
+            row = cell_info.get("row", 1)
+            col = cell_info.get("col", 1)
+            formula = cell_info.get("formula", "")
+
+            cell = ws.cell(row=row, column=col)
+
+            if formula or (row, col) in formula_positions:
+                # 公式单元格 - 黑色字体
+                color_type = "formula"
+            else:
+                # 手动输入值 - 蓝色字体
+                color_type = "input"
+
+            font_color, bg_color = self.COLOR_CODING_MAP.get(color_type, (None, None))
+
+            if font_color:
+                cell.font = Font(color=font_color)
+            if bg_color:
+                cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+
+        # 为 formulas 中的单元格应用公式颜色编码
+        for formula_info in formulas:
+            row = formula_info.get("row", 1)
+            col = formula_info.get("col", 1)
+            cell = ws.cell(row=row, column=col)
+            # 公式单元格 - 黑色字体
+            font_color, bg_color = self.COLOR_CODING_MAP.get("formula", (None, None))
+            if font_color:
+                cell.font = Font(color=font_color)
+            if bg_color:
+                cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+
+    def _apply_color_coding_by_range(self, ws, cell_range: str, color_type: str) -> None:
+        """按范围应用颜色编码
+
+        Args:
+            ws: openpyxl 工作表对象
+            cell_range: 单元格范围（如 "B2" 或 "B2:D10"）
+            color_type: 颜色类型（input/formula/cross_ref/external/assumption）
+        """
+        font_color, bg_color = self.COLOR_CODING_MAP.get(color_type, (None, None))
+        if not font_color and not bg_color:
+            self.logger.warning("_apply_color_coding_by_range: 未知颜色类型: %s", color_type)
+            return
+
+        try:
+            for row in ws[cell_range]:
+                for cell in row:
+                    if font_color:
+                        cell.font = Font(color=font_color)
+                    if bg_color:
+                        cell.fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        except Exception as e:
+            self.logger.warning("_apply_color_coding_by_range: 应用颜色编码失败, range=%s, colorType=%s, error=%s",
+                                cell_range, color_type, e)
+
+    def _apply_conditional_formats(self, ws, formats: list) -> None:
+        """应用条件格式到工作表
+
+        Args:
+            ws: openpyxl 工作表对象
+            formats: 条件格式列表 [{range: "C2:C10", rule: "greaterThan", value: 100, color: "FF0000"}]
+                     rule 支持: greaterThan, lessThan, equal, notEqual,
+                     greaterThanOrEqual, lessThanOrEqual, between, notBetween
+        """
+        # 规则名称到 openpyxl CellIsRule 操作符的映射
+        rule_map = {
+            "greaterThan": "greaterThan",
+            "lessThan": "lessThan",
+            "equal": "equal",
+            "notEqual": "notEqual",
+            "greaterThanOrEqual": "greaterThanOrEqual",
+            "lessThanOrEqual": "lessThanOrEqual",
+            "between": "between",
+            "notBetween": "notBetween",
+        }
+
+        for fmt_info in formats:
+            fmt_range = fmt_info.get("range", "")
+            rule = fmt_info.get("rule", "")
+            value = fmt_info.get("value", "")
+            color = fmt_info.get("color", "FF0000")
+
+            if not fmt_range or not rule:
+                continue
+
+            operator = rule_map.get(rule)
+            if not operator:
+                self.logger.warning("_apply_conditional_formats: 不支持的条件规则: %s", rule)
+                continue
+
+            try:
+                # 构建条件格式规则
+                fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+                font = Font(color="FFFFFF")  # 白色字体，配合深色背景
+
+                # between/notBetween 需要 formula 为列表形式 [val1, val2]
+                if operator in ("between", "notBetween"):
+                    if isinstance(value, list) and len(value) >= 2:
+                        formula = [str(value[0]), str(value[1])]
+                    else:
+                        # 如果不是列表，跳过
+                        self.logger.warning("_apply_conditional_formats: between/notBetween 规则需要 value 为列表 [val1, val2]")
+                        continue
+                else:
+                    formula = [str(value)]
+
+                conditional_rule = CellIsRule(
+                    operator=operator,
+                    formula=formula,
+                    fill=fill,
+                    font=font,
+                )
+                ws.conditional_formatting.add(fmt_range, conditional_rule)
+                self.logger.info("_apply_conditional_formats: 已添加条件格式, range=%s, rule=%s, value=%s",
+                                 fmt_range, rule, value)
+            except Exception as e:
+                self.logger.warning("_apply_conditional_formats: 添加条件格式失败, range=%s, rule=%s, error=%s",
+                                    fmt_range, rule, e)
 
     def _convert_to_csv(self, all_sheets_data: dict) -> str:
         """将工作表数据转换为 CSV 格式

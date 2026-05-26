@@ -6,6 +6,7 @@
 # Rust / Tauri
 src-tauri/target/
 *.pdb
+*/tests/
 
 # 依赖
 node_modules

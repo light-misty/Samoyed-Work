@@ -1,4 +1,5 @@
 use crate::models::llm::{ChatMessage, LlmToolCall};
+use super::prompts::document_design::get_all_design_guides;
 
 /// Agent 执行上下文
 /// 管理对话历史和系统提示词
@@ -91,6 +92,7 @@ impl AgentContext {
 
     /// 构建系统提示词
     pub fn build_system_prompt(workspace_path: &str) -> String {
+        let design_guides = get_all_design_guides();
         format!(
             "你是 DocAgent，一个专业的 AI 文档处理助手。\n\
             \n\
@@ -126,8 +128,14 @@ impl AgentContext {
             2. 对于重要操作（如删除、覆盖），需要明确提醒用户\n\
             3. 优先使用工具完成任务，而不是仅提供建议\n\
             4. 如果操作可能造成数据丢失，先创建版本快照\n\
-            5. 使用中文与用户交流",
-            workspace_path
+            5. 使用中文与用户交流\n\
+            \n\
+            ---\n\
+            以下是你生成文档时必须遵循的专业设计规范：\n\
+            \n\
+            {}",
+            workspace_path,
+            design_guides
         )
     }
 }
