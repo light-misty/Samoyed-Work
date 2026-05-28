@@ -347,8 +347,11 @@ pub async fn show_in_file_manager(
     #[cfg(target_os = "windows")]
     {
         // Windows: 使用 explorer /select,"path" 选中并定位到文件
+        // 必须使用 raw_arg 避免 Command::arg 对双引号进行转义，
+        // 否则 explorer 无法识别 /select 标志，只会打开默认页面
+        use std::os::windows::process::CommandExt;
         std::process::Command::new("explorer")
-            .arg(format!("/select,\"{}\"", abs_path.to_string_lossy()))
+            .raw_arg(format!("/select,\"{}\"", abs_path.to_string_lossy()))
             .spawn()?;
     }
 
