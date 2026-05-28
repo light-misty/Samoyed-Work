@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocAgent Logo Design - Fold Stack</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --light-bg: #ffffff;
+    --light-surface: #f8f9fa;
+    --light-border: rgba(0,0,0,0.08);
+    --text-primary: #1a1a1a;
+    --text-secondary: rgba(0,0,0,0.55);
+    --text-muted: rgba(0,0,0,0.35);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--light-bg);
+    color: var(--text-primary);
+    overflow-x: hidden;
+  }
+
+  .page-bg {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(0,0,0,0.02), transparent 45%);
+    z-index: -1;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+
+  .top-bar {
+    padding: 22px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--light-border);
+  }
+  .top-bar .brand {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .top-bar .info {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .hero {
+    padding: 90px 0 70px;
+    text-align: center;
+  }
+  .hero-canvas-wrap {
+    position: relative;
+    width: 240px;
+    height: 240px;
+    margin: 0 auto 42px;
+  }
+  .hero-canvas-wrap canvas {
+    width: 100%;
+    height: 100%;
+  }
+  .hero-glow {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(255,255,255,0.015) 0%, transparent 45%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .hero-title {
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text-primary);
+    margin-bottom: 14px;
+  }
+  .hero-subtitle {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    max-width: 440px;
+    margin: 0 auto;
+    line-height: 1.55;
+  }
+
+  .section {
+    padding: 60px 0;
+  }
+  .section-label {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 32px;
+    color: var(--text-primary);
+  }
+
+  .concept-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .concept-card {
+    background: var(--light-surface);
+    border: 1px solid var(--light-border);
+    border-radius: 9px;
+    padding: 22px;
+  }
+  .concept-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 7px;
+    color: var(--text-primary);
+  }
+  .concept-card p {
+    font-size: 11px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+  }
+
+  .variant-row {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+  .variant-card {
+    flex: 1;
+    border-radius: 12px;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    position: relative;
+    overflow: hidden;
+  }
+  .variant-card.light-bg {
+    background: #fafafa;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+  .variant-card.gradient-bg {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid var(--light-border);
+  }
+  .variant-label {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.4;
+    color: #000;
+  }
+  .variant-logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .variant-text {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+    color: #1a1a1a;
+  }
+
+  .sizes-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    padding: 24px 0;
+    flex-wrap: wrap;
+  }
+  .size-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .size-label {
+    font-size: 8px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .mockup-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .mockup-card {
+    background: var(--light-surface);
+    border: 1px solid var(--light-border);
+    border-radius: 9px;
+    padding: 20px;
+    min-height: 120px;
+  }
+  .mockup-card h4 {
+    font-size: 10px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .taskbar-mock {
+    background: rgba(248,249,250,0.95);
+    border-radius: 7px;
+    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--light-border);
+  }
+  .taskbar-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: #1a1a1a;
+  }
+  .taskbar-item.active {
+    background: rgba(0,0,0,0.06);
+    border-bottom: 2px solid rgba(0,0,0,0.2);
+  }
+
+  .titlebar-mock {
+    background: #f8f9fa;
+    border-radius: 7px 7px 0 0;
+    overflow: hidden;
+    border: 1px solid var(--light-border);
+  }
+  .titlebar-top {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    gap: 7px;
+    background: rgba(0,0,0,0.02);
+  }
+  .titlebar-dots { display: flex; gap: 4px; }
+  .titlebar-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .titlebar-dot.red { background: #ff5f57; }
+  .titlebar-dot.yellow { background: #febc2e; }
+  .titlebar-dot.green { background: #28c840; }
+  .titlebar-name {
+    font-size: 9px;
+    color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .titlebar-body {
+    height: 45px;
+    background: linear-gradient(180deg, rgba(248,249,250,1) 0%, rgba(255,255,255,1) 100%);
+  }
+
+  .watermark-mock {
+    position: relative;
+    background: #fff;
+    border-radius: 4px;
+    padding: 16px;
+    min-height: 80px;
+    overflow: hidden;
+  }
+  .wm-line {
+    height: 4px;
+    background: #e6e6e6;
+    border-radius: 2px;
+    margin-bottom: 6px;
+  }
+  .wm-line:nth-child(2) { width: 65%; }
+  .wm-line:nth-child(3) { width: 45%; }
+  .wm-line:nth-child(4) { width: 75%; }
+  .watermark-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.025;
+  }
+
+  .loading-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
+  }
+
+  .footer {
+    padding: 40px 0;
+    text-align: center;
+    border-top: 1px solid var(--light-border);
+  }
+  .footer p {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-bg"></div>
+
+<div class="container">
+  <div class="top-bar">
+    <div class="brand">DocAgent Logo</div>
+    <div class="info">Fold Stack Concept</div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-canvas-wrap">
+      <div class="hero-glow"></div>
+      <canvas id="heroLogo" width="480" height="480"></canvas>
+    </div>
+    <div class="hero-title">Fold Stack</div>
+    <div class="hero-subtitle">
+      层叠的折角方块，象征文档的堆叠与智能处理，简洁而富有层次感
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Design Concept</div>
+    <div class="section-title">设计理念</div>
+    <div class="concept-grid">
+      <div class="concept-card">
+        <h3>层叠深度</h3>
+        <p>三个错位层叠的方块，通过位置偏移创造三维深度感，象征多文档处理能力。</p>
+      </div>
+      <div class="concept-card">
+        <h3>折角细节</h3>
+        <p>每个方块右上角的折角设计，暗示文档/纸张的属性，增加辨识度与趣味性。</p>
+      </div>
+      <div class="concept-card">
+        <h3>透明层次</h3>
+        <p>通过线条粗细和透明度变化区分层级，最上层最清晰，下层逐渐淡化，形成视觉层次。</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Logo Variants</div>
+    <div class="section-title">标志变体</div>
+
+    <div class="variant-row">
+      <div class="variant-card light-bg">
+        <div class="variant-label">Light Background</div>
+        <div class="variant-logo-wrap">
+          <canvas class="variant-logo" data-size="36" data-theme="light" width="72" height="72"></canvas>
+          <span class="variant-text">DocAgent</span>
+        </div>
+      </div>
+      <div class="variant-card gradient-bg">
+        <div class="variant-label">Gradient Background</div>
+        <div class="variant-logo-wrap">
+          <canvas class="variant-logo" data-size="36" data-theme="light" width="72" height="72"></canvas>
+          <span class="variant-text">DocAgent</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="variant-row">
+      <div class="variant-card light-bg">
+        <div class="variant-label">Icon Only</div>
+        <canvas class="variant-logo" data-size="48" data-theme="light" width="96" height="96"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Size Scaling</div>
+    <div class="section-title">尺寸适配</div>
+    <div class="sizes-row" id="sizesRow"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Application</div>
+    <div class="section-title">应用场景</div>
+    <div class="mockup-grid">
+      <div class="mockup-card">
+        <h4>Windows Taskbar</h4>
+        <div class="taskbar-mock">
+          <div class="taskbar-item">
+            <canvas class="taskbar-icon" data-theme="light" width="32" height="32"></canvas>
+          </div>
+          <div class="taskbar-item active">
+            <canvas class="taskbar-icon" data-theme="light" width="32" height="32"></canvas>
+            <span>DocAgent</span>
+          </div>
+          <div class="taskbar-item">
+            <svg width="10" height="10" viewBox="0 0 10 10"><rect width="10" height="10" rx="1" fill="#4a5568"/></svg>
+            <span>Other</span>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-card">
+        <h4>Title Bar</h4>
+        <div class="titlebar-mock">
+          <div class="titlebar-top">
+            <div class="titlebar-dots">
+              <div class="titlebar-dot red"></div>
+              <div class="titlebar-dot yellow"></div>
+              <div class="titlebar-dot green"></div>
+            </div>
+            <div class="titlebar-name">
+              <canvas class="titlebar-icon" data-theme="light" width="24" height="24"></canvas>
+              DocAgent - AI Document Agent
+            </div>
+          </div>
+          <div class="titlebar-body"></div>
+        </div>
+      </div>
+      <div class="mockup-card">
+        <h4>Watermark</h4>
+        <div class="watermark-mock">
+          <div class="wm-line"></div>
+          <div class="wm-line"></div>
+          <div class="wm-line"></div>
+          <div class="wm-line"></div>
+          <div class="watermark-overlay">
+            <canvas class="watermark-icon" data-theme="light" width="140" height="140"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-card">
+        <h4>Loading Animation</h4>
+        <div class="loading-wrap">
+          <canvas id="loadingAnim" width="80" height="80"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>DocAgent Logo Design - Fold Stack Concept</p>
+  </div>
+</div>
+
+<script>
+// ============================================
+// DocAgent Fold Stack Logo 渲染引擎
+// 核心图形: 层叠的折角方块
+// ============================================
+
+/**
+ * 绘制单个折角方块
+ * 一个带右上角折角的矩形
+ */
+function drawFoldedSquare(ctx, x, y, w, h, color, alpha, lineWidth, foldSize) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // 绘制主体轮廓（带折角）
+  ctx.beginPath();
+  // 从左下角开始
+  ctx.moveTo(x, y + h);
+  // 左边
+  ctx.lineTo(x, y);
+  // 上边（到折角处）
+  ctx.lineTo(x + w - foldSize, y);
+  // 折角斜线
+  ctx.lineTo(x + w, y + foldSize);
+  // 右边
+  ctx.lineTo(x + w, y + h);
+  // 下边
+  ctx.closePath();
+  ctx.stroke();
+
+  // 折角内部线条（折痕）
+  ctx.beginPath();
+  ctx.moveTo(x + w - foldSize, y);
+  ctx.lineTo(x + w - foldSize, y + foldSize);
+  ctx.lineTo(x + w, y + foldSize);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+/**
+ * 绘制 Fold Stack Logo
+ * 三个层叠的折角方块
+ */
+function drawFoldStackLogo(ctx, cx, cy, size, options) {
+  options = options || {};
+  const theme = options.theme || 'dark';
+  const alpha = options.alpha || 1;
+  const animProgress = options.animProgress || 1;
+
+  const color = theme === 'dark' ? '#ffffff' : '#1a1a1a';
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.globalAlpha = alpha;
+
+  const baseW = size * 0.5;
+  const baseH = size * 0.6;
+  const foldSize = size * 0.12;
+  const lineWidth = size * 0.04;
+  const offset = size * 0.08;
+
+  ctx.clearRect(-size, -size, size * 2, size * 2);
+
+  // 计算中心偏移，使整体居中
+  const centerX = -baseW / 2 - offset;
+  const centerY = -baseH / 2 + offset;
+
+  // 三层方块，从下到上绘制
+  // 底层（最淡）
+  const layer3Alpha = 0.25 * animProgress;
+  const layer3X = centerX + offset * 1.5;
+  const layer3Y = centerY - offset * 1.5;
+  drawFoldedSquare(ctx, layer3X, layer3Y, baseW, baseH, color, layer3Alpha, lineWidth * 0.8, foldSize);
+
+  // 中层
+  const layer2Alpha = 0.5 * animProgress;
+  const layer2X = centerX + offset * 0.75;
+  const layer2Y = centerY - offset * 0.75;
+  drawFoldedSquare(ctx, layer2X, layer2Y, baseW, baseH, color, layer2Alpha, lineWidth * 0.9, foldSize);
+
+  // 顶层（最清晰）
+  const layer1Alpha = 1 * animProgress;
+  const layer1X = centerX;
+  const layer1Y = centerY;
+  drawFoldedSquare(ctx, layer1X, layer1Y, baseW, baseH, color, layer1Alpha, lineWidth, foldSize);
+
+  ctx.restore();
+}
+
+// ============================================
+// 动画循环
+// ============================================
+
+let startTime = Date.now();
+
+function animate() {
+  const elapsed = (Date.now() - startTime) / 1000;
+
+  // 英雄区域大 Logo - 带入场动画
+  const heroCanvas = document.getElementById('heroLogo');
+  if (heroCanvas) {
+    const heroCtx = heroCanvas.getContext('2d');
+    const animProgress = Math.min(1, elapsed * 0.5);
+    drawFoldStackLogo(heroCtx, 240, 240, 160, {
+      theme: 'light',
+      animProgress: animProgress,
+    });
+  }
+
+  // 变体 Logo
+  document.querySelectorAll('.variant-logo').forEach(canvas => {
+    const s = parseInt(canvas.dataset.size);
+    const theme = canvas.dataset.theme;
+    const ctx = canvas.getContext('2d');
+    drawFoldStackLogo(ctx, s, s, s * 0.7, { theme: theme });
+  });
+
+  // 任务栏图标
+  document.querySelectorAll('.taskbar-icon').forEach(canvas => {
+    const theme = canvas.dataset.theme;
+    const ctx = canvas.getContext('2d');
+    drawFoldStackLogo(ctx, 16, 16, 10, { theme: theme });
+  });
+
+  // 标题栏图标
+  document.querySelectorAll('.titlebar-icon').forEach(canvas => {
+    const theme = canvas.dataset.theme;
+    const ctx = canvas.getContext('2d');
+    drawFoldStackLogo(ctx, 12, 12, 7, { theme: theme });
+  });
+
+  // 水印图标
+  document.querySelectorAll('.watermark-icon').forEach(canvas => {
+    const theme = canvas.dataset.theme;
+    const ctx = canvas.getContext('2d');
+    drawFoldStackLogo(ctx, 70, 70, 55, { theme: theme, alpha: 1 });
+  });
+
+  // 加载动画 - 层叠波动效果
+  const loadingCanvas = document.getElementById('loadingAnim');
+  if (loadingCanvas) {
+    const lCtx = loadingCanvas.getContext('2d');
+    const wave = Math.sin(elapsed * 2) * 0.15 + 1;
+    drawFoldStackLogo(lCtx, 40, 40, 26 * wave, { theme: 'light' });
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ============================================
+// 初始化尺寸展示
+// ============================================
+
+function initSizes() {
+  const sizesRow = document.getElementById('sizesRow');
+  const sizes = [16, 24, 32, 48, 64, 128];
+  sizes.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'size-item';
+    const canvas = document.createElement('canvas');
+    canvas.width = s * 2;
+    canvas.height = s * 2;
+    canvas.style.width = s + 'px';
+    canvas.style.height = s + 'px';
+    canvas.className = 'size-logo';
+    canvas.dataset.size = s;
+    canvas.dataset.theme = 'light';
+    const label = document.createElement('div');
+    label.className = 'size-label';
+    label.textContent = s + 'px';
+    item.appendChild(canvas);
+    item.appendChild(label);
+    sizesRow.appendChild(item);
+  });
+}
+
+function renderSizeLogos() {
+  document.querySelectorAll('.size-logo').forEach(canvas => {
+    const s = parseInt(canvas.dataset.size);
+    const theme = canvas.dataset.theme;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.scale(2, 2);
+    drawFoldStackLogo(ctx, s/2, s/2, s * 0.28, { theme: theme });
+    ctx.restore();
+  });
+}
+
+initSizes();
+renderSizeLogos();
+animate();
+</script>
+
+</body>
+</html>
