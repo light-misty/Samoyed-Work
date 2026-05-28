@@ -32,24 +32,51 @@ pub fn create_session_summary(
 
 /// 查询指定工作区最近的会话摘要
 /// 按创建时间降序排列，最多返回 limit 条
+/// exclude_session_id: 可选排除的会话ID，用于避免将当前会话的摘要重新注入自身上下文
 pub fn list_summaries_by_workspace(
     conn: &Connection,
     workspace_id: &str,
     limit: u32,
+    exclude_session_id: Option<&str>,
 ) -> Vec<ContextSessionSummary> {
-    let mut stmt = match conn.prepare(
-        "SELECT id, session_id, workspace_id, user_goal, result_summary,
-                files_involved, tools_used, errors_resolved, created_at
-         FROM session_summaries
-         WHERE workspace_id = ?1
-         ORDER BY created_at DESC
-         LIMIT ?2",
-    ) {
+    // 根据是否排除特定会话构建不同的SQL
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(exclude_id) = exclude_session_id {
+        (
+            "SELECT id, session_id, workspace_id, user_goal, result_summary,
+                    files_involved, tools_used, errors_resolved, created_at
+             FROM session_summaries
+             WHERE workspace_id = ?1 AND session_id != ?3
+             ORDER BY created_at DESC
+             LIMIT ?2".to_string(),
+            vec![
+                Box::new(workspace_id.to_string()),
+                Box::new(limit),
+                Box::new(exclude_id.to_string()),
+            ],
+        )
+    } else {
+        (
+            "SELECT id, session_id, workspace_id, user_goal, result_summary,
+                    files_involved, tools_used, errors_resolved, created_at
+             FROM session_summaries
+             WHERE workspace_id = ?1
+             ORDER BY created_at DESC
+             LIMIT ?2".to_string(),
+            vec![
+                Box::new(workspace_id.to_string()),
+                Box::new(limit),
+            ],
+        )
+    };
+
+    let mut stmt = match conn.prepare(&sql) {
         Ok(s) => s,
         Err(_) => return Vec::new(),
     };
 
-    let mut rows = match stmt.query(rusqlite::params![workspace_id, limit]) {
+    // 将 Box<dyn ToSql> 转换为 rusqlite 可用的引用切片
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut rows = match stmt.query(param_refs.as_slice()) {
         Ok(r) => r,
         Err(_) => return Vec::new(),
     };

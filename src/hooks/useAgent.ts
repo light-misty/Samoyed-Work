@@ -127,7 +127,6 @@ export function useAgent(): UseAgentReturn {
         onAgentToolResult((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;
           setLastToolResult(payload);
-          setCurrentToolCall(null);
         }),
         onAgentConfirm((payload) => {
           if (payload.sessionId !== sessionIdRef.current) return;

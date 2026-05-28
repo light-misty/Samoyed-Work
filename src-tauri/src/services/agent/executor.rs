@@ -347,6 +347,9 @@ impl<R: Runtime> AgentExecutor<R> {
             let mut reasoning_content = String::new();
             let mut collected_tool_calls: HashMap<u32, LlmToolCall> = HashMap::new();
             let mut message_id = String::new();
+            // 跟踪流式响应的 finish_reason，用于检测响应截断（DeepSeek R1 等推理模型
+            // 的 reasoning_content 可能耗尽 max_tokens 导致实际响应被截断）
+            let mut finish_reason: Option<String> = None;
 
             while let Some(chunk_result) = stream_rx.recv().await {
                 match chunk_result {
@@ -394,6 +397,11 @@ impl<R: Runtime> AgentExecutor<R> {
                                     }
                                 }
                             }
+
+                            // 跟踪 finish_reason，用于检测响应截断
+                            if choice.finish_reason.is_some() {
+                                finish_reason = choice.finish_reason.clone();
+                            }
                         }
                     }
                     Err(e) => {
@@ -437,11 +445,19 @@ impl<R: Runtime> AgentExecutor<R> {
 
             // 检查是否有 tool_calls
             let has_tool_calls = !collected_tool_calls.is_empty();
-            log::debug!("LLM 响应解析完成, session_id={}, tool_calls数={}, 内容长度={}", ctx.session_id, collected_tool_calls.len(), assistant_content.len());
+            // 检测响应是否因 max_tokens 不足被截断（DeepSeek R1 等推理模型的
+            // reasoning_content 可能消耗大量 token 导致实际响应被截断）
+            let is_truncated = finish_reason.as_deref() == Some("length");
+            log::debug!("LLM 响应解析完成, session_id={}, tool_calls数={}, 内容长度={}, finish_reason={:?}", ctx.session_id, collected_tool_calls.len(), assistant_content.len(), finish_reason);
 
             if has_tool_calls {
                 // 将助手消息（含 tool_calls）添加到上下文
                 ctx.add_assistant_message(&assistant_content, Some(collected_tool_calls.clone()), if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
+
+                // 如果响应被截断，tool_call 的 JSON 参数可能不完整，记录警告
+                if is_truncated {
+                    log::warn!("LLM 响应被截断但包含 tool_calls, session_id={}, 尝试继续执行", ctx.session_id);
+                }
 
                 for tool_call in collected_tool_calls.iter() {
                     if let Some(result) = self.handle_stop_if_needed(
@@ -641,9 +657,52 @@ impl<R: Runtime> AgentExecutor<R> {
                 continue;
             }
 
-            if !assistant_content.is_empty() {
-                ctx.add_assistant_message(&assistant_content, None, if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
+            // 无 tool_calls：判断是否应该结束还是继续循环
+
+            // 情况1: 响应被截断（finish_reason == "length"，max_tokens 不足）
+            // DeepSeek R1 等推理模型的 reasoning_content 可能耗尽 token 配额，
+            // 导致实际回复内容或 tool_calls 被截断。需要自动继续循环让 LLM 补充输出。
+            if is_truncated {
+                log::warn!(
+                    "LLM 响应被截断 (finish_reason=length), 自动继续, session_id={}, 已收集内容长度={}",
+                    ctx.session_id, assistant_content.len()
+                );
+                ctx.add_assistant_message(
+                    &assistant_content,
+                    None,
+                    if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) }
+                );
+                self.persist_new_messages(ctx);
+                ctx.mark_persisted();
+                continue;
             }
+
+            // 情况2: 仅有 reasoning_content，无 content 和 tool_calls
+            // LLM 只输出了思考链但没有产生实际回复或工具调用，需要继续循环
+            if assistant_content.is_empty() {
+                if !reasoning_content.is_empty() {
+                    log::warn!(
+                        "LLM 仅返回推理内容无最终输出, 自动继续, session_id={}",
+                        ctx.session_id
+                    );
+                    ctx.add_assistant_message(
+                        "",
+                        None,
+                        Some(reasoning_content.clone())
+                    );
+                } else {
+                    log::warn!(
+                        "LLM 返回完全空响应, 自动继续, session_id={}",
+                        ctx.session_id
+                    );
+                }
+                self.persist_new_messages(ctx);
+                ctx.mark_persisted();
+                continue;
+            }
+
+            // 情况3: 有实际内容，正常完成
+            ctx.add_assistant_message(&assistant_content, None, if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
 
             // 最终回复后增量持久化
             self.persist_new_messages(ctx);

@@ -549,6 +549,15 @@ impl AgentContext {
 - 按文件内容搜索 -> search_files（设置include_content=true）
 - 浏览目录结构 -> list_directory
 
+### 文档查找策略（重要）
+当用户要求处理文档但未提供完整文件路径时，按以下步骤操作：
+1. 先使用list_directory列出根目录（path=".", depth=1），快速了解工作区有哪些文件
+2. 根据用户描述推断文件类型，使用extensions筛选（如需求文档通常为docx/pdf/md/txt）
+3. 文件名搜索时使用简短关键词（如"需求"、"方案"、"SNS"），避免用完整句子作为搜索词
+4. 仅在文件名搜索无结果时才使用内容搜索（include_content=true）
+5. 如果多次搜索仍无结果，直接列出工作区所有文件供用户确认
+6. 获取到相关文件列表后，向用户展示并确认具体要处理哪个文件，再执行后续操作
+
 ### 转换操作
 - 文档格式转换 -> convert_format
 - 批量处理 -> batch_process

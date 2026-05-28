@@ -41,7 +41,9 @@ impl AgentCleanupGuard {
 impl Drop for AgentCleanupGuard {
     fn drop(&mut self) {
         if let (Some(agents), Some(sid)) = (self.active_agents.take(), self.session_id.take()) {
-            let mut guard = agents.blocking_lock();
+            // 在 Drop 中调用 blocking_lock 需要 block_in_place
+            // 避免 "Cannot block the current thread from within a runtime" panic
+            let mut guard = tokio::task::block_in_place(|| agents.blocking_lock());
             let was_running = guard.remove(&sid);
             if was_running.is_some() {
                 log::info!("Agent 清理守卫: 已从活跃列表移除 session_id={}", sid);
@@ -584,18 +586,29 @@ async fn run_agent(
         }
     };
 
+    // 记录当前会话是否为新会话（无历史消息）
+    let is_new_session = history_messages.is_empty();
+
     // 注入历史消息到上下文（在添加当前用户消息之前）
-    if !history_messages.is_empty() {
+    if !is_new_session {
         log::info!("加载历史消息: session_id={}, 历史消息数={}", session_id, history_messages.len());
         ctx.load_history_messages(history_messages);
     }
 
-    // 加载同工作区的历史会话摘要（情景记忆）和用户偏好（语义记忆）
-    let historical_summaries_text = {
+    // 加载同工作区的历史会话摘要（情景记忆）
+    // 仅在当前会话已有历史消息时（即续写已有会话）才注入，避免全新会话跨会话泄密
+    let historical_summaries_text = if is_new_session {
+        log::info!(
+            "当前会话无历史消息，跳过历史会话摘要注入: session_id={}",
+            session_id
+        );
+        String::new()
+    } else {
         match db.conn() {
             Ok(conn) => {
+                // 排除当前会话自身的摘要，避免循环引用
                 let summaries = crate::db::session_summary_repo::list_summaries_by_workspace(
-                    &conn, workspace_id, 3,
+                    &conn, workspace_id, 3, Some(session_id),
                 );
                 if summaries.is_empty() {
                     String::new()
@@ -766,7 +779,8 @@ fn create_version_snapshot(
 
     // 获取应用数据目录，用于存储快照文件
     let snapshot_dir = {
-        let cfg = config.blocking_lock();
+        // block_in_place 避免在 async 上下文中 blocking_lock 导致 panic
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
         cfg.data_dir().join("snapshots")
     };
 
@@ -803,7 +817,7 @@ fn create_version_snapshot(
 
     // 根据保留策略清理过期快照
     let (policy, max_count, max_days) = {
-        let cfg = config.blocking_lock();
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
         match cfg.load_app_settings() {
             Ok(settings) => {
                 let policy_str = match settings.version_snapshot.retention_policy {
