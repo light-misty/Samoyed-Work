@@ -6,6 +6,7 @@ pub mod skill;
 pub mod document;
 pub mod template;
 pub mod tool;
+pub mod context_memory;
 
 pub use session::*;
 pub use message::*;
@@ -15,3 +16,4 @@ pub use skill::*;
 pub use document::*;
 pub use template::*;
 pub use tool::*;
+pub use context_memory::*;

@@ -118,6 +118,95 @@ pub async fn start_agent(
     Ok(())
 }
 
+/// 生成会话摘要并持久化到数据库（情景记忆）
+/// 从 AgentContext 的执行记录中提取结构化摘要，纯规则无额外 LLM 调用
+fn persist_session_summary(
+    db: &Arc<crate::db::Database>,
+    ctx: &AgentContext,
+) -> Result<(), CommandError> {
+    // 跳过空工作区ID的会话
+    if ctx.workspace_id.is_empty() {
+        log::debug!("工作区ID为空，跳过会话摘要持久化");
+        return Ok(());
+    }
+
+    let (user_goal, result_summary, files_involved, tools_used, errors_resolved) =
+        ctx.extract_session_summary_info();
+
+    // 如果用户目标为空，说明没有有效对话，跳过摘要
+    if user_goal.is_empty() {
+        log::debug!("用户目标为空，跳过会话摘要持久化: session_id={}", ctx.session_id);
+        return Ok(());
+    }
+
+    let summary_id = format!("summary_{}", uuid::Uuid::new_v4());
+    let conn = db.conn()?;
+    crate::db::session_summary_repo::create_session_summary(
+        &conn,
+        &summary_id,
+        &ctx.session_id,
+        &ctx.workspace_id,
+        &user_goal,
+        &result_summary,
+        &files_involved,
+        &tools_used,
+        &errors_resolved,
+    )?;
+
+    log::info!(
+        "会话摘要已持久化: session_id={}, summary_id={}, user_goal长度={}",
+        ctx.session_id, summary_id, user_goal.len()
+    );
+    Ok(())
+}
+
+/// 从工具调用参数中提取用户偏好并持久化（语义记忆）
+/// 纯规则提取，从工具调用参数中识别用户偏好模式
+fn extract_and_persist_preferences(
+    db: &Arc<crate::db::Database>,
+    ctx: &AgentContext,
+) -> Result<(), CommandError> {
+    let conn = db.conn()?;
+
+    for msg in &ctx.messages {
+        if let Some(tool_calls) = &msg.tool_calls {
+            for tc in tool_calls {
+                if let Ok(params) = serde_json::from_str::<serde_json::Value>(&tc.arguments) {
+                    // 从 generate_document 的 format 参数提取文档格式偏好
+                    if tc.name == "generate_document" {
+                        if let Some(format) = params["format"].as_str() {
+                            let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
+                            crate::db::user_preference_repo::upsert_preference(
+                                &conn,
+                                &pref_id,
+                                "format",
+                                "preferred_document_format",
+                                format,
+                            )?;
+                        }
+                    }
+
+                    // 从 convert_format 的 target_format 参数提取格式转换偏好
+                    if tc.name == "convert_format" {
+                        if let Some(target) = params["target_format"].as_str() {
+                            let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
+                            crate::db::user_preference_repo::upsert_preference(
+                                &conn,
+                                &pref_id,
+                                "format",
+                                "preferred_target_format",
+                                target,
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// 停止 Agent 执行
 #[tauri::command]
 pub async fn stop_agent(
@@ -292,6 +381,89 @@ async fn run_agent(
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);
 
+    // 从数据库加载该会话的历史消息，使 Agent 能感知之前的对话内容
+    let history_messages = {
+        match db.conn() {
+            Ok(conn) => {
+                let db_messages = crate::db::message_repo::list_messages(&conn, session_id);
+                db_messages.into_iter()
+                    .filter_map(|m| m.to_chat_message())
+                    .collect::<Vec<ChatMessage>>()
+            }
+            Err(e) => {
+                log::warn!("获取数据库连接失败，无法加载历史消息: {}, 将以空上下文启动", e.message);
+                Vec::new()
+            }
+        }
+    };
+
+    // 注入历史消息到上下文（在添加当前用户消息之前）
+    if !history_messages.is_empty() {
+        log::info!("加载历史消息: session_id={}, 历史消息数={}", session_id, history_messages.len());
+        ctx.load_history_messages(history_messages);
+    }
+
+    // 加载同工作区的历史会话摘要（情景记忆）和用户偏好（语义记忆）
+    let historical_summaries_text = {
+        match db.conn() {
+            Ok(conn) => {
+                let summaries = crate::db::session_summary_repo::list_summaries_by_workspace(
+                    &conn, workspace_id, 3,
+                );
+                if summaries.is_empty() {
+                    String::new()
+                } else {
+                    let text = summaries.iter()
+                        .map(|s| {
+                            let files = s.get_files_involved();
+                            format!(
+                                "- 用户目标: {} | 结果: {} | 涉及文件: {:?}",
+                                s.user_goal, s.result_summary, files
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    format!("\n<historical_context>\n## 近期历史会话摘要\n{}\n</historical_context>", text)
+                }
+            }
+            Err(_) => String::new(),
+        }
+    };
+
+    // 加载高置信度用户偏好（语义记忆）
+    let user_preferences_text = {
+        match db.conn() {
+            Ok(conn) => {
+                let prefs = crate::db::user_preference_repo::list_high_confidence_preferences(
+                    &conn, 0.7,
+                );
+                if prefs.is_empty() {
+                    String::new()
+                } else {
+                    let text = prefs.iter()
+                        .map(|p| format!("- {}: {}", p.key, p.value))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    format!("\n<user_preferences>\n## 用户偏好\n{}\n</user_preferences>", text)
+                }
+            }
+            Err(_) => String::new(),
+        }
+    };
+
+    // 将历史摘要和用户偏好追加到系统提示词
+    if !historical_summaries_text.is_empty() || !user_preferences_text.is_empty() {
+        let mut prompt_extension = String::new();
+        if !historical_summaries_text.is_empty() {
+            prompt_extension.push_str(&historical_summaries_text);
+        }
+        if !user_preferences_text.is_empty() {
+            prompt_extension.push_str(&user_preferences_text);
+        }
+        ctx.system_prompt = format!("{}{}", ctx.system_prompt, prompt_extension);
+        log::info!("已注入历史摘要和用户偏好到系统提示词, session_id={}", session_id);
+    }
+
     ctx.add_user_message(prompt);
 
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
@@ -344,6 +516,16 @@ async fn run_agent(
                     log::warn!("残留消息持久化失败: session_id={}, 错误: {}", session_id, e.message);
                 }
                 ctx.mark_persisted();
+            }
+
+            // 生成会话摘要并持久化（情景记忆）
+            if let Err(e) = persist_session_summary(db, &ctx) {
+                log::warn!("会话摘要持久化失败: session_id={}, 错误: {}", session_id, e.message);
+            }
+
+            // 从工具调用参数中提取用户偏好并持久化（语义记忆）
+            if let Err(e) = extract_and_persist_preferences(db, &ctx) {
+                log::warn!("用户偏好提取失败: session_id={}, 错误: {}", session_id, e.message);
             }
 
             Ok(())

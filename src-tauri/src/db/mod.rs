@@ -3,6 +3,8 @@ pub mod session_repo;
 pub mod message_repo;
 pub mod snapshot_repo;
 pub mod template_repo;
+pub mod session_summary_repo;
+pub mod user_preference_repo;
 
 use rusqlite::Connection;
 use std::path::Path;

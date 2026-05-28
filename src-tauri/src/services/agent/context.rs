@@ -55,6 +55,60 @@ impl AgentContext {
         }
     }
 
+    /// 从数据库加载历史消息并注入上下文
+    /// 在添加当前用户消息之前调用，使 Agent 能感知之前的对话内容
+    pub fn load_history_messages(&mut self, messages: Vec<ChatMessage>) {
+        let count = messages.len();
+        for msg in messages {
+            self.messages.push(msg);
+        }
+        // 加载历史后更新持久化计数，避免重复持久化历史消息
+        self.persisted_count = self.persisted_count.saturating_add(count);
+        // 从历史消息中推断任务类型
+        self.update_task_type_from_history();
+        log::info!(
+            "已加载 {} 条历史消息到上下文, session_id={}, persisted_count={}",
+            count, self.session_id, self.persisted_count
+        );
+    }
+
+    /// 从历史消息中推断任务类型
+    /// 遍历已加载的历史消息，根据用户消息和工具调用更新任务类型
+    fn update_task_type_from_history(&mut self) {
+        // 先收集所有需要处理的信息，避免借用冲突
+        let mut user_message: Option<String> = None;
+        let mut tool_infos: Vec<(String, Option<serde_json::Value>)> = Vec::new();
+
+        for msg in &self.messages {
+            if msg.role == "user" && user_message.is_none() {
+                user_message = Some(msg.content.clone());
+            }
+            if let Some(tool_calls) = &msg.tool_calls {
+                for tc in tool_calls {
+                    let params: Option<serde_json::Value> =
+                        serde_json::from_str(&tc.arguments).ok();
+                    tool_infos.push((tc.name.clone(), params));
+                }
+            }
+        }
+
+        // 从用户消息推断任务类型
+        if let Some(content) = user_message {
+            if self.task_type == TaskType::Unknown {
+                self.task_type = TaskType::from_user_message(&content);
+            }
+        }
+
+        // 从工具调用推断任务类型
+        for (name, params) in tool_infos {
+            self.update_task_type_from_tool(&name, params.as_ref());
+        }
+
+        if self.task_type != TaskType::Unknown {
+            log::info!("从历史消息推断任务类型: {:?}", self.task_type);
+        }
+    }
+
     /// 添加用户消息
     pub fn add_user_message(&mut self, content: &str) {
         // 首条用户消息时识别任务类型
@@ -294,6 +348,86 @@ impl AgentContext {
     /// 标记当前所有消息为已持久化
     pub fn mark_persisted(&mut self) {
         self.persisted_count = self.messages.len();
+    }
+
+    /// 从上下文中提取会话摘要信息
+    /// 纯规则提取，无额外 LLM 调用
+    /// 返回 (user_goal, result_summary, files_involved, tools_used, errors_resolved)
+    pub fn extract_session_summary_info(&self) -> (String, String, String, String, String) {
+        // 提取用户目标：第一条用户消息的内容（截取前200字符）
+        let user_goal = self.messages.iter()
+            .find(|m| m.role == "user")
+            .map(|m| {
+                let content = &m.content;
+                if content.len() > 200 {
+                    format!("{}...", &content[..200])
+                } else {
+                    content.clone()
+                }
+            })
+            .unwrap_or_default();
+
+        // 提取结果摘要：最后一条 assistant 消息的内容（截取前300字符）
+        let result_summary = self.messages.iter()
+            .rev()
+            .find(|m| m.role == "assistant" && m.tool_calls.is_none())
+            .map(|m| {
+                let content = &m.content;
+                if content.len() > 300 {
+                    format!("{}...", &content[..300])
+                } else {
+                    content.clone()
+                }
+            })
+            .unwrap_or_default();
+
+        // 提取涉及的文件列表：从工具调用参数中提取 path/source_path
+        let mut files = std::collections::HashSet::new();
+        for msg in &self.messages {
+            if let Some(tool_calls) = &msg.tool_calls {
+                for tc in tool_calls {
+                    if let Ok(params) = serde_json::from_str::<serde_json::Value>(&tc.arguments) {
+                        // 从 path 参数提取文件
+                        if let Some(path) = params["path"].as_str() {
+                            files.insert(path.to_string());
+                        }
+                        // 从 source_path 参数提取文件
+                        if let Some(path) = params["source_path"].as_str() {
+                            files.insert(path.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        let files_involved = serde_json::to_string(&files.iter().collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string());
+
+        // 提取使用的工具列表
+        let mut tools = std::collections::HashSet::new();
+        for msg in &self.messages {
+            if let Some(tool_calls) = &msg.tool_calls {
+                for tc in tool_calls {
+                    tools.insert(tc.name.clone());
+                }
+            }
+        }
+        let tools_used = serde_json::to_string(&tools.iter().collect::<Vec<_>>())
+            .unwrap_or_else(|_| "[]".to_string());
+
+        // 提取遇到的错误：从 tool result 中提取错误信息
+        let mut errors = Vec::new();
+        for msg in &self.messages {
+            if msg.role == "tool" && msg.content.starts_with("错误:") {
+                let error_text = msg.content.trim_start_matches("错误:").trim();
+                if !error_text.is_empty() && errors.len() < 5 {
+                    errors.push(error_text.to_string());
+                }
+            }
+        }
+        let errors_resolved = serde_json::to_string(&errors)
+            .unwrap_or_else(|_| "[]".to_string());
+
+        (user_goal, result_summary, files_involved, tools_used, errors_resolved)
     }
 
     /// 构建系统提示词（分层架构）
@@ -846,5 +980,134 @@ mod tests {
         assert!(strategy.contains("batch_process"));
         // 分析操作
         assert!(strategy.contains("analyze_document"));
+    }
+
+    /// 测试加载历史消息
+    #[test]
+    fn test_load_history_messages() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+
+        let history = vec![
+            ChatMessage {
+                role: "user".to_string(),
+                content: "帮我生成一份周报".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+            },
+            ChatMessage {
+                role: "assistant".to_string(),
+                content: "好的，我来帮你生成周报".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+            },
+        ];
+
+        ctx.load_history_messages(history);
+
+        // 历史消息应该被添加到上下文
+        assert_eq!(ctx.messages.len(), 2);
+        assert_eq!(ctx.messages[0].role, "user");
+        assert_eq!(ctx.messages[0].content, "帮我生成一份周报");
+        assert_eq!(ctx.messages[1].role, "assistant");
+
+        // persisted_count 应该更新，避免重复持久化
+        assert_eq!(ctx.persisted_count, 2);
+
+        // 任务类型应该从历史消息中推断
+        assert_eq!(*ctx.task_type(), TaskType::GenerateDocx);
+    }
+
+    /// 测试加载历史消息后任务类型从工具调用推断
+    #[test]
+    fn test_load_history_messages_task_type_from_tool() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+
+        let history = vec![
+            ChatMessage {
+                role: "user".to_string(),
+                content: "处理文件".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+            },
+            ChatMessage {
+                role: "assistant".to_string(),
+                content: "".to_string(),
+                tool_calls: Some(vec![LlmToolCall {
+                    index: 0,
+                    id: "call_1".to_string(),
+                    name: "read_document".to_string(),
+                    arguments: r#"{"path": "test.docx"}"#.to_string(),
+                }]),
+                tool_call_id: None,
+                reasoning_content: None,
+            },
+        ];
+
+        ctx.load_history_messages(history);
+
+        // 任务类型应该从工具调用中推断为 ReadDocument
+        assert_eq!(*ctx.task_type(), TaskType::ReadDocument);
+    }
+
+    /// 测试加载空历史消息不影响上下文
+    #[test]
+    fn test_load_empty_history_messages() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.load_history_messages(vec![]);
+        assert!(ctx.messages.is_empty());
+        assert_eq!(ctx.persisted_count, 0);
+        assert_eq!(*ctx.task_type(), TaskType::Unknown);
+    }
+
+    /// 测试提取会话摘要信息
+    #[test]
+    fn test_extract_session_summary_info() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.workspace_id = "ws_1".to_string();
+
+        ctx.add_user_message("帮我生成一份项目周报");
+        ctx.add_assistant_message("", Some(vec![LlmToolCall {
+            index: 0,
+            id: "call_1".to_string(),
+            name: "generate_document".to_string(),
+            arguments: r#"{"format": "docx", "path": "周报.docx"}"#.to_string(),
+        }]), None);
+        ctx.add_tool_result("call_1", "文档已成功生成");
+        ctx.add_assistant_message("周报已生成，保存在 周报.docx", None, None);
+
+        let (user_goal, result_summary, files_involved, tools_used, errors_resolved) =
+            ctx.extract_session_summary_info();
+
+        assert_eq!(user_goal, "帮我生成一份项目周报");
+        assert!(result_summary.contains("周报已生成"));
+        assert!(files_involved.contains("周报.docx"));
+        assert!(tools_used.contains("generate_document"));
+        assert_eq!(errors_resolved, "[]");
+    }
+
+    /// 测试提取摘要时用户目标截断
+    #[test]
+    fn test_extract_session_summary_long_user_goal() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let long_message = "a".repeat(300);
+        ctx.add_user_message(&long_message);
+
+        let (user_goal, _, _, _, _) = ctx.extract_session_summary_info();
+        assert!(user_goal.len() <= 203); // 200 + "..."
+        assert!(user_goal.ends_with("..."));
+    }
+
+    /// 测试提取摘要时包含错误信息
+    #[test]
+    fn test_extract_session_summary_with_errors() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("读取文件");
+        ctx.add_tool_result("call_1", "错误: 文件不存在 test.docx");
+
+        let (_, _, _, _, errors_resolved) = ctx.extract_session_summary_info();
+        assert!(errors_resolved.contains("文件不存在"));
     }
 }

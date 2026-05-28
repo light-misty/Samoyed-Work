@@ -81,6 +81,35 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );"
     )?;
 
+    // session_summaries 会话摘要表（情景记忆）
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS session_summaries (
+            id                TEXT        NOT NULL PRIMARY KEY,
+            session_id        TEXT        NOT NULL,
+            workspace_id      TEXT        NOT NULL,
+            user_goal         TEXT        NOT NULL DEFAULT '',
+            result_summary    TEXT        NOT NULL DEFAULT '',
+            files_involved    TEXT        NOT NULL DEFAULT '[]',
+            tools_used        TEXT        NOT NULL DEFAULT '[]',
+            errors_resolved   TEXT        NOT NULL DEFAULT '[]',
+            created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );"
+    )?;
+
+    // user_preferences 用户偏好表（语义记忆）
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS user_preferences (
+            id                TEXT        NOT NULL PRIMARY KEY,
+            category          TEXT        NOT NULL,
+            key               TEXT        NOT NULL,
+            value             TEXT        NOT NULL,
+            confidence        REAL        NOT NULL DEFAULT 0.5,
+            observation_count INTEGER     NOT NULL DEFAULT 1,
+            last_observed_at  TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+            UNIQUE(category, key)
+        );"
+    )?;
+
     log::info!("数据表创建完成");
     Ok(())
 }
@@ -116,7 +145,15 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
         CREATE INDEX IF NOT EXISTS idx_prompt_templates_is_builtin
             ON prompt_templates (is_builtin);
         CREATE INDEX IF NOT EXISTS idx_prompt_templates_updated_at
-            ON prompt_templates (updated_at DESC);"
+            ON prompt_templates (updated_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_session_summaries_workspace
+            ON session_summaries (workspace_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_session_summaries_session
+            ON session_summaries (session_id);
+
+        CREATE INDEX IF NOT EXISTS idx_user_preferences_category
+            ON user_preferences (category);"
     )?;
 
     log::info!("索引创建完成");
