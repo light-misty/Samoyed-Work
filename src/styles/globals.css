@@ -588,8 +588,16 @@
   color: var(--color-text-tertiary);
   line-height: 1.7;
   padding-left: 16px;
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.wf-thinking-paragraph {
+  white-space: pre-wrap;
+  margin: 0 0 6px 0;
+}
+
+.wf-thinking-paragraph:last-child {
+  margin-bottom: 0;
 }
 
 .wf-thinking-content .cursor-blink {

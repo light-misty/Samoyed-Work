@@ -39,7 +39,11 @@ export function ThinkingNode({ node }: ThinkingNodeProps) {
 
         {expanded && (
           <div className="wf-thinking-content">
-            {data.content}
+            {data.content.split("\n\n").map((paragraph, index) => (
+              <p key={index} className="wf-thinking-paragraph">
+                {paragraph}
+              </p>
+            ))}
             {isStreaming && <span className="cursor-blink" />}
           </div>
         )}
