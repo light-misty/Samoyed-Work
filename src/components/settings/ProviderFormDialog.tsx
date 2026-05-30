@@ -12,6 +12,7 @@ interface ProviderFormDialogProps {
 const providerTypeOptions: { value: LLMProviderType; label: string; defaultBase: string }[] = [
   { value: "openai", label: "OpenAI", defaultBase: "https://api.openai.com/v1" },
   { value: "anthropic", label: "Anthropic", defaultBase: "https://api.anthropic.com" },
+  { value: "gemini", label: "Google Gemini", defaultBase: "https://generativelanguage.googleapis.com/v1beta" },
   { value: "ollama", label: "Ollama", defaultBase: "http://localhost:11434/v1" },
   { value: "custom", label: "自定义", defaultBase: "" },
 ];
@@ -22,6 +23,9 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   const [apiBase, setApiBase] = useState(provider?.apiBase ?? "https://api.openai.com/v1");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(provider?.model ?? "");
+  const [contextWindow, setContextWindow] = useState<string>(
+    provider?.contextWindow ? String(provider.contextWindow) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionResult | null>(null);
@@ -49,6 +53,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         apiBase: apiBase.trim(),
         apiKey: apiKey.trim(),
         model: model.trim(),
+        contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
       };
       if (mode === "add") {
         await tauriCmd.addProvider(config);
@@ -99,6 +104,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
           apiBase: apiBase.trim(),
           apiKey: apiKey.trim(),
           model: model.trim(),
+          contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
         };
         const result = await tauriCmd.testConnectionWithConfig(config);
         setTestResult(result);
@@ -181,6 +187,21 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
               placeholder="例如：gpt-4o、claude-3-5-sonnet、gemini-1.5-pro"
               value={model}
               onChange={(e) => setModel(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              上下文窗口大小 (tokens)
+              <span className="form-label-hint">留空则自动推断</span>
+            </label>
+            <input
+              className="form-input form-input-mono"
+              type="number"
+              placeholder="例如：128000、200000、1000000"
+              value={contextWindow}
+              onChange={(e) => setContextWindow(e.target.value)}
+              min="4096"
             />
           </div>
 
@@ -276,6 +297,14 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
           font-size: 12px;
           font-weight: 500;
           color: var(--color-text-secondary);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .form-label-hint {
+          font-size: 11px;
+          font-weight: 400;
+          color: var(--color-text-quaternary);
         }
         .form-input {
           padding: 8px 12px;

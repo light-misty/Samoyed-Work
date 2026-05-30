@@ -26,6 +26,7 @@ pub enum ProviderType {
 pub struct AdvancedConfig {
     pub temperature: f64,
     pub top_p: f64,
+    /// LLM 最大输出 token 数（如 4096），不是上下文窗口大小
     pub max_tokens: u32,
     pub timeout_seconds: u32,
     pub max_retries: u32,
@@ -36,6 +37,10 @@ pub struct AdvancedConfig {
     /// false: 支持 reasoning_content 输入的 Provider（DeepSeek），保持原样发送
     #[serde(default = "default_reasoning_in_content")]
     pub reasoning_in_content: bool,
+    /// 上下文窗口大小 (tokens)，None 表示使用自动推断
+    /// 与 max_tokens 不同：max_tokens 是 LLM 最大输出 token 数，context_window 是模型上下文窗口总大小
+    #[serde(default)]
+    pub context_window: Option<usize>,
 }
 
 /// reasoning_in_content 默认值：true（安全默认，将思考内容折叠到 content）
@@ -53,6 +58,7 @@ impl Default for AdvancedConfig {
             max_retries: 3,
             extra_headers: HashMap::new(),
             reasoning_in_content: true,
+            context_window: None,
         }
     }
 }
@@ -78,6 +84,27 @@ pub struct LlmProvider {
     /// 高级配置
     #[serde(default)]
     pub advanced: AdvancedConfig,
+}
+
+impl LlmProvider {
+    /// 解析上下文窗口大小
+    /// 优先使用手动配置的 context_window，否则从预设表推断
+    pub fn resolve_context_window(&self) -> usize {
+        if let Some(cw) = self.advanced.context_window {
+            return cw;
+        }
+        let provider_type_str = match &self.provider_type {
+            ProviderType::OpenAI => "openai",
+            ProviderType::Anthropic => "anthropic",
+            ProviderType::Ollama => "ollama",
+            ProviderType::Gemini => "gemini",
+            ProviderType::Custom => "custom",
+        };
+        crate::services::llm::context_presets::resolve_context_window(
+            &self.model,
+            Some(provider_type_str),
+        )
+    }
 }
 
 /// LLM 配置，包含所有 Provider 及回退顺序

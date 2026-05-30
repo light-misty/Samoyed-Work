@@ -59,7 +59,7 @@ export interface AppSettings {
 
 // ----- LLM 相关类型 -----
 
-export type LLMProviderType = "openai" | "anthropic" | "ollama" | "custom";
+export type LLMProviderType = "openai" | "anthropic" | "ollama" | "gemini" | "custom";
 
 export interface ProviderConfig {
   name: string;
@@ -68,6 +68,8 @@ export interface ProviderConfig {
   apiKey: string;
   model: string;
   extraParams?: Record<string, unknown>;
+  /** 上下文窗口大小 (tokens)，undefined 表示自动推断 */
+  contextWindow?: number;
 }
 
 export interface ProviderInfo {
@@ -80,6 +82,8 @@ export interface ProviderInfo {
   isAvailable: boolean;
   isConnected?: boolean;
   createdAt: string;
+  /** 上下文窗口大小 (tokens)，运行时计算后的最终值 */
+  contextWindow: number;
 }
 
 export interface ConnectionResult {
@@ -124,6 +128,32 @@ export interface ToolInfo {
   enabled: boolean;
   version: string;
   paramsSchema?: unknown;
+}
+
+// ----- 上下文窗口相关类型 -----
+
+/** 上下文窗口使用信息，与 Rust ContextUsageInfo 对齐 */
+export interface ContextUsageInfo {
+  /** 上下文窗口总大小 (tokens) */
+  contextWindow: number;
+  /** 系统提示词估算 Token 数 */
+  systemPromptTokens: number;
+  /** 函数定义估算 Token 数（包含 Tool + Skill 两部分） */
+  functionDefinitionsTokens: number;
+  /** 对话历史估算 Token 数 */
+  conversationTokens: number;
+  /** LLM 响应估算 Token 数（当前轮，迭代完成后估算） */
+  responseTokens: number;
+  /** 已使用 Token 总数 */
+  totalUsedTokens: number;
+  /** 压缩状态: "normal" | "compressed" | "critical" */
+  compressionStatus: string;
+  /** 当前活跃 Provider 的模型名称 */
+  modelName: string;
+  /** 对话历史消息总数（压缩前） */
+  totalMessageCount: number;
+  /** 压缩后保留的消息数 */
+  retainedMessageCount: number;
 }
 
 export interface CustomSkillConfig {

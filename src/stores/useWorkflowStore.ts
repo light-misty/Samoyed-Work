@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap } from "../types";
 import type { Message } from "../types/session";
+import type { ContextUsageInfo } from "../types/settings";
 import { generateToolBrief } from "../utils/format";
+import { onAgentContextUpdate } from "../services/event";
+import * as tauriCmd from "../services/tauri";
 
 interface WorkflowState {
   nodes: WorkflowNode[];
@@ -9,6 +12,8 @@ interface WorkflowState {
   error: string | null;
   autoScroll: boolean;
   confirmHandler: ((approved: boolean) => Promise<void>) | null;
+  /** 上下文窗口使用信息（Agent 运行时实时更新） */
+  contextUsage: ContextUsageInfo | null;
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -20,6 +25,12 @@ interface WorkflowState {
   setAutoScroll: (autoScroll: boolean) => void;
   setConfirmHandler: (handler: ((approved: boolean) => Promise<void>) | null) => void;
   loadFromMessages: (messages: Message[]) => void;
+  /** 初始化上下文窗口使用情况事件监听 */
+  initContextUsageListener: () => Promise<() => void>;
+  /** 从后端加载指定会话的上下文窗口使用信息 */
+  loadContextUsage: (sessionId: string) => Promise<void>;
+  /** 清除上下文窗口使用信息（新会话/切换会话时调用） */
+  clearContextUsage: () => void;
 }
 
 let nodeCounter = 0;
@@ -30,6 +41,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
   error: null,
   autoScroll: true,
   confirmHandler: null,
+  contextUsage: null,
 
   addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
@@ -64,7 +76,7 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
 
   clearNodes: () => {
     nodeCounter = 0;
-    set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null });
+    set({ nodes: [], error: null, executionStatus: "idle", confirmHandler: null, contextUsage: null });
   },
 
   setExecutionStatus: (status) => {
@@ -159,5 +171,29 @@ export const useWorkflowStore = create<WorkflowState>((set) => ({
     }
 
     set({ nodes, error: null, executionStatus: "idle", confirmHandler: null });
+  },
+
+  // 初始化上下文窗口使用情况事件监听，返回取消监听函数
+  initContextUsageListener: async () => {
+    const unlisten = await onAgentContextUpdate((payload) => {
+      set({ contextUsage: payload.contextUsage });
+    });
+    return unlisten;
+  },
+
+  // 从后端加载指定会话的上下文窗口使用信息
+  loadContextUsage: async (sessionId: string) => {
+    try {
+      const usage = await tauriCmd.getContextUsage(sessionId);
+      set({ contextUsage: usage });
+    } catch {
+      // 会话无消息或后端计算失败时，清除上下文使用信息
+      set({ contextUsage: null });
+    }
+  },
+
+  // 清除上下文窗口使用信息（新会话/切换会话时调用）
+  clearContextUsage: () => {
+    set({ contextUsage: null });
   },
 }));

@@ -6,6 +6,7 @@ import { InputArea } from "./components/layout/InputArea";
 import { WorkflowTimeline } from "./components/workflow/WorkflowTimeline";
 import { FileTreeSection } from "./components/sidebar/FileTreeSection";
 import { AgentInfoSection } from "./components/sidebar/AgentInfoSection";
+import { ContextWindowSection } from "./components/sidebar/ContextWindowSection";
 import { TodoSection } from "./components/sidebar/TodoSection";
 import { ToastContainer } from "./components/common/Toast";
 import { useWorkflowStore } from "./stores/useWorkflowStore";
@@ -61,7 +62,7 @@ export default function App() {
   const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
@@ -105,7 +106,15 @@ export default function App() {
     loadSessions();
     // 初始化系统主题偏好监听
     const cleanup = initThemeListener();
-    return cleanup;
+    // 初始化上下文窗口使用情况事件监听
+    let contextUsageCleanup: (() => void) | null = null;
+    initContextUsageListener().then((unlisten) => {
+      contextUsageCleanup = unlisten;
+    });
+    return () => {
+      cleanup();
+      if (contextUsageCleanup) contextUsageCleanup();
+    };
   }, []);
 
   // 监听会话标题自动更新事件（后端生成标题后通知前端）
@@ -420,10 +429,11 @@ export default function App() {
     clearNodes();
     resetAgent();
     clearCurrentSession();
+    clearContextUsage();
     streamingNodeIdRef.current = null;
     thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
-  }, [clearNodes, resetAgent, clearCurrentSession]);
+  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage]);
 
   // 切换到历史会话：清空当前节点，从后端加载消息并转换为工作流节点
   const handleSwitchSession = useCallback(async (sessionId: string) => {
@@ -446,7 +456,10 @@ export default function App() {
     } catch (err) {
       console.error("[App] 加载历史会话失败:", err);
     }
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages]);
+
+    // 加载该会话的上下文窗口使用信息
+    loadContextUsage(sessionId);
+  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage]);
 
   // 删除当前会话后的处理：清空工作流或切换到其他会话
   const handleDeleteCurrentSession = useCallback(async (nextSessionId: string | null) => {
@@ -468,9 +481,15 @@ export default function App() {
       } catch (err) {
         console.error("[App] 加载切换后的会话失败:", err);
       }
+
+      // 加载该会话的上下文窗口使用信息
+      loadContextUsage(nextSessionId);
+    } else {
+      // 没有其他会话，清除上下文窗口使用信息
+      clearContextUsage();
     }
     // 如果 nextSessionId 为 null，表示没有其他会话，工作流保持清空状态
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages]);
+  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage]);
 
   // 打开文档预览：从后端获取文档内容并显示预览浮层
   const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {
@@ -602,6 +621,7 @@ export default function App() {
           <>
             <FileTreeSection onOpenPreview={handleOpenPreview} onOpenVersionHistory={handleOpenVersionHistory} />
             <AgentInfoSection />
+            <ContextWindowSection />
             <TodoSection
               items={todos?.todos.map((t) => ({
                 id: t.id,

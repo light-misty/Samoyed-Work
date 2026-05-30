@@ -14,6 +14,9 @@ pub struct ProviderConfig {
     pub api_key: String,
     pub model: String,
     pub extra_params: Option<HashMap<String, serde_json::Value>>,
+    /// 上下文窗口大小 (tokens)，None 表示自动推断
+    #[serde(default)]
+    pub context_window: Option<usize>,
 }
 
 /// Provider 信息
@@ -33,6 +36,35 @@ pub struct ProviderInfo {
     /// 是否已连接（运行时填充）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_connected: Option<bool>,
+    /// 上下文窗口大小 (tokens)，运行时计算后的最终值
+    pub context_window: usize,
+}
+
+/// 上下文窗口使用信息
+/// 用于前端实时展示上下文窗口的使用情况
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextUsageInfo {
+    /// 上下文窗口总大小 (tokens)
+    pub context_window: usize,
+    /// 系统提示词估算 Token 数
+    pub system_prompt_tokens: usize,
+    /// 函数定义估算 Token 数（包含 Tool + Skill 两部分）
+    pub function_definitions_tokens: usize,
+    /// 对话历史估算 Token 数
+    pub conversation_tokens: usize,
+    /// LLM 响应估算 Token 数（当前轮，迭代完成后估算）
+    pub response_tokens: usize,
+    /// 已使用 Token 总数
+    pub total_used_tokens: usize,
+    /// 压缩状态: "normal" | "compressed" | "critical"
+    pub compression_status: String,
+    /// 当前活跃 Provider 的模型名称
+    pub model_name: String,
+    /// 对话历史消息总数（压缩前）
+    pub total_message_count: usize,
+    /// 压缩后保留的消息数
+    pub retained_message_count: usize,
 }
 
 /// 连接测试结果

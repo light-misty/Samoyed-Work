@@ -109,4 +109,9 @@ impl<R: Runtime> AgentEmitter<R> {
     pub fn emit_provider_switch(&self, payload: types::ProviderSwitchPayload) -> Result<(), CommandError> {
         self.emit_event(types::LLM_PROVIDER_SWITCH, payload, false)
     }
+
+    /// 发射上下文窗口使用情况更新事件（非关键）
+    pub fn emit_context_usage(&self, payload: types::ContextUsagePayload) -> Result<(), CommandError> {
+        self.emit_event(types::AGENT_CONTEXT_UPDATE, payload, false)
+    }
 }

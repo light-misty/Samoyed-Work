@@ -29,6 +29,7 @@ import type {
   PromptTemplate,
   CreateTemplateParams,
   UpdateTemplateParams,
+  ContextUsageInfo,
 } from "../types";
 
 // ================================================================
@@ -414,6 +415,13 @@ export async function confirmOperation(
     feedback: feedback ?? null,
   }), { context: "confirmOperation" });
   if (!result.ok) throw result.error.raw;
+}
+
+/** 获取上下文窗口使用信息 */
+export async function getContextUsage(sessionId: string): Promise<ContextUsageInfo> {
+  const result = await safeInvoke(() => invoke<ContextUsageInfo>("get_context_usage", { sessionId }), { context: "getContextUsage" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 // ================================================================

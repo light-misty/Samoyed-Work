@@ -172,7 +172,10 @@ pub async fn add_provider(
         api_key_encrypted: config.api_key,
         model: config.model,
         is_default: llm_config.providers.is_empty(),
-        advanced: crate::config::llm_config::AdvancedConfig::default(),
+        advanced: crate::config::llm_config::AdvancedConfig {
+            context_window: config.context_window,
+            ..Default::default()
+        },
     };
 
     crate::config::llm_config::add_provider(&mut llm_config, provider).map_err(|e| {
@@ -239,6 +242,12 @@ pub async fn update_provider(
         config.api_key.clone()
     };
 
+    let mut advanced = existing.advanced.clone();
+    // 如果前端传入了 context_window，更新；否则保留原值
+    if config.context_window.is_some() {
+        advanced.context_window = config.context_window;
+    }
+
     let provider = crate::config::llm_config::LlmProvider {
         id: provider_id.clone(),
         provider_type,
@@ -247,7 +256,7 @@ pub async fn update_provider(
         api_key_encrypted: api_key_to_save,
         model: config.model,
         is_default: existing.is_default,
-        advanced: existing.advanced.clone(),
+        advanced,
     };
 
     crate::config::llm_config::update_provider(&mut llm_config, &provider_id, provider).map_err(|e| {

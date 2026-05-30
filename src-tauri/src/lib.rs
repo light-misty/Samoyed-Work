@@ -337,6 +337,7 @@ pub fn run() {
             commands::agent::start_agent,
             commands::agent::stop_agent,
             commands::agent::confirm_operation,
+            commands::agent::get_context_usage,
             // 模板命令
             commands::template::list_templates,
             commands::template::get_template,

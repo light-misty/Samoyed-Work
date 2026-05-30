@@ -193,3 +193,29 @@ pub fn clear_all_sessions(conn: &Connection) -> Result<u64, CommandError> {
 
     Ok(count)
 }
+
+/// 保存上下文窗口使用信息到会话（持久化 JSON）
+pub fn save_context_usage(conn: &Connection, session_id: &str, json: &str) -> Result<(), CommandError> {
+    conn.execute(
+        "UPDATE sessions SET context_usage_json = ?1 WHERE id = ?2",
+        rusqlite::params![json, session_id],
+    )?;
+    Ok(())
+}
+
+/// 读取会话的上下文窗口使用信息（从持久化的 JSON 反序列化）
+pub fn load_context_usage(conn: &Connection, session_id: &str) -> Option<crate::models::llm::ContextUsageInfo> {
+    let json_str: String = conn
+        .query_row(
+            "SELECT context_usage_json FROM sessions WHERE id = ?1",
+            rusqlite::params![session_id],
+            |row| row.get(0),
+        )
+        .ok()?;
+
+    if json_str.is_empty() {
+        return None;
+    }
+
+    serde_json::from_str(&json_str).ok()
+}

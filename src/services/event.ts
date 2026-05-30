@@ -134,14 +134,21 @@ export interface FileChangePayload {
 
 /** LLM Provider 切换通知 */
 export interface ProviderSwitchPayload {
-  /** 原始 Provider ID */
   fromProviderId: string;
-  /** 切换到的 Provider ID */
   toProviderId: string;
-  /** 切换原因 */
   reason: string;
-  /** 是否为自动切换 */
   isAutomatic: boolean;
+}
+
+// ================================================================
+// 上下文窗口事件 Payload 类型
+// ================================================================
+
+/** 上下文窗口使用情况更新事件 */
+export interface ContextUsagePayload {
+  sessionId: string;
+  /** 上下文使用详情 */
+  contextUsage: import("../types/settings").ContextUsageInfo;
 }
 
 // ================================================================
@@ -278,6 +285,19 @@ export function onLlmProviderSwitch(
   handler: (payload: ProviderSwitchPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<ProviderSwitchPayload>("llm:provider_switch", (event) => {
+    handler(event.payload);
+  });
+}
+
+// ================================================================
+// 上下文窗口事件监听函数
+// ================================================================
+
+/** 监听上下文窗口使用情况更新事件 */
+export function onAgentContextUpdate(
+  handler: (payload: ContextUsagePayload) => void,
+): Promise<UnlistenFn> {
+  return listen<ContextUsagePayload>("agent:context_update", (event) => {
     handler(event.payload);
   });
 }

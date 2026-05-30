@@ -29,6 +29,9 @@ pub struct ExecutionResult {
 /// 接收 session_id 和新增消息列表，返回持久化结果
 type PersistFn = Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync>;
 
+/// 上下文窗口使用信息持久化回调
+type ContextUsagePersistFn = Arc<dyn Fn(&str, &crate::models::llm::ContextUsageInfo) + Send + Sync>;
+
 /// 版本快照回调类型
 /// 接收 (workspace_id, session_id, file_path, operation)，在文件修改/删除前创建快照
 type SnapshotFn = Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync>;
@@ -43,6 +46,8 @@ pub struct AgentExecutor<R: Runtime> {
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     /// 增量持久化回调，每轮迭代后调用，防止崩溃丢失消息
     persist_fn: Option<PersistFn>,
+    /// 上下文窗口使用信息持久化回调，每次发射事件时调用，确保切换会话后数据一致
+    context_usage_persist_fn: Option<ContextUsagePersistFn>,
     /// 版本快照回调，在文件修改/删除前调用，自动创建快照
     snapshot_fn: Option<SnapshotFn>,
 }
@@ -64,6 +69,7 @@ impl<R: Runtime> AgentExecutor<R> {
             max_iterations: 20,
             should_stop: Arc::new(|_| false),
             persist_fn: None,
+            context_usage_persist_fn: None,
             snapshot_fn: None,
         }
     }
@@ -86,6 +92,12 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 设置增量持久化回调
     pub fn with_persist_fn(mut self, f: PersistFn) -> Self {
         self.persist_fn = Some(f);
+        self
+    }
+
+    /// 设置上下文窗口使用信息持久化回调
+    pub fn with_context_usage_persist_fn(mut self, f: ContextUsagePersistFn) -> Self {
+        self.context_usage_persist_fn = Some(f);
         self
     }
 
@@ -274,6 +286,24 @@ impl<R: Runtime> AgentExecutor<R> {
         }).ok();
     }
 
+    /// 发射上下文窗口使用情况事件
+    async fn emit_context_usage(&self, ctx: &AgentContext, response_tokens: usize) {
+        // 获取当前模型名称
+        let model_name = self.router.current_model_name();
+
+        let usage_info = ctx.calculate_context_usage(response_tokens, model_name);
+
+        // 持久化上下文窗口使用信息到数据库，确保切换会话后数据一致
+        if let Some(ref persist_fn) = self.context_usage_persist_fn {
+            persist_fn(&ctx.session_id, &usage_info);
+        }
+
+        self.emitter.emit_context_usage(crate::events::types::ContextUsagePayload {
+            session_id: ctx.session_id.clone(),
+            context_usage: usage_info,
+        }).ok();
+    }
+
     pub async fn execute(&self, ctx: &mut AgentContext) -> Result<ExecutionResult, CommandError> {
         let start_time = std::time::Instant::now();
         let mut total_steps = 0u32;
@@ -300,6 +330,14 @@ impl<R: Runtime> AgentExecutor<R> {
                 })
             })
             .collect();
+
+        // 估算函数定义的 Token 数并设置到上下文中
+        let func_defs_str = tool_defs_json
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        ctx.function_definitions_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(&func_defs_str);
 
         self.emitter.emit_todo_update(TodoUpdatePayload {
             session_id: ctx.session_id.clone(),
@@ -683,6 +721,10 @@ impl<R: Runtime> AgentExecutor<R> {
                 self.persist_new_messages(ctx);
                 ctx.mark_persisted();
 
+                // 有 tool_calls 的迭代完成后发射上下文使用情况
+                let response_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(&assistant_content);
+                self.emit_context_usage(ctx, response_tokens).await;
+
                 // 继续循环，让 LLM 处理工具结果
                 continue;
             }
@@ -737,6 +779,10 @@ impl<R: Runtime> AgentExecutor<R> {
             // 最终回复后增量持久化
             self.persist_new_messages(ctx);
             ctx.mark_persisted();
+
+            // 正常完成前发射上下文使用情况
+            let response_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(&assistant_content);
+            self.emit_context_usage(ctx, response_tokens).await;
 
             self.emitter.emit_todo_update(TodoUpdatePayload {
                 session_id: ctx.session_id.clone(),
@@ -833,11 +879,8 @@ impl<R: Runtime> AgentExecutor<R> {
         let mut result = content.to_string();
         let mut search_from = 0;
 
-        loop {
-            let start = match result[search_from..].find(open_tag) {
-                Some(pos) => search_from + pos,
-                None => break,
-            };
+        while let Some(pos) = result[search_from..].find(open_tag) {
+            let start = search_from + pos;
 
             // 尝试查找闭合标签
             let (block_end, content_end) = if let Some(pos) = result[start + open_tag.len()..].find(close_tag) {

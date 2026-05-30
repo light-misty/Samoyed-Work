@@ -29,6 +29,8 @@ struct ProviderMeta {
     api_base: String,
     model: String,
     created_at: String,
+    /// 上下文窗口大小 (tokens)，运行时计算后的最终值
+    context_window: usize,
 }
 
 /// Provider 健康状态
@@ -144,6 +146,7 @@ impl LlmRouter {
                 api_base: provider.api_base_url.clone(),
                 model: provider.model.clone(),
                 created_at: String::new(),
+                context_window: provider.resolve_context_window(),
             });
 
             if provider.is_default {
@@ -553,7 +556,17 @@ impl LlmRouter {
                 is_available: self.is_provider_available(id),
                 created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                 is_connected: None,
+                context_window: m.map(|m| m.context_window).unwrap_or(128_000),
             }
         }).collect()
+    }
+
+    /// 获取当前默认 Provider 的模型名称
+    pub fn current_model_name(&self) -> String {
+        self.default_id
+            .as_ref()
+            .and_then(|id| self.meta.get(id))
+            .map(|m| m.model.clone())
+            .unwrap_or_default()
     }
 }

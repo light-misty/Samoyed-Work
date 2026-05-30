@@ -33,7 +33,8 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             created_at          TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             updated_at          TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             llm_provider        TEXT        NOT NULL DEFAULT '',
-            llm_model           TEXT        NOT NULL DEFAULT ''
+            llm_model           TEXT        NOT NULL DEFAULT '',
+            context_usage_json  TEXT        DEFAULT NULL
         );"
     )?;
 

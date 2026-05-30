@@ -235,6 +235,128 @@ pub async fn start_agent(
     Ok(())
 }
 
+/// 获取当前上下文窗口使用信息
+/// 需要传入 session_id，返回该会话的上下文窗口使用情况
+/// 优先从数据库读取持久化的 JSON（与实时事件数据完全一致），若无则回退到重新计算
+#[tauri::command]
+pub async fn get_context_usage(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<crate::models::llm::ContextUsageInfo, CommandError> {
+    // 优先从数据库读取持久化的上下文窗口使用信息（与实时事件数据完全一致）
+    if let Ok(conn) = state.db.conn() {
+        if let Some(usage) = crate::db::session_repo::load_context_usage(&conn, &session_id) {
+            return Ok(usage);
+        }
+    }
+
+    // 回退：数据库中无持久化数据时，重新计算（首次加载或旧版本数据库）
+    use crate::services::agent::context::AgentContext;
+    use crate::services::agent::prompts::token_budget::TokenBudgetManager;
+    use crate::services::agent::prompts::task_type::TaskType;
+
+    // 获取当前活跃 Provider 的上下文窗口大小和模型名称
+    let (context_window, model_name) = {
+        let router = state.llm_router.read().await;
+        let providers = router.list_providers();
+        let default_provider = providers.iter().find(|p| p.is_default);
+        match default_provider {
+            Some(p) => (p.context_window, p.model.clone()),
+            None => (128_000, String::new()),
+        }
+    };
+
+    // 获取当前工作区路径（用于构建系统提示词）
+    let workspace_path = {
+        let cfg_manager = state.config.lock().await;
+        let settings = cfg_manager.load_app_settings().ok();
+        let ws_config = cfg_manager.load_workspaces().ok();
+        settings
+            .as_ref()
+            .and_then(|s| ws_config.as_ref()?.workspaces.iter().find(|w| w.id == s.workspace.default_workspace_id))
+            .map(|ws| ws.path.clone())
+            .unwrap_or_else(|| ".".to_string())
+    };
+
+    // 使用与 Agent 运行时相同的方法构建系统提示词并估算 Token 数
+    let tool_count = state.tool_registry.tool_definitions().len();
+    let skill_count = {
+        let reg = state.skill_registry.lock().await;
+        reg.tool_definitions().len()
+    };
+    let budget = TokenBudgetManager::new(context_window);
+    let system_prompt = AgentContext::build_system_prompt_with_task(
+        &workspace_path,
+        &TaskType::Unknown,
+        tool_count,
+        skill_count,
+        &budget,
+    );
+    let system_prompt_tokens = TokenBudgetManager::estimate_tokens(&system_prompt);
+
+    // 估算函数定义 Token 数（与 executor 中的计算方式一致）
+    let function_definitions_tokens = {
+        let tool_defs = state.tool_registry.tool_definitions();
+        let skill_defs = {
+            let reg = state.skill_registry.lock().await;
+            reg.tool_definitions()
+        };
+        let all_defs = [tool_defs, skill_defs].concat();
+        let defs_str = all_defs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        TokenBudgetManager::estimate_tokens(&defs_str)
+    };
+
+    // 从数据库加载该会话的消息来估算对话历史 Token 数
+    let (conversation_tokens, total_message_count) = {
+        match state.db.conn() {
+            Ok(conn) => {
+                let messages = crate::db::message_repo::list_messages(&conn, &session_id);
+                let count = messages.len();
+                let conv_tokens = TokenBudgetManager::estimate_tokens(
+                    &messages.iter().map(|m| m.content.as_str()).collect::<String>()
+                );
+                (conv_tokens, count)
+            }
+            Err(_) => (0, 0)
+        }
+    };
+
+    let total_used_tokens = system_prompt_tokens + function_definitions_tokens + conversation_tokens;
+    let usage_percentage = if context_window > 0 {
+        (total_used_tokens as f64 / context_window as f64).min(1.0)
+    } else {
+        0.0
+    };
+
+    let is_over_budget = budget.is_conversation_over_budget(conversation_tokens);
+    let compression_status = if usage_percentage >= 0.95 {
+        "critical".to_string()
+    } else if is_over_budget {
+        "compressed".to_string()
+    } else {
+        "normal".to_string()
+    };
+
+    let retained_message_count = {
+        let avg_round_tokens = if conversation_tokens == 0 { 0 } else { conversation_tokens / 4 };
+        let keep_rounds = budget.calculate_window_size(conversation_tokens, avg_round_tokens);
+        total_message_count.min(keep_rounds * 4)
+    };
+
+    Ok(crate::models::llm::ContextUsageInfo {
+        context_window,
+        system_prompt_tokens,
+        function_definitions_tokens,
+        conversation_tokens,
+        response_tokens: 0,
+        total_used_tokens,
+        compression_status,
+        model_name,
+        total_message_count,
+        retained_message_count,
+    })
+}
+
 /// 使用 LLM 自动生成会话标题
 /// 根据用户的首条消息，调用 LLM 生成简短准确的标题
 async fn generate_session_title(
@@ -549,7 +671,32 @@ async fn run_agent(
     }
 
     let system_prompt = crate::services::agent::context::AgentContext::build_system_prompt(workspace_path);
-    let mut ctx = AgentContext::new(session_id.to_string(), system_prompt);
+
+    // 从当前活跃 Provider 解析上下文窗口大小
+    let context_window = {
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+        match cfg.load_llm_config() {
+            Ok(llm_config) => {
+                match crate::config::llm_config::get_default_provider(&llm_config) {
+                    Some(provider) => {
+                        let cw = provider.resolve_context_window();
+                        log::info!("从默认 Provider 解析上下文窗口: {} tokens (模型: {})", cw, provider.model);
+                        cw
+                    }
+                    None => {
+                        log::warn!("无默认 Provider，使用默认上下文窗口 128K");
+                        128_000
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("加载 LLM 配置失败: {}, 使用默认上下文窗口 128K", e.message);
+                128_000
+            }
+        }
+    };
+
+    let mut ctx = AgentContext::new(session_id.to_string(), system_prompt, context_window);
     ctx.max_iterations = max_iterations;
     ctx.workspace_path = workspace_path.to_string();
     ctx.workspace_id = workspace_id.to_string();
@@ -566,6 +713,7 @@ async fn run_agent(
         &task_type,
         tool_count,
         skill_count,
+        ctx.token_budget(),
     );
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);
@@ -654,6 +802,19 @@ async fn run_agent(
             )
         });
 
+    // 创建上下文窗口使用信息持久化回调，每次发射事件时持久化到数据库
+    let db_for_context_usage = Arc::clone(db);
+    let context_usage_persist_fn: Arc<dyn Fn(&str, &crate::models::llm::ContextUsageInfo) + Send + Sync> =
+        Arc::new(move |sid: &str, usage_info: &crate::models::llm::ContextUsageInfo| {
+            if let Ok(json) = serde_json::to_string(usage_info) {
+                if let Ok(conn) = db_for_context_usage.conn() {
+                    if let Err(e) = crate::db::session_repo::save_context_usage(&conn, sid, &json) {
+                        log::warn!("持久化上下文窗口使用信息失败: session_id={}, 错误: {}", sid, e.message);
+                    }
+                }
+            }
+        });
+
     let executor = AgentExecutor::new(
         Arc::clone(llm_router),
         Arc::clone(tool_registry),
@@ -664,6 +825,7 @@ async fn run_agent(
     .with_stop_check(should_stop)
     .with_max_iterations(max_iterations)
     .with_persist_fn(persist_fn)
+    .with_context_usage_persist_fn(context_usage_persist_fn)
     .with_snapshot_fn(snapshot_fn);
 
     match executor.execute(&mut ctx).await {

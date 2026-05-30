@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 
 import * as tauriCmd from "../services/tauri";
+import { useWorkflowStore } from "../stores/useWorkflowStore";
 import {
   onAgentThinking,
   onAgentDeepThinking,
@@ -192,6 +193,9 @@ export function useAgent(): UseAgentReturn {
       lastContentEpochRef.current = contentEpochRef.current;
       deepThinkingContentRef.current = "";
       lastDeepThinkingStepRef.current = 0;
+
+      // 新一轮 Agent 运行开始时清除上一次的上下文窗口使用信息
+      useWorkflowStore.getState().clearContextUsage();
 
       try {
         let sid = sessionId;

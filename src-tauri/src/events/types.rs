@@ -14,6 +14,7 @@ pub const AGENT_TODO_UPDATE: &str = "agent:todo_update";
 pub const AGENT_DONE: &str = "agent:done";
 pub const AGENT_ERROR: &str = "agent:error";
 pub const AGENT_STOPPED: &str = "agent:stopped";
+pub const AGENT_CONTEXT_UPDATE: &str = "agent:context_update";
 
 // ================================================================
 // 系统事件名常量
@@ -204,4 +205,17 @@ pub struct ProviderSwitchPayload {
     pub reason: String,
     /// 是否为自动切换
     pub is_automatic: bool,
+}
+
+// ================================================================
+// 上下文窗口事件 Payload 类型
+// ================================================================
+
+/// 上下文窗口使用情况更新事件
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ContextUsagePayload {
+    pub session_id: String,
+    /// 上下文使用详情
+    pub context_usage: crate::models::llm::ContextUsageInfo,
 }

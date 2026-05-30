@@ -1,4 +1,4 @@
-use crate::models::llm::{ChatMessage, LlmToolCall};
+﻿use crate::models::llm::{ChatMessage, LlmToolCall};
 use super::prompts::document_design::get_design_guide_by_type;
 use super::prompts::task_type::TaskType;
 use super::prompts::token_budget::{TokenBudgetManager, HistoryCompressionConfig};
@@ -7,6 +7,22 @@ use super::prompts::token_budget::{TokenBudgetManager, HistoryCompressionConfig}
 const REASONING_COMPRESS_THRESHOLD: usize = 500;
 /// 压缩后保留的字符数
 const REASONING_COMPRESS_KEEP: usize = 200;
+
+/// 历史压缩结果
+pub struct CompressionResult {
+    /// 压缩后的消息列表
+    pub messages: Vec<ChatMessage>,
+    /// 是否发生了压缩
+    pub was_compressed: bool,
+    /// 压缩前消息数量
+    pub before_count: usize,
+    /// 压缩后消息数量
+    pub after_count: usize,
+    /// 压缩前估算 Token 数
+    pub before_tokens: usize,
+    /// 压缩后估算 Token 数
+    pub after_tokens: usize,
+}
 
 /// Agent 执行上下文
 /// 管理对话历史和系统提示词
@@ -35,10 +51,12 @@ pub struct AgentContext {
     completed_steps: Vec<String>,
     /// 当前正在执行的步骤描述
     current_step: String,
+    /// 函数定义（Tool + Skill）的估算 Token 数，由 executor 在构建 tool definitions 后设置
+    pub function_definitions_tokens: usize,
 }
 
 impl AgentContext {
-    pub fn new(session_id: String, system_prompt: String) -> Self {
+    pub fn new(session_id: String, system_prompt: String, context_window: usize) -> Self {
         Self {
             session_id,
             messages: Vec::new(),
@@ -48,10 +66,75 @@ impl AgentContext {
             workspace_path: String::new(),
             workspace_id: String::new(),
             task_type: TaskType::Unknown,
-            token_budget: TokenBudgetManager::default_context(),
+            token_budget: TokenBudgetManager::new(context_window),
             compression_config: HistoryCompressionConfig::default(),
             completed_steps: Vec::new(),
             current_step: String::new(),
+            function_definitions_tokens: 0,
+        }
+    }
+
+    /// 使用默认上下文窗口大小创建（128K），仅用于测试
+    pub fn new_default(session_id: String, system_prompt: String) -> Self {
+        Self::new(session_id, system_prompt, 128_000)
+    }
+
+    /// 获取 Token 预算管理器的引用
+    pub fn token_budget(&self) -> &TokenBudgetManager {
+        &self.token_budget
+    }
+
+    /// 获取上下文窗口大小
+    pub fn context_window(&self) -> usize {
+        self.token_budget.context_window()
+    }
+
+    /// 计算当前上下文窗口使用信息
+    /// response_tokens: 当前轮 LLM 响应的估算 Token 数，由 executor 传入
+    /// function_definitions_tokens 使用 self.function_definitions_tokens（由 executor 在构建 tool definitions 后设置）
+    pub fn calculate_context_usage(&self, response_tokens: usize, model_name: String) -> crate::models::llm::ContextUsageInfo {
+        let system_prompt_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(&self.system_prompt);
+        let conversation_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(
+            &self.messages.iter().map(|m| m.content.as_str()).collect::<String>()
+        );
+        let function_definitions_tokens = self.function_definitions_tokens;
+        let total_used_tokens = system_prompt_tokens + function_definitions_tokens + conversation_tokens + response_tokens;
+
+        // 计算使用百分比
+        let usage_percentage = if self.token_budget.context_window() > 0 {
+            (total_used_tokens as f64 / self.token_budget.context_window() as f64).min(1.0)
+        } else {
+            0.0
+        };
+
+        // 判断压缩状态
+        let is_over_budget = self.token_budget.is_conversation_over_budget(conversation_tokens);
+        let compression_status = if usage_percentage >= 0.95 {
+            "critical".to_string()
+        } else if is_over_budget {
+            "compressed".to_string()
+        } else {
+            "normal".to_string()
+        };
+
+        // 消息总数和保留消息数
+        let total_message_count = self.messages.len();
+        let retained_message_count = {
+            let keep_count = self.calculate_keep_message_count();
+            self.messages.len().min(keep_count)
+        };
+
+        crate::models::llm::ContextUsageInfo {
+            context_window: self.token_budget.context_window(),
+            system_prompt_tokens,
+            function_definitions_tokens,
+            conversation_tokens,
+            response_tokens,
+            total_used_tokens,
+            compression_status,
+            model_name,
+            total_message_count,
+            retained_message_count,
         }
     }
 
@@ -227,7 +310,8 @@ impl AgentContext {
         }];
 
         // 对话历史压缩处理
-        let processed_messages = self.compress_history_if_needed();
+        let compression_result = self.compress_history_if_needed();
+        let processed_messages = compression_result.messages;
 
         // 找出最后一条包含 reasoning_content 的 assistant 消息的索引
         let last_reasoning_idx = processed_messages.iter().rposition(|m| {
@@ -282,20 +366,31 @@ impl AgentContext {
     }
 
     /// 对话历史压缩：滑动窗口 + 关键消息保护
-    fn compress_history_if_needed(&self) -> Vec<ChatMessage> {
+    fn compress_history_if_needed(&self) -> CompressionResult {
         // 估算当前对话历史的 Token 数
         let estimated_tokens = TokenBudgetManager::estimate_tokens(&self.messages.iter()
             .map(|m| m.content.as_str())
             .collect::<String>());
 
+        let before_count = self.messages.len();
+        let before_tokens = estimated_tokens;
+
         // 未超过预算阈值，直接返回原始消息
         if !self.token_budget.is_conversation_over_budget(estimated_tokens) {
-            return self.messages.clone();
+            return CompressionResult {
+                messages: self.messages.clone(),
+                was_compressed: false,
+                before_count,
+                after_count: before_count,
+                before_tokens,
+                after_tokens: before_tokens,
+            };
         }
 
         log::info!(
-            "对话历史超过Token预算 (估算: {} tokens), 开始压缩, 保留最近 {} 轮",
+            "对话历史超过Token预算 (估算: {} tokens, 可用: {} tokens), 开始压缩, 保留最近 {} 轮",
             estimated_tokens,
+            self.token_budget.available_conversation_tokens(estimated_tokens),
             self.compression_config.keep_recent_rounds
         );
 
@@ -303,7 +398,14 @@ impl AgentContext {
         // 一轮 = user + assistant(+tool_calls) + tool results
         let keep_count = self.calculate_keep_message_count();
         if self.messages.len() <= keep_count {
-            return self.messages.clone();
+            return CompressionResult {
+                messages: self.messages.clone(),
+                was_compressed: false,
+                before_count,
+                after_count: before_count,
+                before_tokens,
+                after_tokens: before_tokens,
+            };
         }
 
         let mut result = Vec::new();
@@ -330,13 +432,45 @@ impl AgentContext {
             result.push(msg.clone());
         }
 
-        result
+        let after_tokens = TokenBudgetManager::estimate_tokens(&result.iter()
+            .map(|m| m.content.as_str())
+            .collect::<String>());
+        let after_count = result.len();
+
+        log::info!(
+            "对话历史压缩完成: {} -> {} 消息, {} -> {} tokens",
+            before_count, after_count, before_tokens, after_tokens
+        );
+
+        CompressionResult {
+            messages: result,
+            was_compressed: true,
+            before_count,
+            after_count,
+            before_tokens,
+            after_tokens,
+        }
     }
 
     /// 计算应保留的消息数量
     fn calculate_keep_message_count(&self) -> usize {
+        // 估算当前对话历史的 Token 数
+        let current_tokens = TokenBudgetManager::estimate_tokens(&self.messages.iter()
+            .map(|m| m.content.as_str())
+            .collect::<String>());
+
+        // 估算每轮平均 Token 数
+        let avg_round_tokens = if self.messages.is_empty() {
+            0
+        } else {
+            current_tokens / (self.messages.len().max(1) / 4).max(1)
+        };
+
+        // 使用 TokenBudgetManager 动态计算保留轮数
+        let keep_rounds = self.token_budget.calculate_window_size(current_tokens, avg_round_tokens);
+
         // 每轮大约 3-4 条消息（user + assistant + tool_result(s)）
-        self.compression_config.keep_recent_rounds * 4
+        keep_rounds * 4
     }
 
     /// 获取尚未持久化的消息列表（增量持久化用）
@@ -433,19 +567,21 @@ impl AgentContext {
     /// 构建系统提示词（分层架构）
     /// 根据 workspace_path 和可选的 user_message 动态组装
     pub fn build_system_prompt(workspace_path: &str) -> String {
-        Self::build_system_prompt_with_task(workspace_path, &TaskType::Unknown, 0, 0)
+        Self::build_system_prompt_with_task(workspace_path, &TaskType::Unknown, 0, 0, &TokenBudgetManager::default_context())
     }
 
-    /// 构建系统提示词（带任务类型识别）
+    /// 构建系统提示词（带任务类型识别和 Token 预算控制）
     /// workspace_path: 工作区路径
     /// task_type: 当前任务类型
     /// tool_count: 可用基础工具数量
     /// skill_count: 可用高级技能数量
+    /// token_budget: Token 预算管理器，用于决定是否注入规范层
     pub fn build_system_prompt_with_task(
         workspace_path: &str,
         task_type: &TaskType,
         tool_count: usize,
         skill_count: usize,
+        token_budget: &TokenBudgetManager,
     ) -> String {
         let mut parts = vec![
             Self::layer_identity(),
@@ -456,16 +592,26 @@ impl AgentContext {
             Self::layer_error_handling(),
         ];
 
-        // Layer 6: 规范层（按需注入）
-        let guides = Self::layer_guides(task_type);
-        if !guides.is_empty() {
-            parts.push(guides);
-        }
+        // 估算当前系统提示词已消耗的 Token 数
+        let current_system_tokens = TokenBudgetManager::estimate_tokens(&parts.join("\n\n"));
 
-        // Layer 7: 示例层（按需注入）
-        let examples = Self::layer_examples(task_type);
-        if !examples.is_empty() {
-            parts.push(examples);
+        // Layer 6: 规范层（按需注入，受 Token 预算控制）
+        if token_budget.should_inject_guides(current_system_tokens) {
+            let guides = Self::layer_guides(task_type);
+            if !guides.is_empty() {
+                parts.push(guides);
+            }
+
+            // Layer 7: 示例层（按需注入，受 Token 预算控制）
+            let examples = Self::layer_examples(task_type);
+            if !examples.is_empty() {
+                parts.push(examples);
+            }
+        } else {
+            log::info!(
+                "系统提示词已达 {} tokens，超过预算 {} tokens，跳过规范层和示例层注入",
+                current_system_tokens, token_budget.budget().system_prompt
+            );
         }
 
         parts.join("\n\n")
@@ -719,7 +865,7 @@ mod tests {
     /// 测试第一轮迭代时系统提示词不追加继续推理提示
     #[test]
     fn test_get_messages_for_iteration_first_iteration() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("你好");
         ctx.add_assistant_message("你好！", None, None);
 
@@ -734,7 +880,7 @@ mod tests {
     /// 测试后续迭代时系统提示词追加迭代上下文
     #[test]
     fn test_get_messages_for_iteration_later_iteration() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("你好");
         ctx.add_assistant_message("你好！", None, None);
         ctx.record_completed_step("列出了工作区文件".to_string());
@@ -751,7 +897,7 @@ mod tests {
     /// 测试早期 reasoning_content 超过阈值时被压缩
     #[test]
     fn test_get_messages_for_iteration_compress_reasoning() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("你好");
 
         // 早期的 assistant 消息，reasoning_content 超过阈值（600 > 500）
@@ -779,7 +925,7 @@ mod tests {
     /// 测试最近一轮的 reasoning_content 保持完整
     #[test]
     fn test_get_messages_for_iteration_keep_latest_reasoning() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("你好");
 
         // 早期长 reasoning
@@ -804,7 +950,7 @@ mod tests {
     /// 测试短 reasoning_content 不被压缩
     #[test]
     fn test_get_messages_for_iteration_short_reasoning_not_compressed() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("你好");
 
         // 短 reasoning（不超过阈值 500）
@@ -849,11 +995,13 @@ mod tests {
     /// 测试按任务类型构建系统提示词 - 生成Word时注入Word规范
     #[test]
     fn test_build_system_prompt_with_task_generate_docx() {
+        let budget = TokenBudgetManager::default_context();
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
             &TaskType::GenerateDocx,
             8,
             6,
+            &budget,
         );
 
         // 应包含 Word 规范
@@ -869,11 +1017,13 @@ mod tests {
     /// 测试按任务类型构建系统提示词 - 读取任务不注入规范
     #[test]
     fn test_build_system_prompt_with_task_read_document() {
+        let budget = TokenBudgetManager::default_context();
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
             &TaskType::ReadDocument,
             8,
             6,
+            &budget,
         );
 
         // 不应包含任何设计规范
@@ -886,11 +1036,13 @@ mod tests {
     /// 测试按任务类型构建系统提示词 - 未知类型默认注入Word规范
     #[test]
     fn test_build_system_prompt_with_task_unknown() {
+        let budget = TokenBudgetManager::default_context();
         let prompt = AgentContext::build_system_prompt_with_task(
             "/workspace",
             &TaskType::Unknown,
             8,
             6,
+            &budget,
         );
 
         // 未知类型默认注入 Word 规范
@@ -925,7 +1077,7 @@ mod tests {
     /// 测试迭代上下文构建
     #[test]
     fn test_iteration_context() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.max_iterations = 20;
         ctx.record_completed_step("列出了工作区文件".to_string());
         ctx.record_completed_step("读取了报告.docx".to_string());
@@ -944,7 +1096,7 @@ mod tests {
     /// 测试任务类型更新
     #[test]
     fn test_update_task_type_from_tool() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
 
         // 初始为 Unknown
         assert_eq!(*ctx.task_type(), TaskType::Unknown);
@@ -961,7 +1113,7 @@ mod tests {
     /// 测试任务类型从 generate_document 的 format 参数推断
     #[test]
     fn test_update_task_type_from_generate_document() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
 
         let params = serde_json::json!({"format": "xlsx", "path": "test.xlsx", "content": "test"});
         ctx.update_task_type_from_tool("generate_document", Some(&params));
@@ -994,7 +1146,7 @@ mod tests {
     /// 测试加载历史消息
     #[test]
     fn test_load_history_messages() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
 
         let history = vec![
             ChatMessage {
@@ -1031,7 +1183,7 @@ mod tests {
     /// 测试加载历史消息后任务类型从工具调用推断
     #[test]
     fn test_load_history_messages_task_type_from_tool() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
 
         let history = vec![
             ChatMessage {
@@ -1064,7 +1216,7 @@ mod tests {
     /// 测试加载空历史消息不影响上下文
     #[test]
     fn test_load_empty_history_messages() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.load_history_messages(vec![]);
         assert!(ctx.messages.is_empty());
         assert_eq!(ctx.persisted_count, 0);
@@ -1074,7 +1226,7 @@ mod tests {
     /// 测试提取会话摘要信息
     #[test]
     fn test_extract_session_summary_info() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.workspace_id = "ws_1".to_string();
 
         ctx.add_user_message("帮我生成一份项目周报");
@@ -1100,7 +1252,7 @@ mod tests {
     /// 测试提取摘要时用户目标截断
     #[test]
     fn test_extract_session_summary_long_user_goal() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         let long_message = "a".repeat(300);
         ctx.add_user_message(&long_message);
 
@@ -1112,11 +1264,158 @@ mod tests {
     /// 测试提取摘要时包含错误信息
     #[test]
     fn test_extract_session_summary_with_errors() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string());
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("读取文件");
         ctx.add_tool_result("call_1", "错误: 文件不存在 test.docx");
 
         let (_, _, _, _, errors_resolved) = ctx.extract_session_summary_info();
         assert!(errors_resolved.contains("文件不存在"));
+    }
+
+    // ================================================================
+    // 上下文窗口集成测试和边界情况
+    // ================================================================
+
+    /// 测试 calculate_context_usage 基本功能
+    #[test]
+    fn test_calculate_context_usage_basic() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("帮我生成一份Word文档");
+        ctx.add_assistant_message("好的，我来帮你生成", None, None);
+        ctx.function_definitions_tokens = 500;
+
+        let usage = ctx.calculate_context_usage(0, "gpt-4o".to_string());
+        assert_eq!(usage.context_window, 128_000);
+        assert_eq!(usage.model_name, "gpt-4o");
+        assert!(usage.system_prompt_tokens > 0);
+        assert!(usage.conversation_tokens > 0);
+        assert_eq!(usage.function_definitions_tokens, 500);
+        assert!(usage.total_used_tokens > 0);
+        assert_eq!(usage.compression_status, "normal");
+        assert!(usage.total_message_count > 0);
+    }
+
+    /// 测试小上下文窗口 (8K Ollama)
+    #[test]
+    fn test_small_context_window_budget() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 8192);
+        ctx.function_definitions_tokens = 200;
+        let usage = ctx.calculate_context_usage(0, "llama3".to_string());
+        assert_eq!(usage.context_window, 8192);
+        assert_eq!(usage.function_definitions_tokens, 200);
+    }
+
+    /// 测试大上下文窗口 (1M)
+    #[test]
+    fn test_large_context_window_budget() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 1_000_000);
+        ctx.function_definitions_tokens = 1000;
+        let usage = ctx.calculate_context_usage(0, "gemini-1.5-pro".to_string());
+        assert_eq!(usage.context_window, 1_000_000);
+        // 使用率极低
+        let usage_pct = usage.total_used_tokens as f64 / usage.context_window as f64;
+        assert!(usage_pct < 0.01);
+    }
+
+    /// 测试空消息列表的上下文使用情况
+    #[test]
+    fn test_calculate_context_usage_empty_messages() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.function_definitions_tokens = 500;
+        let usage = ctx.calculate_context_usage(0, "gpt-4o".to_string());
+        assert!(usage.conversation_tokens == 0);
+        assert!(usage.system_prompt_tokens > 0);
+        assert_eq!(usage.compression_status, "normal");
+        assert_eq!(usage.total_message_count, 0);
+    }
+
+    /// 测试高使用率触发压缩标记
+    #[test]
+    fn test_calculate_context_usage_high_usage() {
+        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 8192);
+        ctx.function_definitions_tokens = 200;
+        // 添加大量消息以超过对话预算
+        for i in 0..100 {
+            ctx.add_user_message(&format!("这是第{}条用户消息，内容比较长以便超过预算限制", i));
+            ctx.add_assistant_message(&format!("这是第{}条助手回复，内容也比较长", i), None, None);
+        }
+        let usage = ctx.calculate_context_usage(0, "llama3".to_string());
+        // 对话历史应超过预算，标记为已压缩
+        assert!(usage.compression_status == "compressed" || usage.compression_status == "critical");
+        let usage_pct = usage.total_used_tokens as f64 / usage.context_window as f64;
+        assert!(usage_pct > 0.5);
+    }
+
+    /// 测试 should_inject_guides 在小上下文窗口中跳过规范层
+    #[test]
+    fn test_should_inject_guides_small_context() {
+        // 8K 上下文窗口，系统提示词预算只有 1228 tokens
+        let budget = TokenBudgetManager::new(8192);
+        // 基础系统提示词通常超过 1228 tokens，应跳过规范层
+        let long_prompt_tokens = 2000;
+        assert!(!budget.should_inject_guides(long_prompt_tokens));
+    }
+
+    /// 测试 should_inject_guides 在大上下文窗口中注入规范层
+    #[test]
+    fn test_should_inject_guides_large_context() {
+        // 1M 上下文窗口，系统提示词预算有 150000 tokens
+        let budget = TokenBudgetManager::new(1_000_000);
+        let normal_prompt_tokens = 5000;
+        assert!(budget.should_inject_guides(normal_prompt_tokens));
+    }
+
+    /// 测试 Token 预算分配比例
+    #[test]
+    fn test_token_budget_allocation() {
+        let budget = TokenBudgetManager::new(200_000);
+        let b = budget.budget();
+        // 系统提示词 15%
+        assert_eq!(b.system_prompt, 30_000);
+        // 工具定义 10%
+        assert_eq!(b.tool_definitions, 20_000);
+        // 对话历史 50%
+        assert_eq!(b.conversation, 100_000);
+        // LLM 响应 25%
+        assert_eq!(b.response, 50_000);
+    }
+
+    /// 测试 context_window 最小值保护
+    #[test]
+    fn test_context_window_minimum_protection() {
+        let budget = TokenBudgetManager::new(100); // 极小值
+        assert_eq!(budget.context_window(), 4096); // 应被保护为 4096
+    }
+
+    /// 测试 build_system_prompt_with_task 在小窗口中跳过规范层
+    #[test]
+    fn test_build_system_prompt_small_context_skips_guides() {
+        let budget = TokenBudgetManager::new(8192);
+        let prompt = AgentContext::build_system_prompt_with_task(
+            "/workspace",
+            &TaskType::GenerateDocx,
+            8,
+            6,
+            &budget,
+        );
+        // 小上下文窗口应跳过规范层和示例层
+        assert!(!prompt.contains("<guide"));
+        assert!(!prompt.contains("<examples>"));
+    }
+
+    /// 测试 build_system_prompt_with_task 在大窗口中注入规范层
+    #[test]
+    fn test_build_system_prompt_large_context_includes_guides() {
+        let budget = TokenBudgetManager::new(1_000_000);
+        let prompt = AgentContext::build_system_prompt_with_task(
+            "/workspace",
+            &TaskType::GenerateDocx,
+            8,
+            6,
+            &budget,
+        );
+        // 大上下文窗口应注入规范层和示例层
+        assert!(prompt.contains("<guide type=\"docx\">"));
+        assert!(prompt.contains("<examples>"));
     }
 }

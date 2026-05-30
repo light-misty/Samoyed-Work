@@ -35,6 +35,13 @@
   --color-purple-light: #f0edff;
   --color-indigo: #4f46e5;
 
+  /* 上下文窗口横条颜色 */
+  --color-context-system: #6366f1;
+  --color-context-functions: #f59e0b;
+  --color-context-history: #3b82f6;
+  --color-context-response: #10b981;
+  --color-context-idle: var(--color-border-light);
+
   /* 字体 - 使用系统字体栈，无需 CDN 依赖 */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-mono: "Cascadia Code", "SF Mono", "Fira Code", "JetBrains Mono", Consolas, monospace;
@@ -394,6 +401,13 @@
   --color-purple-light: #2a254a;
   --color-indigo: #6366f1;
 
+  /* 上下文窗口横条颜色（暗色模式使用更亮的变体） */
+  --color-context-system: #818cf8;
+  --color-context-functions: #fbbf24;
+  --color-context-history: #60a5fa;
+  --color-context-response: #34d399;
+  --color-context-idle: var(--color-border-light);
+
   /* 文件类型图标颜色（暗色模式使用更亮的变体以提高对比度） */
   --color-ext-docx: #5b9bd5;
   --color-ext-xlsx: #4caf7d;
@@ -435,6 +449,13 @@
     --color-purple: #8b7cf7;
     --color-purple-light: #2a254a;
     --color-indigo: #6366f1;
+
+    /* 上下文窗口横条颜色（暗色模式使用更亮的变体） */
+    --color-context-system: #818cf8;
+    --color-context-functions: #fbbf24;
+    --color-context-history: #60a5fa;
+    --color-context-response: #34d399;
+    --color-context-idle: var(--color-border-light);
 
     /* 文件类型图标颜色（暗色模式使用更亮的变体以提高对比度） */
     --color-ext-docx: #5b9bd5;
