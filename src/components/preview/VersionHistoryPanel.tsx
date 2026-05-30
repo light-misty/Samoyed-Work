@@ -198,9 +198,6 @@ export function VersionHistoryPanel({
         {/* 顶部栏 */}
         <div className="vh-header">
           <div className="vh-header-left">
-            <button className="vh-close-btn" onClick={onClose}>
-              <Icon name="close" size={16} />
-            </button>
             <div className="vh-title-group">
               <span className="vh-title">版本历史</span>
               <span className="vh-filename">{fileName}</span>
@@ -219,6 +216,9 @@ export function VersionHistoryPanel({
             )}
             <button className="vh-refresh-btn" onClick={loadVersions} disabled={isLoading}>
               <Icon name="refresh" size={14} />
+            </button>
+            <button className="vh-close-btn" onClick={onClose}>
+              <Icon name="close" size={16} />
             </button>
           </div>
         </div>

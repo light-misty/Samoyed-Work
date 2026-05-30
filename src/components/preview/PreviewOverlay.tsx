@@ -56,14 +56,8 @@ export function PreviewOverlay({
       >
         {/* 顶部栏 */}
         <div className="flex items-center px-5 py-3 border-b border-border gap-3 flex-shrink-0">
-          <button
-            className="w-[30px] h-[30px] flex items-center justify-center rounded-[var(--radius-sm)] transition-colors text-text-secondary hover:bg-bg-sub"
-            onClick={onClose}
-          >
-            <Icon name="close" size={18} />
-          </button>
           <span className="font-semibold text-[14px] flex-1 truncate">{title}</span>
-          <div className="flex gap-[6px]">
+          <div className="flex gap-[6px] items-center">
             {diffData && (
               <button
                 className="px-[10px] py-1 rounded-[var(--radius-sm)] text-[11px] font-medium bg-bg-sub text-text-secondary hover:bg-bg-hover transition-all"
@@ -72,6 +66,12 @@ export function PreviewOverlay({
                 {showDiff ? "文档预览" : "差异对比"}
               </button>
             )}
+            <button
+              className="w-[30px] h-[30px] flex items-center justify-center rounded-[var(--radius-sm)] transition-colors text-text-secondary hover:bg-bg-sub"
+              onClick={onClose}
+            >
+              <Icon name="close" size={18} />
+            </button>
           </div>
         </div>
 
