@@ -294,7 +294,7 @@ pub async fn get_context_usage(
     );
     let system_prompt_tokens = TokenBudgetManager::estimate_tokens(&system_prompt);
 
-    // 估算函数定义 Token 数（与 executor 中的计算方式一致）
+    // 估算工具定义 Token 数（与 executor 中的计算方式一致）
     let function_definitions_tokens = {
         let tool_defs = state.tool_registry.tool_definitions();
         let skill_defs = {

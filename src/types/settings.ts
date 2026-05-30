@@ -138,7 +138,7 @@ export interface ContextUsageInfo {
   contextWindow: number;
   /** 系统提示词估算 Token 数 */
   systemPromptTokens: number;
-  /** 函数定义估算 Token 数（包含 Tool + Skill 两部分） */
+  /** 工具定义估算 Token 数（包含 Tool + Skill 两部分） */
   functionDefinitionsTokens: number;
   /** 对话历史估算 Token 数 */
   conversationTokens: number;

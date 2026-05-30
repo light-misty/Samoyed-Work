@@ -331,7 +331,7 @@ impl<R: Runtime> AgentExecutor<R> {
             })
             .collect();
 
-        // 估算函数定义的 Token 数并设置到上下文中
+        // 估算工具定义的 Token 数并设置到上下文中
         let func_defs_str = tool_defs_json
             .iter()
             .map(|v| v.to_string())

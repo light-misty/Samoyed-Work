@@ -28,7 +28,7 @@ function getCompressionInfo(status: string): { label: string; color: string } {
 /** 各部分定义：标签、颜色变量名、对应字段 */
 const SECTIONS = [
   { key: "system", label: "系统提示词", colorVar: "--color-context-system" },
-  { key: "functions", label: "函数定义", colorVar: "--color-context-functions" },
+  { key: "functions", label: "工具定义", colorVar: "--color-context-functions" },
   { key: "history", label: "对话历史", colorVar: "--color-context-history" },
   { key: "response", label: "LLM 响应", colorVar: "--color-context-response" },
 ] as const;
@@ -66,24 +66,23 @@ export function ContextWindowSection() {
     const convPct = contextWindow > 0 ? (conversationTokens / contextWindow) * 100 : 0;
     const respPct = contextWindow > 0 ? (responseTokens / contextWindow) * 100 : 0;
 
-    // 各部分的 token 数和百分比（用于独立进度条）
-    const sectionData = [
-      { tokens: systemPromptTokens, pct: systemPct },
-      { tokens: functionDefinitionsTokens, pct: funcPct },
-      { tokens: conversationTokens, pct: convPct },
-      { tokens: responseTokens, pct: respPct },
-    ];
+    // 各部分的 token 数（用于总览横条 title）
+    const sectionTokens = [systemPromptTokens, functionDefinitionsTokens, conversationTokens, responseTokens];
 
     return (
       <SidebarSection title="上下文窗口">
         <div className="cw-grid" role="region" aria-label="上下文窗口使用信息">
-          {/* 总览分段横条：系统/函数/历史/响应 四色横条 */}
+          {/* 总览分段横条：系统/工具/历史/响应 四色横条 */}
           <div className="cw-bar-container">
             <div className="cw-bar-track">
-              <div className="cw-bar-segment" style={{ width: `${systemPct}%`, background: `var(${SECTIONS[0].colorVar})` }} title={`系统提示词: ${formatTokens(systemPromptTokens)} (${systemPct.toFixed(1)}%)`} />
-              <div className="cw-bar-segment" style={{ width: `${funcPct}%`, background: `var(${SECTIONS[1].colorVar})` }} title={`函数定义: ${formatTokens(functionDefinitionsTokens)} (${funcPct.toFixed(1)}%)`} />
-              <div className="cw-bar-segment" style={{ width: `${convPct}%`, background: `var(${SECTIONS[2].colorVar})` }} title={`对话历史: ${formatTokens(conversationTokens)} (${convPct.toFixed(1)}%)`} />
-              <div className="cw-bar-segment" style={{ width: `${respPct}%`, background: `var(${SECTIONS[3].colorVar})` }} title={`LLM 响应: ${formatTokens(responseTokens)} (${respPct.toFixed(1)}%)`} />
+              {SECTIONS.map((section, i) => (
+                <div
+                  key={section.key}
+                  className="cw-bar-segment"
+                  style={{ width: `${[systemPct, funcPct, convPct, respPct][i]}%`, background: `var(${section.colorVar})` }}
+                  title={`${section.label}: ${formatTokens(sectionTokens[i])} (${[systemPct, funcPct, convPct, respPct][i].toFixed(1)}%)`}
+                />
+              ))}
             </div>
             <div className="cw-bar-labels">
               <span className="cw-usage-label" style={{ color: compressionInfo.color }}>
@@ -93,30 +92,17 @@ export function ContextWindowSection() {
             </div>
           </div>
 
-          {/* 各部分独立进度条 */}
+          {/* 各部分：圆点 + 名称 + 使用量 */}
           <div className="cw-sections">
-            {SECTIONS.map((section, i) => {
-              const { tokens, pct } = sectionData[i];
-              const pctDisplay = Math.round(pct);
-              return (
-                <div className="cw-section-row" key={section.key}>
-                  <div className="cw-section-header">
-                    <span className="cw-section-label">
-                      <span className="cw-dot" style={{ background: `var(${section.colorVar})` }} />
-                      {section.label}
-                    </span>
-                    <span className="cw-section-value">{formatTokens(tokens)}</span>
-                  </div>
-                  <div className="cw-section-bar-track">
-                    <div
-                      className="cw-section-bar-fill"
-                      style={{ width: `${pct}%`, background: `var(${section.colorVar})` }}
-                    />
-                  </div>
-                  <span className="cw-section-pct">{pctDisplay}%</span>
-                </div>
-              );
-            })}
+            {SECTIONS.map((section, i) => (
+              <div className="cw-section-row" key={section.key}>
+                <span className="cw-section-label">
+                  <span className="cw-dot" style={{ background: `var(${section.colorVar})` }} />
+                  {section.label}
+                </span>
+                <span className="cw-section-value">{formatTokens(sectionTokens[i])}</span>
+              </div>
+            ))}
           </div>
 
           {/* 总计行 */}
@@ -181,19 +167,19 @@ function CWStyles() {
       .cw-grid {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 4px;
       }
 
       /* ===== 总览分段横条 ===== */
       .cw-bar-container {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
       }
       .cw-bar-track {
-        height: 8px;
+        height: 4px;
         background: var(--color-context-idle);
-        border-radius: 4px;
+        border-radius: 2px;
         overflow: hidden;
         display: flex;
       }
@@ -208,69 +194,42 @@ function CWStyles() {
         align-items: center;
       }
       .cw-usage-label {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 500;
       }
       .cw-usage-percent {
-        font-size: 11px;
+        font-size: 10px;
         color: var(--color-text-quaternary);
         font-variant-numeric: tabular-nums;
       }
 
-      /* ===== 各部分独立进度条 ===== */
+      /* ===== 各部分行：圆点 + 名称 + 使用量 ===== */
       .cw-sections {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 2px;
       }
       .cw-section-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        grid-template-rows: auto auto;
-        gap: 2px 8px;
-        align-items: center;
-      }
-      .cw-section-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        grid-column: 1 / -1;
       }
       .cw-section-label {
-        font-size: 11px;
+        font-size: 10px;
         color: var(--color-text-quaternary);
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 4px;
       }
       .cw-section-value {
-        font-size: 11px;
-        font-weight: 500;
-        color: var(--color-text-secondary);
-        font-variant-numeric: tabular-nums;
-      }
-      .cw-section-bar-track {
-        height: 4px;
-        background: var(--color-context-idle);
-        border-radius: 2px;
-        overflow: hidden;
-      }
-      .cw-section-bar-fill {
-        height: 100%;
-        border-radius: 2px;
-        transition: width 0.5s ease;
-        min-width: 0;
-      }
-      .cw-section-pct {
         font-size: 10px;
+        font-weight: 500;
         color: var(--color-text-quaternary);
         font-variant-numeric: tabular-nums;
-        text-align: right;
-        min-width: 28px;
       }
       .cw-dot {
-        width: 6px;
-        height: 6px;
+        width: 5px;
+        height: 5px;
         border-radius: 50%;
         flex-shrink: 0;
       }
@@ -280,19 +239,16 @@ function CWStyles() {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding-top: 4px;
-        border-top: 1px solid var(--color-border-light);
-        margin-top: 2px;
       }
       .cw-total-label {
-        font-size: 11px;
-        color: var(--color-text-primary);
-        font-weight: 600;
+        font-size: 10px;
+        color: var(--color-text-quaternary);
+        font-weight: 500;
       }
       .cw-total-value {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--color-text-primary);
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--color-text-quaternary);
         font-variant-numeric: tabular-nums;
       }
 
@@ -300,16 +256,16 @@ function CWStyles() {
       .cw-compressed-badge {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 4px 8px;
+        gap: 4px;
+        padding: 3px 6px;
         background: var(--color-warning-bg, rgba(250, 173, 20, 0.1));
         border-radius: var(--radius-sm);
-        font-size: 11px;
+        font-size: 10px;
         color: var(--color-warning, #faad14);
       }
       .cw-compressed-dot {
-        width: 6px;
-        height: 6px;
+        width: 5px;
+        height: 5px;
         border-radius: 50%;
         background: var(--color-warning, #faad14);
         flex-shrink: 0;

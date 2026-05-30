@@ -1,4 +1,4 @@
-﻿use crate::models::llm::{ChatMessage, LlmToolCall};
+use crate::models::llm::{ChatMessage, LlmToolCall};
 use super::prompts::document_design::get_design_guide_by_type;
 use super::prompts::task_type::TaskType;
 use super::prompts::token_budget::{TokenBudgetManager, HistoryCompressionConfig};
@@ -51,7 +51,7 @@ pub struct AgentContext {
     completed_steps: Vec<String>,
     /// 当前正在执行的步骤描述
     current_step: String,
-    /// 函数定义（Tool + Skill）的估算 Token 数，由 executor 在构建 tool definitions 后设置
+    /// 工具定义（Tool + Skill）的估算 Token 数，由 executor 在构建 tool definitions 后设置
     pub function_definitions_tokens: usize,
 }
 
