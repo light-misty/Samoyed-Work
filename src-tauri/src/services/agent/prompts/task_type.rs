@@ -139,18 +139,6 @@ impl TaskType {
         }
     }
 
-    /// 获取此任务类型对应的 Skill 名称
-    /// 用于检测 LLM 是否遗漏了必要的工具调用
-    pub fn expected_skill_name(&self) -> Option<&'static str> {
-        match self {
-            TaskType::Docx => Some("docx_skill"),
-            TaskType::Xlsx => Some("xlsx_skill"),
-            TaskType::Pptx => Some("pptx_skill"),
-            TaskType::Pdf => Some("pdf_skill"),
-            // Markdown 目前没有对应的 Skill，使用 write_text_file 工具处理
-            TaskType::Markdown | TaskType::FileSystem | TaskType::General | TaskType::Unknown => None,
-        }
-    }
 }
 
 /// 检查字符串是否包含任一关键词

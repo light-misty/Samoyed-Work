@@ -318,10 +318,6 @@ impl<R: Runtime> AgentExecutor<R> {
     pub async fn execute(&self, ctx: &mut AgentContext) -> Result<ExecutionResult, CommandError> {
         let start_time = std::time::Instant::now();
         let mut total_steps = 0u32;
-        // 跟踪已调用的 Skill，用于检测 LLM 是否遗漏了必要的工具调用
-        let mut called_skills: HashSet<String> = HashSet::new();
-        // 标记是否已注入过 Skill 提醒，避免无限循环
-        let mut skill_reminder_injected = false;
 
         log::info!("Agent 开始执行, session_id={}", ctx.session_id);
 
@@ -582,11 +578,6 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     log::info!("执行 Tool, session_id={}, tool={}, call_id={}", ctx.session_id, tool_call.name, tool_call.id);
 
-                    // 记录已调用的 Skill（名称以 _skill 结尾的是高级技能）
-                    if tool_call.name.ends_with("_skill") {
-                        called_skills.insert(tool_call.name.clone());
-                    }
-
                     self.emit_todo_progress(
                         &ctx.session_id,
                         total_steps,
@@ -823,38 +814,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 continue;
             }
 
-            // 情况3: 有实际内容，检查是否遗漏了必要的 Skill 调用
-            // 当任务类型是文档操作（非 General/FileSystem/Unknown）但 LLM 未调用任何 Skill 时，
-            // 注入提醒消息让 LLM 继续调用工具，防止 LLM 仅用文字声称已完成操作
-            let task_type = ctx.task_type();
-            if !skill_reminder_injected {
-                if let Some(expected_skill) = task_type.expected_skill_name() {
-                    if !called_skills.contains(expected_skill) {
-                        log::warn!(
-                            "LLM 未调用必要的 Skill 即声称完成, session_id={}, 任务类型={:?}, 期望 Skill={}, 已调用 Skills={:?}",
-                            ctx.session_id, task_type, expected_skill, called_skills
-                        );
-                        // 保存 LLM 当前回复，然后注入提醒消息
-                        ctx.add_assistant_message(
-                            &assistant_content,
-                            None,
-                            if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) }
-                        );
-                        // 注入用户提醒消息，明确告知 LLM 必须调用工具
-                        let reminder = format!(
-                            "你声称已完成操作，但实际上并未调用 {} 工具。文档操作必须通过调用对应的 Skill 工具来完成，仅用文字描述操作结果是不够的，文档并不会被实际创建。请立即调用 {} 工具来执行操作。",
-                            expected_skill, expected_skill
-                        );
-                        ctx.add_user_message(&reminder);
-                        skill_reminder_injected = true;
-                        self.persist_new_messages(ctx);
-                        ctx.mark_persisted();
-                        continue;
-                    }
-                }
-            }
-
-            // 情况4: 有实际内容，正常完成
+            // 情况3: 有实际内容，正常完成
             ctx.add_assistant_message(&assistant_content, None, if reasoning_content.is_empty() { None } else { Some(reasoning_content.clone()) });
 
             // 最终回复后增量持久化
