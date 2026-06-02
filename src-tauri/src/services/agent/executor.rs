@@ -6,6 +6,7 @@ use futures::FutureExt;
 use serde_json::json;
 use tauri::Runtime;
 
+use crate::config::app_settings::ConfirmationLevel;
 use crate::errors::CommandError;
 use crate::events::emitter::AgentEmitter;
 use crate::events::types::*;
@@ -70,6 +71,8 @@ pub struct AgentExecutor<R: Runtime> {
     context_usage_persist_fn: Option<ContextUsagePersistFn>,
     /// 版本快照回调，在文件修改/删除前调用，自动创建快照
     snapshot_fn: Option<SnapshotFn>,
+    /// 操作确认级别，决定哪些操作需要用户手动确认
+    confirmation_level: ConfirmationLevel,
 }
 
 impl<R: Runtime> AgentExecutor<R> {
@@ -91,6 +94,7 @@ impl<R: Runtime> AgentExecutor<R> {
             persist_fn: None,
             context_usage_persist_fn: None,
             snapshot_fn: None,
+            confirmation_level: ConfirmationLevel::default(),
         }
     }
 
@@ -127,6 +131,12 @@ impl<R: Runtime> AgentExecutor<R> {
         self
     }
 
+    /// 设置操作确认级别
+    pub fn with_confirmation_level(mut self, level: ConfirmationLevel) -> Self {
+        self.confirmation_level = level;
+        self
+    }
+
     /// 检查是否应该停止
     fn check_stopped(&self, session_id: &str) -> bool {
         (self.should_stop)(session_id)
@@ -158,20 +168,30 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
-    /// 检查是否为高风险操作
-    /// 1. delete_file 始终为高风险（critical）
-    /// 2. 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）在 action 为 "modify" 时为高风险
-    fn is_high_risk_skill(name: &str, params: &serde_json::Value) -> bool {
-        if HIGH_RISK_SKILLS.contains(&name) {
-            return true;
+    /// 检查是否为高风险操作（需要用户确认）
+    /// 根据确认级别决定哪些操作需要用户确认：
+    /// - Never: 任何操作都不需要确认
+    /// - EditOnly: 仅删除操作和文档修改操作需要确认
+    /// - Always: 所有 Skill/Tool 调用都需要确认
+    fn needs_confirmation(&self, name: &str, params: &serde_json::Value) -> bool {
+        match self.confirmation_level {
+            ConfirmationLevel::Never => false,
+            ConfirmationLevel::EditOnly => {
+                // 仅编辑/删除操作需要确认
+                // 1. delete_file 始终为高风险
+                // 2. 文档 Skill 的 modify 操作需要确认
+                if HIGH_RISK_SKILLS.contains(&name) {
+                    return true;
+                }
+                if matches!(name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
+                    && params["action"].as_str() == Some("modify")
+                {
+                    return true;
+                }
+                false
+            }
+            ConfirmationLevel::Always => true,
         }
-        // 文档 Skill 的 modify 操作需要用户确认
-        if matches!(name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
-            && params["action"].as_str() == Some("modify")
-        {
-            return true;
-        }
-        false
     }
 
     /// 从 Skill 参数中提取需要创建快照的文件路径列表
@@ -214,10 +234,26 @@ impl<R: Runtime> AgentExecutor<R> {
     ) -> Result<bool, CommandError> {
         let operation_id = format!("confirm_{}", uuid::Uuid::new_v4());
 
-        let risk_level = if tool_name == "delete_file" {
-            "critical"
-        } else {
-            "high"
+        let risk_level = match self.confirmation_level {
+            ConfirmationLevel::Always => {
+                // 全部需确认模式下，根据操作类型区分风险等级
+                if tool_name == "delete_file" {
+                    "critical"
+                } else if matches!(tool_name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
+                    && arguments["action"].as_str() == Some("modify")
+                {
+                    "high"
+                } else {
+                    "normal"
+                }
+            }
+            _ => {
+                if tool_name == "delete_file" {
+                    "critical"
+                } else {
+                    "high"
+                }
+            }
         };
 
         let description = match tool_name {
@@ -227,7 +263,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
                 format!("{} 文档 - {}: {}", tool_name, action, path)
             }
-            _ => format!("执行高风险操作: {}", tool_name),
+            _ => format!("执行操作: {}", tool_name),
         };
 
         // 先创建 channel 并插入 map，再发射事件，避免竞态条件
@@ -713,7 +749,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 记录当前执行的步骤
                     ctx.set_current_step(format!("执行 {}", tool_call.name));
 
-                    if Self::is_high_risk_skill(&tool_call.name, &params) {
+                    if self.needs_confirmation(&tool_call.name, &params) {
                         // 高风险技能：始终发射 tool_call 事件
                         // 若流式阶段已提前发射，此处携带完整参数重新发射，前端通过 callId 去重更新
                         self.emitter.emit_tool_call(ToolCallPayload {

@@ -723,6 +723,15 @@ async fn run_agent(
         })
     };
 
+    // 从配置中读取操作确认级别
+    let confirmation_level = {
+        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+        cfg.load_app_settings()
+            .map(|s| s.general.confirmation_level.clone())
+            .unwrap_or_default()
+    };
+    log::info!("操作确认级别: {:?}", confirmation_level);
+
     // 从当前活跃 Provider 解析上下文窗口大小
     let context_window = {
         let cfg = tokio::task::block_in_place(|| config.blocking_lock());
@@ -964,7 +973,8 @@ async fn run_agent(
     .with_max_iterations(max_iterations)
     .with_persist_fn(persist_fn)
     .with_context_usage_persist_fn(context_usage_persist_fn)
-    .with_snapshot_fn(snapshot_fn);
+    .with_snapshot_fn(snapshot_fn)
+    .with_confirmation_level(confirmation_level);
 
     match executor.execute(&mut ctx).await {
         Ok(result) => {

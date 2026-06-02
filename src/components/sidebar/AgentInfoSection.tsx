@@ -3,11 +3,11 @@ import { SidebarSection } from "../layout/Sidebar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { Icon } from "../common/Icon";
 
-const confirmationLevelLabels: Record<string, string> = {
-  always: "全部需确认",
-  editOnly: "仅编辑操作确认",
-  never: "全部自动确认",
-};
+const confirmationLevelOptions: { value: string; label: string }[] = [
+  { value: "always", label: "全部需确认" },
+  { value: "editOnly", label: "仅编辑确认" },
+  { value: "never", label: "全部自动确认" },
+];
 
 export function AgentInfoSection() {
   const { settings, llmProviders, activeProviderId, updateSettings, openSettings } = useSettingsStore();
@@ -65,7 +65,6 @@ export function AgentInfoSection() {
               onClick={() => { setEditValue(settings.general.authorName); setEditing(true); }}
             >
               <span>{settings.general.authorName || "未设置"}</span>
-              <Icon name="code" size={12} />
             </button>
           )}
         </div>
@@ -73,9 +72,16 @@ export function AgentInfoSection() {
         {/* 确认级别 */}
         <div className="ai-field">
           <span className="ai-field-label">确认级别</span>
-          <span className="ai-field-value">
-            {confirmationLevelLabels[settings.general.confirmationLevel] ?? settings.general.confirmationLevel}
-          </span>
+          <select
+            className="ai-field-select"
+            aria-label="确认级别"
+            value={settings.general.confirmationLevel}
+            onChange={(e) => updateSettings({ general: { confirmationLevel: e.target.value as "always" | "editOnly" | "never" } })}
+          >
+            {confirmationLevelOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -151,14 +157,6 @@ export function AgentInfoSection() {
           background: var(--color-bg);
           color: var(--color-accent);
         }
-        .ai-field-value-btn:hover svg {
-          opacity: 1;
-        }
-        .ai-field-value-btn svg {
-          opacity: 0;
-          transition: opacity 0.2s;
-          color: var(--color-text-quaternary);
-        }
         .ai-field-edit {
           font-size: 12px;
           font-weight: 500;
@@ -174,6 +172,33 @@ export function AgentInfoSection() {
         }
         .ai-field-edit:focus-visible {
           outline: none;
+        }
+        .ai-field-select {
+          font-size: 12px;
+          font-weight: 500;
+          padding: 2px 8px;
+          border: 1px solid transparent;
+          border-radius: var(--radius-sm);
+          background: none;
+          color: var(--color-text-primary);
+          cursor: pointer;
+          transition: all 0.15s;
+          outline: none;
+          -webkit-appearance: none;
+          appearance: none;
+        }
+        .ai-field-select:hover {
+          border-color: var(--color-border);
+          background: var(--color-bg);
+          color: var(--color-accent);
+        }
+        .ai-field-select option {
+          color: var(--color-text-primary);
+          background: var(--color-bg);
+        }
+        .ai-field-select:focus {
+          border-color: var(--color-accent);
+          box-shadow: 0 0 0 2px var(--color-accent-lighter);
         }
         .ai-setup-hint {
           display: flex;
