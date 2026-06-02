@@ -10,7 +10,7 @@ export type IconName =
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "undo"
-  | "theme" | "keyboard" | "info" | "image";
+  | "theme" | "moon" | "keyboard" | "info" | "image";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -337,6 +337,12 @@ const paths: Record<IconName, React.JSX.Element> = {
     <g key="undo">
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </g>
+  ),
+  // 月亮/夜间模式
+  moon: (
+    <g key="moon">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
     </g>
   ),
   // 主题/外观
