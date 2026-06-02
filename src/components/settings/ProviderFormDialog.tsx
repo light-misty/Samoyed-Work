@@ -2,6 +2,57 @@ import { useState, useEffect } from "react";
 import type { ProviderInfo, LLMProviderType, ConnectionResult } from "../../types";
 import * as tauriCmd from "../../services/tauri";
 
+/** 将人类可读格式(如 "128K", "1M")解析为数字 */
+function parseContextWindow(value: string): number | undefined {
+  const trimmed = value.trim().toUpperCase();
+  if (!trimmed) return undefined;
+  // 支持纯数字
+  if (/^\d+$/.test(trimmed)) {
+    const num = parseInt(trimmed, 10);
+    return num > 0 ? num : undefined;
+  }
+  // 支持 K 后缀 (千)
+  const kMatch = trimmed.match(/^(\d+(?:\.\d+)?)K$/);
+  if (kMatch) {
+    const num = parseFloat(kMatch[1]) * 1000;
+    return num > 0 ? Math.round(num) : undefined;
+  }
+  // 支持 M 后缀 (百万)
+  const mMatch = trimmed.match(/^(\d+(?:\.\d+)?)M$/);
+  if (mMatch) {
+    const num = parseFloat(mMatch[1]) * 1_000_000;
+    return num > 0 ? Math.round(num) : undefined;
+  }
+  return undefined;
+}
+
+/** 将数字格式化为人类可读字符串 */
+function formatContextWindow(value: number | undefined): string {
+  if (value === undefined || value === 0) return "";
+  if (value >= 1_000_000 && value % 1_000_000 === 0) {
+    return `${value / 1_000_000}M`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (value >= 1000 && value % 1000 === 0) {
+    return `${value / 1000}K`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(/\.0$/, "")}K`;
+  }
+  return String(value);
+}
+
+/** 常用上下文窗口大小预设 */
+const CONTEXT_PRESETS = [
+  { label: "8K", value: 8192 },
+  { label: "32K", value: 32768 },
+  { label: "128K", value: 128000 },
+  { label: "200K", value: 200000 },
+  { label: "1M", value: 1000000 },
+];
+
 interface ProviderFormDialogProps {
   mode: "add" | "edit";
   provider?: ProviderInfo | null;
@@ -24,7 +75,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(provider?.model ?? "");
   const [contextWindow, setContextWindow] = useState<string>(
-    provider?.contextWindow ? String(provider.contextWindow) : ""
+    formatContextWindow(provider?.contextWindow)
   );
   const [supportsVision, setSupportsVision] = useState<boolean>(
     provider?.supportsVision ?? true
@@ -42,7 +93,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   }, [providerType, mode]);
 
   const handleSave = async () => {
-    if (!name.trim()) { setError("请输入 Provider 名称"); return; }
+    if (!name.trim()) { setError("请输入服务商名称"); return; }
     if (!apiBase.trim()) { setError("请输入 API Base URL"); return; }
     if (!model.trim()) { setError("请输入模型名称"); return; }
     if (mode === "add" && !apiKey.trim()) { setError("请输入 API Key"); return; }
@@ -56,7 +107,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         apiBase: apiBase.trim(),
         apiKey: apiKey.trim(),
         model: model.trim(),
-        contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
+        contextWindow: parseContextWindow(contextWindow),
         supportsVision: supportsVision,
       };
       if (mode === "add") {
@@ -101,7 +152,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         apiBase: apiBase.trim(),
         apiKey: apiKey.trim(),
         model: model.trim(),
-        contextWindow: contextWindow.trim() ? Number(contextWindow) || undefined : undefined,
+        contextWindow: parseContextWindow(contextWindow),
         supportsVision: supportsVision,
       };
       const providerId = mode === "edit" ? provider?.id : undefined;
@@ -126,14 +177,14 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
       >
         <div className="dialog-header">
           <h3 className="dialog-title">
-            {mode === "add" ? "添加 LLM Provider" : "编辑 LLM Provider"}
+            {mode === "add" ? "添加服务商" : "编辑服务商"}
           </h3>
           <button className="dialog-close-btn" onClick={onClose}>x</button>
         </div>
 
         <div className="dialog-body">
           <div className="form-group">
-            <label className="form-label">Provider 名称</label>
+            <label className="form-label">服务商名称</label>
             <input
               className="form-input"
               placeholder="例如：我的 GPT-4o"
@@ -143,7 +194,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
           </div>
 
           <div className="form-group">
-            <label className="form-label">Provider 类型</label>
+            <label className="form-label">服务商类型</label>
             <select
               className="form-select"
               value={providerType}
@@ -190,17 +241,28 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
 
           <div className="form-group">
             <label className="form-label">
-              上下文窗口大小 (tokens)
-              <span className="form-label-hint">留空则自动推断</span>
+              上下文窗口大小
+              <span className="form-label-hint">支持 K/M 后缀，如 128K、1M；留空则自动推断</span>
             </label>
             <input
               className="form-input form-input-mono"
-              type="number"
-              placeholder="例如：128000、200000、1000000"
+              type="text"
+              placeholder="例如：128K、200K、1M"
               value={contextWindow}
               onChange={(e) => setContextWindow(e.target.value)}
-              min="4096"
             />
+            <div className="context-presets">
+              {CONTEXT_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  className={`context-preset-btn ${contextWindow === preset.label ? "active" : ""}`}
+                  onClick={() => setContextWindow(preset.label)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="form-group">
@@ -419,6 +481,33 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
         }
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+        .context-presets {
+          display: flex;
+          gap: 6px;
+          margin-top: 2px;
+        }
+        .context-preset-btn {
+          padding: 3px 10px;
+          border-radius: var(--radius-xs);
+          font-size: 11px;
+          font-weight: 500;
+          font-family: var(--font-mono);
+          background: var(--color-bg-sub);
+          color: var(--color-text-tertiary);
+          border: 1px solid var(--color-border-light);
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .context-preset-btn:hover {
+          background: var(--color-bg-hover);
+          color: var(--color-text-primary);
+          border-color: var(--color-border-strong);
+        }
+        .context-preset-btn.active {
+          background: var(--color-accent-light);
+          color: var(--color-accent);
+          border-color: var(--color-accent);
         }
       `}</style>
     </div>

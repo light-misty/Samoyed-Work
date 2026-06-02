@@ -11,7 +11,7 @@ import { GeneralTab } from "./GeneralTab";
 import { HelpTab } from "./HelpTab";
 
 const tabs = [
-  { id: "llm" as const, label: "LLM 配置", icon: "settings" },
+  { id: "llm" as const, label: "模型配置", icon: "settings" },
   { id: "workspace" as const, label: "工作区管理", icon: "folder" },
   { id: "skill" as const, label: "Tools 和 Skills管理", icon: "tool" },
   { id: "template" as const, label: "Prompt 模板", icon: "template" },

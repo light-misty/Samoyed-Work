@@ -13,8 +13,8 @@ const shortcutList = [
 // 常见问题
 const faqList = [
   {
-    q: "如何配置 LLM Provider?",
-    a: "在设置 > LLM 配置中，点击\"添加 Provider\"按钮，选择 Provider 类型（OpenAI/Anthropic/Gemini/Ollama/自定义），填写 API 地址、API Key 和模型名称即可。",
+    q: "如何配置 LLM 服务商?",
+    a: "在设置 > 模型配置中，点击\"添加服务商\"按钮，选择服务商类型（OpenAI/Anthropic/Gemini/Ollama/自定义），填写 API 地址、API Key 和模型名称即可。",
   },
   {
     q: "支持哪些文档格式?",
@@ -63,7 +63,7 @@ export function HelpTab() {
           <div className="help-step">
             <span className="help-step-num">1</span>
             <div className="help-step-content">
-              <div className="help-step-title">配置 LLM Provider</div>
+              <div className="help-step-title">配置 LLM 服务商</div>
               <div className="help-step-desc">在设置中添加 OpenAI/Anthropic/Gemini 等 API 配置</div>
             </div>
           </div>

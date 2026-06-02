@@ -55,7 +55,7 @@ export function LLMConfigTab() {
       await tauriCmd.setDefaultProvider(providerId);
       await loadProviders();
     } catch (err) {
-      console.error("[LLMConfigTab] 设置默认 Provider 失败:", err);
+      console.error("[LLMConfigTab] 设置默认服务商失败:", err);
     }
   };
 
@@ -69,17 +69,17 @@ export function LLMConfigTab() {
     <div>
       <div className="mb-8">
         <div className="section-header">
-          <span className="section-title">已配置的 Provider</span>
+          <span className="section-title">已配置的服务商</span>
           <span className="section-badge">{llmProviders.length}</span>
           <button className="add-btn" onClick={handleAdd}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-            添加 Provider
+            添加服务商
           </button>
         </div>
 
         {llmProviders.length === 0 && (
           <div className="empty-state-lg">
-            <span>暂无 Provider，请点击右侧按钮添加</span>
+            <span>暂无服务商，请点击右侧按钮添加</span>
           </div>
         )}
 
@@ -133,7 +133,7 @@ export function LLMConfigTab() {
 
             {deletingId === p.id && (
               <div className="confirm-bar">
-                <div className="confirm-bar-text">确定要删除此 Provider 吗？</div>
+                <div className="confirm-bar-text">确定要删除此服务商吗？</div>
                 {deleteError && (
                   <div className="error-text">{deleteError}</div>
                 )}
@@ -154,7 +154,7 @@ export function LLMConfigTab() {
         </div>
         <div className="fallback-list">
           {llmProviders.length === 0 && (
-            <div className="empty-state-lg">添加 Provider 后可配置 Fallback 顺序</div>
+            <div className="empty-state-lg">添加服务商后可配置 Fallback 顺序</div>
           )}
           {llmProviders.map((p, i) => (
             <div key={p.id} className="fallback-item">
