@@ -1,4 +1,4 @@
-﻿use std::time::Duration;
+use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
@@ -155,6 +155,17 @@ impl OpenAiAdapter {
         body["temperature"] = json!(self.advanced.temperature);
         body["max_tokens"] = json!(self.advanced.max_tokens);
         body["top_p"] = json!(self.advanced.top_p);
+
+        // 启用工具调用流式输出（tool_stream）
+        // 智谱 GLM-5/GLM-4.7/GLM-4.6 系列模型默认 tool_stream=false，
+        // 即流式响应中 tool_calls 不以增量方式返回，而是在参数完全生成后一次性返回，
+        // 导致前端在 content 输出完毕后需等待很久才显示工具加载动画。
+        // 设置 tool_stream=true 后，tool_calls 以增量 delta 方式流式输出，
+        // 前端可立即检测到工具名称并显示加载状态。
+        // 其他 OpenAI 兼容 API 会忽略未知参数，不影响兼容性。
+        if stream && !tools.is_empty() {
+            body["tool_stream"] = json!(true);
+        }
 
         body
     }
