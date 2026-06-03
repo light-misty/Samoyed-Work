@@ -112,15 +112,18 @@ pub fn run() {
                 Default::default()
             });
 
-            // 注入内置 Provider（从项目根目录的 builtin_provider.json 加载）
-            let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("."));
-            crate::config::llm_config::inject_builtin_provider(&mut llm_config, project_root);
+            // 注入内置 Provider（仅在编译时检测到 builtin_provider.json 时启用）
+            #[cfg(builtin_provider)]
+            {
+                let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .unwrap_or_else(|| std::path::Path::new("."));
+                crate::config::llm_config::inject_builtin_provider(&mut llm_config, project_root);
 
-            // 保存更新后的配置（内置 Provider 注入后需持久化）
-            if let Err(e) = config_manager.save_llm_config(&llm_config) {
-                log::error!("保存 LLM 配置失败: {}", e);
+                // 保存更新后的配置（内置 Provider 注入后需持久化）
+                if let Err(e) = config_manager.save_llm_config(&llm_config) {
+                    log::error!("保存 LLM 配置失败: {}", e);
+                }
             }
 
             let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config)

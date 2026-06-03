@@ -6,12 +6,15 @@ use serde::{Deserialize, Serialize};
 use crate::errors::{CommandError, CONFIG_PROVIDER_NOT_FOUND, CONFIG_DEFAULT_PROVIDER_REQUIRED};
 
 /// 内置 Provider 的固定 ID
+#[cfg(builtin_provider)]
 pub const BUILTIN_PROVIDER_ID: &str = "builtin_deepseek";
 
 /// 内置 Provider 配置文件名
+#[cfg(builtin_provider)]
 const BUILTIN_PROVIDER_FILENAME: &str = "builtin_provider.json";
 
 /// 内置 Provider 配置（从 JSON 文件加载）
+#[cfg(builtin_provider)]
 #[derive(Deserialize)]
 struct BuiltinProviderConfig {
     name: String,
@@ -26,6 +29,7 @@ struct BuiltinProviderConfig {
 }
 
 /// 内置配置的 supports_vision 默认值
+#[cfg(builtin_provider)]
 fn default_supports_vision_builtin() -> bool {
     false
 }
@@ -300,6 +304,8 @@ pub fn set_default_provider(config: &mut LlmConfig, id: &str) -> Result<(), Comm
 /// 从配置文件加载内置 Provider 并注入到 LLM 配置中
 /// 仅当内置 Provider 不存在时才注入，已存在时不覆盖（保留用户修改）
 /// project_root: 项目根目录，builtin_provider.json 所在位置
+/// 仅在编译时检测到 builtin_provider.json 时编译此函数
+#[cfg(builtin_provider)]
 pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
     let builtin_path = project_root.join(BUILTIN_PROVIDER_FILENAME);
 
