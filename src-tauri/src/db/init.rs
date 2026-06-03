@@ -39,6 +39,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             tool_name         TEXT        DEFAULT NULL,
             tool_args         TEXT        DEFAULT NULL,
             tool_result       TEXT        DEFAULT NULL,
+            tool_call_id      TEXT        DEFAULT NULL,
             thinking_content  TEXT        DEFAULT NULL,
             reasoning_content TEXT        DEFAULT NULL,
             attachments       TEXT        DEFAULT NULL,

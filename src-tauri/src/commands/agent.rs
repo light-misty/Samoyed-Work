@@ -613,6 +613,8 @@ pub async fn confirm_operation(
 
 /// 将消息列表持久化到数据库
 /// 支持多 tool_calls：将所有 tool_calls 序列化为 JSON 数组存储
+/// assistant 消息的 tool_call_id 字段存储所有 tool_call 的 id 列表（JSON 数组）
+/// tool 消息的 tool_call_id 字段存储对应的单个 tool_call_id
 fn persist_messages_to_db(
     db: &Arc<crate::db::Database>,
     session_id: &str,
@@ -623,33 +625,41 @@ fn persist_messages_to_db(
         let msg_id = format!("msg_{}", uuid::Uuid::new_v4());
 
         // 对于包含 tool_calls 的消息，将所有 tool_calls 序列化为 JSON 存储
-        // 修复原来只持久化第一个 tool_call 的问题
-        let (tool_name, tool_args, tool_result) = if let Some(tool_calls) = &msg.tool_calls {
+        let (tool_name, tool_args, tool_result, tool_call_id) = if let Some(tool_calls) = &msg.tool_calls {
             if tool_calls.is_empty() {
-                (None, None, None as Option<String>)
+                (None, None, None as Option<String>, None as Option<String>)
             } else if tool_calls.len() == 1 {
-                // 单个 tool_call：保持原有格式
+                // 单个 tool_call：保持原有格式，同时保存 tool_call id
                 let tc = &tool_calls[0];
-                (Some(tc.name.clone()), Some(tc.arguments.clone()), None)
+                (
+                    Some(tc.name.clone()),
+                    Some(tc.arguments.clone()),
+                    None,
+                    Some(tc.id.clone()),
+                )
             } else {
                 // 多个 tool_calls：将所有调用信息序列化为 JSON 数组
+                let ids: Vec<&str> = tool_calls.iter().map(|tc| tc.id.as_str()).collect();
                 let names: Vec<&str> = tool_calls.iter().map(|tc| tc.name.as_str()).collect();
                 let args: Vec<&str> = tool_calls.iter().map(|tc| tc.arguments.as_str()).collect();
                 (
                     Some(serde_json::to_string(&names).unwrap_or_default()),
                     Some(serde_json::to_string(&args).unwrap_or_default()),
                     None,
+                    Some(serde_json::to_string(&ids).unwrap_or_default()),
                 )
             }
         } else if msg.role == "tool" {
-            (None, None, Some(msg.content.clone()))
+            // tool 消息：保存 tool_call_id 以确保历史消息加载时能正确匹配
+            (None, None, Some(msg.content.clone()), msg.tool_call_id.clone())
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         let tool_name_ref = tool_name.as_deref();
         let tool_args_ref = tool_args.as_deref();
         let tool_result_ref = tool_result.as_deref();
+        let tool_call_id_ref = tool_call_id.as_deref();
 
         crate::db::message_repo::create_message(
             &conn,
@@ -660,6 +670,7 @@ fn persist_messages_to_db(
             tool_name_ref,
             tool_args_ref,
             tool_result_ref,
+            tool_call_id_ref,
             None,
             msg.reasoning_content.as_deref(),
             msg.attachments.as_deref(),
