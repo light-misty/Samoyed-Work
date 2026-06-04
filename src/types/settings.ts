@@ -7,7 +7,6 @@ export type SettingsTab = "llm" | "workspace" | "skill" | "template" | "appearan
 export type ConfirmationLevel = "always" | "editOnly" | "never";
 export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
-export type UpdateChannel = "stable" | "beta";
 
 export interface GeneralSettings {
   authorName: string;
@@ -42,7 +41,6 @@ export interface Shortcuts {
 }
 
 export interface UpdateSettings {
-  channel: UpdateChannel;
   autoCheck: boolean;
 }
 

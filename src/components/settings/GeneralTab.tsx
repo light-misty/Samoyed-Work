@@ -225,21 +225,6 @@ export function GeneralTab() {
 
         <div className="setting-row">
           <div className="setting-info">
-            <div className="setting-label">更新通道</div>
-            <div className="setting-desc">稳定版经过充分测试，测试版包含最新功能</div>
-          </div>
-          <select
-            className="setting-select"
-            value={settings.update.channel}
-            onChange={(e) => updateSettings({ update: { channel: e.target.value as "stable" | "beta" } })}
-          >
-            <option value="stable">稳定版</option>
-            <option value="beta">测试版</option>
-          </select>
-        </div>
-
-        <div className="setting-row">
-          <div className="setting-info">
             <div className="setting-label">自动检查更新</div>
             <div className="setting-desc">应用启动时自动检查是否有新版本</div>
           </div>

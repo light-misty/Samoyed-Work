@@ -52,8 +52,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY4NDcwMDEwMjgzODc5ODkKUldTSmVUZ29FQUJIK0tWeE1nTWJLTHdmc295T3ExcXRTWmdsVy8wWDJkT2VnQzNycG9BRy90WVoK",
       "endpoints": [
-        "https://releases.docagent.app/{{target}}/{{arch}}/{{current_version}}",
-        "https://github.com/docagent/docagent/releases/latest/download/latest.json"
+        "https://github.com/XuMingKe-06/DocAgent/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

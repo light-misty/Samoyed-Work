@@ -167,22 +167,10 @@ impl Default for Shortcuts {
     }
 }
 
-/// 更新通道
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum UpdateChannel {
-    #[default]
-    Stable,
-    Beta,
-}
-
 /// 更新设置
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSettings {
-    /// 更新通道：stable / beta
-    #[serde(default)]
-    pub channel: UpdateChannel,
     /// 是否自动检查更新
     #[serde(default = "default_auto_check")]
     pub auto_check: bool,
@@ -195,7 +183,6 @@ fn default_auto_check() -> bool {
 impl Default for UpdateSettings {
     fn default() -> Self {
         Self {
-            channel: UpdateChannel::default(),
             auto_check: default_auto_check(),
         }
     }
@@ -336,7 +323,6 @@ pub fn merge_with_defaults(
         },
         disabled_skills: user_settings.disabled_skills.clone(),
         update: UpdateSettings {
-            channel: user_settings.update.channel.clone(),
             auto_check: user_settings.update.auto_check,
         },
     }

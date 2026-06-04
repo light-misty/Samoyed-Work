@@ -29,6 +29,6 @@ async-trait = "0.1"
 futures = "0.3"
 eventsource-stream = "0.2"
 log = { version = "0.4", features = ["std"] }
-notify = { version = "7", features = ["macos_fsevent"] }
+notify = "7"
 base64 = "0.22"
 dunce = "1"

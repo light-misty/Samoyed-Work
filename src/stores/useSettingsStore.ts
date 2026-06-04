@@ -8,7 +8,6 @@ import type {
   CreateTemplateParams,
   UpdateTemplateParams,
   SettingsTab,
-  UpdateChannel,
 } from "../types";
 import type { ProviderSwitchPayload } from "../services/event";
 import { onLlmProviderSwitch } from "../services/event";
@@ -73,7 +72,6 @@ const defaultSettings: AppSettings = {
   },
   disabledSkills: [],
   update: {
-    channel: "stable" as UpdateChannel,
     autoCheck: true,
   },
 };
