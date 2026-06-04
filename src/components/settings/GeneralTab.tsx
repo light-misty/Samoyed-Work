@@ -266,7 +266,9 @@ export function GeneralTab() {
               } catch (err) {
                 console.error("[GeneralTab] 检查更新失败:", err);
                 setUpdateCheckResult("error");
-                addToast("error", "检查更新失败");
+                // 提取具体错误信息，帮助用户排查问题
+                const errMsg = err instanceof Error ? err.message : String(err);
+                addToast("error", `检查更新失败: ${errMsg}`);
               } finally {
                 setCheckingUpdate(false);
               }
