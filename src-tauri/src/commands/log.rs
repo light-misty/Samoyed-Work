@@ -1,16 +1,21 @@
 use crate::errors::{CommandError, FS_IO_ERROR, FS_PATH_NOT_FOUND};
+use tauri::Manager;
 
 /// 获取错误日志文件内容
-/// 读取项目根目录下 log/docagent.log 文件并返回其内容
+/// 读取 Tauri 推荐日志目录下的 docagent.log 文件并返回其内容
 #[tauri::command]
-pub async fn get_error_log() -> Result<String, CommandError> {
+pub async fn get_error_log(app_handle: tauri::AppHandle) -> Result<String, CommandError> {
     log::info!("获取错误日志");
 
-    // 日志文件路径：项目根目录/log/docagent.log
-    let log_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|p| p.join("log").join("docagent.log"))
-        .unwrap_or_else(|| std::path::PathBuf::from("log/docagent.log"));
+    // 日志文件路径：使用 Tauri 推荐的日志目录
+    // 与 lib.rs 中日志初始化使用相同的目录
+    let log_dir = app_handle
+        .path()
+        .app_log_dir()
+        .unwrap_or_else(|_| {
+            app_handle.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("log")).join("log")
+        });
+    let log_path = log_dir.join("docagent.log");
 
     if !log_path.exists() {
         log::warn!("日志文件不存在: {:?}", log_path);
