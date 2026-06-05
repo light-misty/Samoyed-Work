@@ -172,11 +172,6 @@ export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
       {/* 发现新版本 */}
       {state === "available" && updateInfo && (
         <div className="update-body">
-          <div className="update-icon update-icon-available">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M10 2L12.5 7.5L18 8.5L14 12.5L15 18L10 15.5L5 18L6 12.5L2 8.5L7.5 7.5L10 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-            </svg>
-          </div>
           <div className="update-title">{t("update.newVersionFound", { version: updateInfo.version })}</div>
           <div className="update-version-info">
             {t("update.currentVersionLabel", { version: updateInfo.currentVersion })}
@@ -200,12 +195,6 @@ export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
       {/* 下载中 */}
       {state === "downloading" && (
         <div className="update-body">
-          <div className="update-icon update-icon-loading">
-            <svg className="update-spin" width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" opacity="0.25" />
-              <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-          </div>
           <div className="update-title">{t("update.downloadingUpdate")}</div>
           <div className="update-progress-bar">
             <div
@@ -330,10 +319,6 @@ export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
         }
 
         .update-icon-loading {
-          color: var(--color-accent);
-        }
-
-        .update-icon-available {
           color: var(--color-accent);
         }
 
