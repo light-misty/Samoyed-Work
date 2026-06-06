@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use tauri::Manager;
+use tauri::path::BaseDirectory;
 
 pub mod commands;
 pub mod config;
@@ -181,16 +182,15 @@ pub fn run() {
                     .map(|p| p.join("sidecar").join("main.py"))
                     .unwrap_or_else(|| std::path::PathBuf::from("sidecar/main.py"));
 
-                // Tauri 资源目录：生产环境中 bundle.resources 打包的文件位于此目录下
-                // 开发模式下 resource_dir 也可用（指向 src-tauri 目录），但 CARGO_MANIFEST_DIR 更直接
-                let resource_dir_path = app.path().resource_dir()
-                    .ok()
-                    .map(|p| p.join("sidecar").join("main.py"));
+                // Tauri 资源路径解析：生产环境中 bundle.resources 打包的文件通过此 API 定位
+                // resolve() 会自动处理路径中的 .. -> _up_ 等转换，比手动拼接 resource_dir() 更可靠
+                let resource_path = app.path().resolve("sidecar/main.py", BaseDirectory::Resource)
+                    .ok();
 
                 // 按优先级构建候选路径列表
                 let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-                // 1. Tauri 资源目录下的 sidecar（生产环境，通过 bundle.resources 打包）
-                if let Some(path) = resource_dir_path {
+                // 1. Tauri 资源路径解析（生产环境，通过 bundle.resources 打包）
+                if let Some(path) = resource_path {
                     candidates.push(path);
                 }
                 // 2. 项目根目录下的 sidecar（开发模式，基于 CARGO_MANIFEST_DIR 推导）
@@ -199,14 +199,9 @@ pub fn run() {
                 let mut found = None;
                 for candidate in &candidates {
                     if candidate.exists() {
-                        // 转换为绝对路径，避免依赖工作目录
-                        let abs_path = if candidate.is_absolute() {
-                            candidate.clone()
-                        } else {
-                            crate::utils::canonicalize(candidate)
-                                .unwrap_or_else(|_| candidate.clone())
-                        };
-                        found = Some(abs_path.to_string_lossy().to_string());
+                        // 去除 Windows UNC 前缀（\\?\），Python 不支持 UNC 路径作为脚本参数
+                        let clean_path = crate::utils::strip_unc_prefix(candidate);
+                        found = Some(clean_path.to_string_lossy().to_string());
                         break;
                     }
                 }
