@@ -32,7 +32,7 @@
     "targets": "nsis",
     "createUpdaterArtifacts": true,
     "resources": {
-      "../sidecar/": ""
+      "../sidecar/": "sidecar/"
     },
     "icon": [
       "icons/32x32.png",
