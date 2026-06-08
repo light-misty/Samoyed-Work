@@ -16,7 +16,9 @@
 
 ---
 
-> [Click here to download for Windows](https://github.com/XuMingKe-06/DocAgent/releases/latest)
+> This project is currently in early development stage and may have some imperfections. We sincerely welcome like-minded developers to join us in improving this project!
+
+> [Click here to download release for Windows](https://github.com/XuMingKe-06/DocAgent/releases/latest)
 
 ## What is DocAgent?
 
