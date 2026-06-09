@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 use tauri::path::BaseDirectory;
 
 pub mod commands;
@@ -330,6 +330,46 @@ pub fn run() {
                     let healthy = doc_service_for_health.health_check().await;
                     if !healthy {
                         log::warn!("Sidecar 定期健康检查: 不健康");
+                    }
+                }
+            });
+
+            // 启动定期工作区目录存在性检查（每 10 秒执行一次）
+            // 作为父目录监听器的兜底机制，当父目录监听器失效时仍能检测到目录删除
+            let fs_watcher_for_check = app.state::<AppState>().fs_watcher.clone();
+            let app_handle_for_check = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+                interval.tick().await;
+                loop {
+                    interval.tick().await;
+                    // 如果已经通过 FsWatcher 检测到目录删除并发射过事件，跳过
+                    if fs_watcher_for_check.is_deletion_emitted() {
+                        // 停止监听已删除的工作区（如果尚未停止）
+                        fs_watcher_for_check.stop().await;
+                        continue;
+                    }
+                    if let Some((wid, wpath, wname)) = fs_watcher_for_check.get_active_watch_info().await {
+                        if !wpath.exists() || !wpath.is_dir() {
+                            log::warn!(
+                                "定期检查: 工作区目录已不存在, workspace_id={}, path={}, name={}",
+                                wid,
+                                wpath.display(),
+                                wname
+                            );
+                            // 发射工作区目录删除事件
+                            let deleted_payload = crate::events::types::WorkspaceDirectoryDeletedPayload {
+                                workspace_id: wid.clone(),
+                                workspace_name: wname.clone(),
+                                workspace_path: wpath.to_string_lossy().to_string(),
+                            };
+                            let _ = app_handle_for_check.emit(
+                                crate::events::types::WORKSPACE_DIRECTORY_DELETED,
+                                deleted_payload,
+                            );
+                            // 停止监听已删除的工作区
+                            fs_watcher_for_check.stop().await;
+                        }
                     }
                 }
             });

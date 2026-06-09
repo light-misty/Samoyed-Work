@@ -19,11 +19,12 @@ import { useSettingsStore } from "./stores/useSettingsStore";
 import { useWorkspaceStore } from "./stores/useWorkspaceStore";
 import { useFileTreeStore } from "./stores/useFileTreeStore";
 import { useUpdateStore } from "./stores/useUpdateStore";
+import { useToastStore } from "./stores/useToastStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
 import { generateToolBrief } from "./utils/format";
 import type { ToolNodeData } from "./types";
-import { onSessionUpdated } from "./services/event";
+import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
@@ -75,7 +76,7 @@ export default function App() {
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
   const settings = useSettingsStore((s) => s.settings);
-  const { loadWorkspaces, currentWorkspaceId, workspaces } = useWorkspaceStore();
+  const { loadWorkspaces, currentWorkspaceId, workspaces, handleWorkspaceDirectoryDeleted } = useWorkspaceStore();
   const { loadTree, clearTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
 
   const {
@@ -173,6 +174,25 @@ export default function App() {
       if (unlistenFn) unlistenFn();
     };
   }, [updateSessionTitleLocal]);
+
+  // 监听工作区目录被外部删除事件：自动移除工作区、切换到其他工作区、Toast 通知
+  useEffect(() => {
+    let unlistenFn: (() => void) | null = null;
+
+    onWorkspaceDirectoryDeleted(async (payload) => {
+      console.warn("[App] 收到工作区目录删除事件:", payload);
+      // 调用 store 方法处理：移除工作区、切换活动工作区、清理后端配置
+      await handleWorkspaceDirectoryDeleted(payload.workspaceId);
+      // 显示 Toast 通知用户
+      useToastStore.getState().addToast("warning", `工作区 "${payload.workspaceName}" 的目录已被删除，已自动移除`);
+    }).then((unlisten) => {
+      unlistenFn = unlisten;
+    });
+
+    return () => {
+      if (unlistenFn) unlistenFn();
+    };
+  }, [handleWorkspaceDirectoryDeleted]);
 
   // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
   useEffect(() => {

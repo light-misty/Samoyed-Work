@@ -1322,6 +1322,19 @@ impl Tool for CreateDirectoryTool {
             };
         }
 
+        // 检查工作区根目录是否存在，防止自动重建已删除的工作区目录
+        if !workspace_root.is_empty() {
+            let root_path = std::path::Path::new(workspace_root);
+            if !root_path.exists() {
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                };
+            }
+        }
+
         let result = if recursive {
             tokio::fs::create_dir_all(&resolved_path).await
         } else {
@@ -1498,8 +1511,21 @@ impl Tool for WriteTextFileTool {
         }
 
         // 确保父目录存在
+        // 但如果工作区根目录已被删除，不允许自动重建，应提示用户重新选择工作区
         if let Some(parent) = path.parent() {
             if !parent.exists() {
+                // 检查工作区根目录是否存在
+                if !workspace_root.is_empty() {
+                    let root_path = std::path::Path::new(workspace_root);
+                    if !root_path.exists() {
+                        return ToolResult {
+                            success: false,
+                            output: None,
+                            error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
+                            duration_ms: start.elapsed().as_millis() as u64,
+                        };
+                    }
+                }
                 if let Err(e) = tokio::fs::create_dir_all(parent).await {
                     return ToolResult {
                         success: false,

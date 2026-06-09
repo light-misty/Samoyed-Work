@@ -10,6 +10,8 @@ pub struct WorkspaceInfo {
     pub path: String,
     /// 是否为当前活动工作区
     pub is_active: bool,
+    /// 工作区目录是否存在于文件系统中
+    pub path_exists: bool,
     /// 文件数量
     pub file_count: u32,
     pub created_at: String,

@@ -56,7 +56,8 @@
     "confirmRemoveBtn": "Confirm Remove",
     "cancel": "Cancel",
     "addWorkspace": "Add Workspace",
-    "removeWorkspace": "Remove workspace"
+    "removeWorkspace": "Remove workspace",
+    "directoryDeleted": "Directory deleted"
   },
   "workflow": {
     "selectWorkspaceTitle": "Select Workspace",

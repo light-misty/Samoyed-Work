@@ -128,6 +128,13 @@ export interface WorkspaceChangePayload {
   workspacePath: string;
 }
 
+/** 工作区目录被外部删除事件 */
+export interface WorkspaceDirectoryDeletedPayload {
+  workspaceId: string;
+  workspaceName: string;
+  workspacePath: string;
+}
+
 /** 文件变更事件 */
 export interface FileChangePayload {
   workspaceId: string;
@@ -288,6 +295,15 @@ export function onWorkspaceChange(
   handler: (payload: WorkspaceChangePayload) => void,
 ): Promise<UnlistenFn> {
   return listen<WorkspaceChangePayload>("workspace:change", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听工作区目录被外部删除事件 */
+export function onWorkspaceDirectoryDeleted(
+  handler: (payload: WorkspaceDirectoryDeletedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<WorkspaceDirectoryDeletedPayload>("workspace:directory_deleted", (event) => {
     handler(event.payload);
   });
 }

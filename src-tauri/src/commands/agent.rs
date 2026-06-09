@@ -110,6 +110,23 @@ pub async fn start_agent(
         .unwrap_or("")
         .to_string();
 
+    // 校验工作区目录是否存在（仅当指定了非默认工作区路径时检查）
+    if !workspace_path.is_empty() && workspace_path != "." {
+        let ws_path = std::path::Path::new(&workspace_path);
+        if !ws_path.exists() || !ws_path.is_dir() {
+            log::error!("start_agent 失败: 工作区目录已被删除: {}", workspace_path);
+            // 从 active_agents 中移除注册
+            {
+                let mut active = state.active_agents.lock().await;
+                active.remove(&session_id);
+            }
+            return Err(CommandError::fs(
+                crate::errors::FS_PATH_NOT_FOUND,
+                format!("工作区目录已被删除: {}，请移除该工作区后重新选择", workspace_path),
+            ));
+        }
+    }
+
     // 从 options 中提取附件列表
     let attachments: Vec<AttachmentMeta> = options
         .as_ref()

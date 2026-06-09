@@ -23,6 +23,7 @@ pub const AGENT_NETWORK_RETRY: &str = "agent:network_retry";
 
 pub const SESSION_UPDATED: &str = "session:updated";
 pub const WORKSPACE_CHANGE: &str = "workspace:change";
+pub const WORKSPACE_DIRECTORY_DELETED: &str = "workspace:directory_deleted";
 pub const FILE_CHANGE: &str = "file:change";
 pub const LLM_PROVIDER_SWITCH: &str = "llm:provider_switch";
 pub const SYSTEM_NETWORK_CHANGE: &str = "system:network_change";
@@ -184,6 +185,15 @@ pub struct SessionUpdatePayload {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceChangePayload {
+    pub workspace_id: String,
+    pub workspace_name: String,
+    pub workspace_path: String,
+}
+
+/// 工作区目录被外部删除事件
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceDirectoryDeletedPayload {
     pub workspace_id: String,
     pub workspace_name: String,
     pub workspace_path: String,

@@ -25,12 +25,14 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<Workspace
         .iter()
         .map(|w| {
             let path = PathBuf::from(&w.path);
-            let file_count = count_files_in_dir(&path).unwrap_or(0);
+            let path_exists = path.exists() && path.is_dir();
+            let file_count = if path_exists { count_files_in_dir(&path).unwrap_or(0) } else { 0 };
             WorkspaceInfo {
                 id: w.id.clone(),
                 name: w.name.clone(),
                 path: w.path.clone(),
                 is_active: w.id == default_workspace_id,
+                path_exists,
                 file_count,
                 created_at: w.created_at.clone(),
                 last_accessed: w.created_at.clone(),
@@ -96,6 +98,7 @@ pub async fn add_workspace(
         name: entry.name,
         path: entry.path,
         is_active: false,
+        path_exists: true, // 刚添加的工作区目录一定存在
         file_count,
         created_at: entry.created_at.clone(),
         last_accessed: entry.created_at,
@@ -119,6 +122,14 @@ pub async fn remove_workspace(
     cfg_manager.remove_workspace(&mut ws_config, &workspace_id)?;
     cfg_manager.save_workspaces(&ws_config)?;
     log::info!("remove_workspace: 工作区移除成功, id={}", workspace_id);
+
+    // 如果被移除的工作区是当前活动工作区，清除默认工作区设置
+    let mut settings = cfg_manager.load_app_settings()?;
+    if settings.workspace.default_workspace_id == workspace_id {
+        settings.workspace.default_workspace_id = String::new();
+        cfg_manager.save_app_settings(&settings)?;
+        log::info!("remove_workspace: 已清除默认工作区设置（被移除的工作区是当前活动工作区）");
+    }
 
     // 发射工作区变更事件
     if let Some(ws) = removed_ws {
@@ -154,14 +165,24 @@ pub async fn set_active_workspace(
 
     let ws = workspace.unwrap();
 
+    // 检查工作区目录是否存在于文件系统
+    let ws_path = PathBuf::from(&ws.path);
+    if !ws_path.exists() || !ws_path.is_dir() {
+        log::error!("set_active_workspace: 工作区目录已被删除: {}", ws.path);
+        return Err(CommandError::fs(
+            FS_PATH_NOT_FOUND,
+            format!("工作区目录已被删除: {}，请移除该工作区后重新选择", ws.path),
+        ));
+    }
+
     // 更新应用设置中的默认工作区
     let mut settings = cfg_manager.load_app_settings()?;
     settings.workspace.default_workspace_id = workspace_id.clone();
     cfg_manager.save_app_settings(&settings)?;
 
-    // 启动文件监听
+    // 启动文件监听（传入工作区名称以便 FsWatcher 在目录删除时使用）
     drop(cfg_manager);
-    state.fs_watcher.watch(workspace_id, ws.path.clone()).await;
+    state.fs_watcher.watch_with_name(workspace_id, ws.path.clone(), ws.name.clone()).await;
 
     log::info!("set_active_workspace: 活动工作区设置成功, id={}", settings.workspace.default_workspace_id);
     Ok(())

@@ -56,7 +56,8 @@
     "confirmRemoveBtn": "确认移除",
     "cancel": "取消",
     "addWorkspace": "添加工作区",
-    "removeWorkspace": "移除工作区"
+    "removeWorkspace": "移除工作区",
+    "directoryDeleted": "目录已删除"
   },
   "workflow": {
     "selectWorkspaceTitle": "选择工作区",

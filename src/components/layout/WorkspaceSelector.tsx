@@ -97,15 +97,15 @@ export function WorkspaceSelector() {
             {workspaces.map((ws) => (
               <div key={ws.id} className="ws-selector-item-wrapper">
                 <div
-                  className={`ws-selector-item ${ws.id === currentWorkspaceId ? "ws-selector-item-active" : ""}`}
-                  onClick={() => handleSwitch(ws.id)}
+                  className={`ws-selector-item ${ws.id === currentWorkspaceId ? "ws-selector-item-active" : ""} ${!ws.pathExists ? "ws-selector-item-deleted" : ""}`}
+                  onClick={() => ws.pathExists && handleSwitch(ws.id)}
                 >
                   <div className="ws-selector-item-left">
                     <span className="ws-selector-item-dot">
                       {ws.id === currentWorkspaceId && <span className="ws-selector-item-dot-inner" />}
                     </span>
                     <div className="ws-selector-item-info">
-                      <span className="ws-selector-item-name">{ws.name}</span>
+                      <span className="ws-selector-item-name">{ws.name}{!ws.pathExists ? ` (${t('workspace.directoryDeleted')})` : ""}</span>
                       <span className="ws-selector-item-path">{ws.path}</span>
                     </div>
                   </div>
@@ -256,6 +256,14 @@ export function WorkspaceSelector() {
         }
         .ws-selector-item-active:hover {
           background: var(--color-accent-bg);
+        }
+        .ws-selector-item-deleted {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .ws-selector-item-deleted .ws-selector-item-name {
+          color: var(--color-error);
+          text-decoration: line-through;
         }
         .ws-selector-item-left {
           display: flex;

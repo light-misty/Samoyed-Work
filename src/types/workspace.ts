@@ -5,6 +5,8 @@ export interface WorkspaceInfo {
   name: string;
   path: string;
   isActive: boolean;
+  /** 工作区目录是否存在于文件系统中 */
+  pathExists: boolean;
   fileCount: number;
   createdAt: string;
   lastAccessed: string;
