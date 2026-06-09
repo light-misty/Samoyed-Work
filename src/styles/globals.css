@@ -21,6 +21,7 @@
   --color-success-bg: rgba(52, 199, 36, 0.08);
   --color-warning: #ff9f18;
   --color-warning-light: #fff3e0;
+  --color-warning-dark: #856404;
   --color-warning-bg: rgba(255, 159, 24, 0.08);
   --color-error: #f54a45;
   --color-error-light: #fef0ef;
@@ -451,6 +452,7 @@
   --color-success-bg: rgba(74, 222, 128, 0.08);
   --color-warning: #fbbf24;
   --color-warning-light: #2e2a1a;
+  --color-warning-dark: #856404;
   --color-warning-bg: rgba(251, 191, 36, 0.08);
   --color-error: #f87171;
   --color-error-light: #2e1a1a;

@@ -104,7 +104,7 @@ export function AddWorkspaceDialog({ onClose, onSaved }: AddWorkspaceDialogProps
           z-index: 1000;
         }
         .dialog-content {
-          background: var(--color-bg-primary);
+          background: var(--color-bg-elevated);
           border: 1px solid var(--color-border);
           border-radius: var(--radius-lg);
           padding: 24px;
@@ -155,7 +155,7 @@ export function AddWorkspaceDialog({ onClose, onSaved }: AddWorkspaceDialogProps
           border: 1px solid var(--color-border);
           border-radius: var(--radius-sm);
           font-size: 13px;
-          background: var(--color-bg-primary);
+          background: var(--color-bg);
           color: var(--color-text-primary);
           outline: none;
           transition: border-color 0.15s;
