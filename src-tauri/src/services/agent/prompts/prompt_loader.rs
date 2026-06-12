@@ -264,7 +264,7 @@ impl PromptLoader {
 
     /// 默认工具策略层
     fn default_tool_strategy() -> String {
-        r#"<tool_strategy>
+        let base = r#"<tool_strategy>
 ## 工具选择策略
 
 ### 读取操作
@@ -278,11 +278,7 @@ impl PromptLoader {
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成Word文档 -> docx_skill，action="generate"
-- 生成Excel文档 -> xlsx_skill，action="generate"
-- 生成PPT文档 -> pptx_skill，action="generate"
-- 生成PDF文档 -> pdf_skill，action="generate"
-- 修改已有文档 -> 对应 Skill 的 action="modify"
+- 生成/修改文档 -> code_interpreter_skill（编写 Python 代码生成或修改任意文档）
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -306,7 +302,11 @@ impl PromptLoader {
 
 ### 输出风格
 - 回复和文档中不得出现任何emoji表情符号，使用文字替代（如用"完成"替代"✅"，用"注意"替代"⚠️"）
-</tool_strategy>"#.to_string()
+</tool_strategy>"#;
+
+        // 追加 Code Interpreter 指导
+        let ci_guide = super::code_interpreter::CODE_INTERPRETER_GUIDE;
+        format!("{}\n\n{}", base, ci_guide)
     }
 
     /// 默认防幻觉层
@@ -345,6 +345,7 @@ impl PromptLoader {
 
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
+- code_interpreter_skill: 执行代码生成/修改文档（high风险级别）
 - docx_skill/xlsx_skill/pptx_skill/pdf_skill 的 modify 操作: 修改已有文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
@@ -362,14 +363,11 @@ impl PromptLoader {
 
 ### 示例: 生成Word文档
 用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用docx_skill工具
-工具调用: docx_skill({
-  "action": "generate",
-  "path": "项目周报.docx",
-  "title": "项目周报",
-  "content": "...",
-  "pageSize": "a4",
-  "includeToc": true
+思考: 用户需要生成Word文档，应使用code_interpreter_skill编写Python代码
+工具调用: code_interpreter_skill({
+  "code": "doc = create_word_doc(title='项目周报', author='DocAgent')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
+  "description": "生成项目周报Word文档",
+  "expected_files": ["项目周报.docx"]
 })
 </examples>"#.to_string(),
             _ => String::new(),
@@ -430,7 +428,7 @@ mod tests {
     #[test]
     fn test_default_examples() {
         let content = PromptLoader::default_examples("generate");
-        assert!(content.contains("docx_skill"));
+        assert!(content.contains("code_interpreter_skill"));
     }
 
     #[test]

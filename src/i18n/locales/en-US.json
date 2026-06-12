@@ -690,7 +690,8 @@
     "search": "Search",
     "file": "file",
     "listDirectory": "List directory",
-    "write": "Write"
+    "write": "Write",
+    "executeCode": "Execute code"
   },
   "session": {
     "newSession": "New Session"

@@ -22,7 +22,7 @@ const RETRY_DELAY_SECONDS: u64 = 2;
 /// 确认操作超时时间（秒）
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 /// 始终需要确认的高风险 Skill 列表
-const HIGH_RISK_SKILLS: &[&str] = &["delete_file"];
+const HIGH_RISK_SKILLS: &[&str] = &["delete_file", "code_interpreter_skill"];
 
 /// 检查错误码是否可重试
 fn is_retryable_error(code: u32) -> bool {
@@ -210,6 +210,18 @@ impl<R: Runtime> AgentExecutor<R> {
                     Vec::new()
                 }
             }
+            "code_interpreter_skill" => {
+                // Code Interpreter 可能修改多个文件，提取预期文件列表
+                // 1. 优先从 expected_files 参数提取（LLM 声明的预期输出文件）
+                // 2. 如果没有 expected_files，则不创建快照（因为无法预知文件路径）
+                if let Some(files) = params["expected_files"].as_array() {
+                    files.iter()
+                        .filter_map(|f| f.as_str().map(|s| s.to_string()))
+                        .collect()
+                } else {
+                    Vec::new()
+                }
+            }
             _ => Vec::new(),
         }
     }
@@ -239,6 +251,8 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 全部需确认模式下，根据操作类型区分风险等级
                 if tool_name == "delete_file" {
                     "critical"
+                } else if tool_name == "code_interpreter_skill" {
+                    "high"  // 代码执行始终为高风险
                 } else if matches!(tool_name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
                     && arguments["action"].as_str() == Some("modify")
                 {
@@ -262,6 +276,14 @@ impl<R: Runtime> AgentExecutor<R> {
                 let action = arguments["action"].as_str().unwrap_or("未知操作");
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
                 format!("{} 文档 - {}: {}", tool_name, action, path)
+            }
+            "code_interpreter_skill" => {
+                // 展示代码描述和代码摘要
+                let desc = arguments["description"].as_str().unwrap_or("执行代码");
+                let code_preview: String = arguments["code"].as_str()
+                    .map(|c| if c.len() > 200 { format!("{}...", &c[..200]) } else { c.to_string() })
+                    .unwrap_or_default();
+                format!("执行代码: {}\n{}", desc, code_preview)
             }
             _ => format!("执行操作: {}", tool_name),
         };
@@ -812,6 +834,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         "list_directory" | "search_files" | "read_file" | "file_info"
                         | "file_exists" | "delete_file" | "create_directory" | "write_text_file"
                         | "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill"
+                        | "code_interpreter_skill"  // 需要workspace_root作为working_dir
                     );
                     if needs_workspace_root && !ctx.workspace_path.is_empty() {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
@@ -825,6 +848,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                 let operation = match tool_call.name.as_str() {
                                     "delete_file" => "delete",
                                     "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => "modify",
+                                    "code_interpreter_skill" => "code_execute",
                                     _ => "unknown",
                                 };
                                 match snapshot_fn(&ctx.workspace_id, &ctx.session_id, file_path, operation) {

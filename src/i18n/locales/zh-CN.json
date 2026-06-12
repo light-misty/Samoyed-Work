@@ -690,7 +690,8 @@
     "search": "搜索",
     "file": "文件",
     "listDirectory": "列出目录",
-    "write": "写入"
+    "write": "写入",
+    "executeCode": "执行代码"
   },
   "session": {
     "newSession": "新会话"

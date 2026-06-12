@@ -393,8 +393,9 @@ pub fn register_builtin_skills(
     registry.register(Box::new(DocxSkill::new(doc_service.clone())));
     registry.register(Box::new(XlsxSkill::new(doc_service.clone())));
     registry.register(Box::new(PptxSkill::new(doc_service.clone())));
-    registry.register(Box::new(PdfSkill::new(doc_service)));
-    log::info!("内置技能注册完成, 共注册 4 个技能");
+    registry.register(Box::new(PdfSkill::new(doc_service.clone())));
+    registry.register(Box::new(CodeInterpreterSkill::new(doc_service)));
+    log::info!("内置技能注册完成, 共注册 5 个技能");
 }
 
 // ============================================================================
@@ -1222,6 +1223,106 @@ impl Skill for PdfSkill {
                 output: None,
                 error: Some(format!("PdfSkill 不支持的操作类型: {}", action)),
                 duration_ms: 0,
+            },
+        }
+    }
+}
+
+// ============================================================================
+// CodeInterpreterSkill - 代码解释器技能
+// ============================================================================
+
+/// 代码解释器技能
+/// 让 Agent 自由编写 Python 代码生成/修改文档
+/// 承担原有 generate 和 modify 操作的全部职责
+struct CodeInterpreterSkill {
+    doc_service: Arc<DocumentService>,
+}
+
+impl CodeInterpreterSkill {
+    fn new(doc_service: Arc<DocumentService>) -> Self {
+        Self { doc_service }
+    }
+}
+
+#[async_trait]
+impl Skill for CodeInterpreterSkill {
+    fn skill_name(&self) -> &str { "code_interpreter_skill" }
+    fn description(&self) -> &str {
+        "代码解释器，通过编写和执行 Python 代码生成和修改文档。所有文档生成和修改操作都通过此技能完成。可用库: python-docx, openpyxl, python-pptx, reportlab, matplotlib, pandas, numpy, Pillow。可用 helper: create_word_doc(), save_word_doc() 等。"
+    }
+    fn category(&self) -> &str { "document" }
+    fn is_builtin(&self) -> bool { true }
+    fn supported_types(&self) -> Vec<String> {
+        vec!["docx".into(), "xlsx".into(), "pptx".into(), "pdf".into()]
+    }
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "要执行的 Python 代码。可用库: python-docx, openpyxl, python-pptx, reportlab, matplotlib, pandas, numpy, Pillow。可用 helper: create_word_doc(), save_word_doc(), create_excel_doc(), save_excel_doc(), create_ppt_doc(), save_ppt_doc(), create_pdf_doc(), save_pdf_doc(), create_chart(), save_chart()。工作目录变量: working_dir"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "代码功能的简要描述，用于用户确认时展示"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "执行超时时间（秒），默认 60，最大 120",
+                    "default": 60
+                },
+                "expected_files": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "预期生成的文件名列表（如 [\"报告.docx\", \"chart.png\"]）"
+                }
+            },
+            "required": ["code", "description"]
+        })
+    }
+    async fn execute(&self, params: Value) -> SkillResult {
+        let start = Instant::now();
+        let code = params["code"].as_str().unwrap_or("");
+        let description = params["description"].as_str().unwrap_or("");
+        let timeout = params["timeout"].as_u64().unwrap_or(60).min(120);
+        let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+
+        if code.is_empty() {
+            return SkillResult {
+                success: false,
+                output: None,
+                error: Some("缺少代码内容".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+            };
+        }
+
+        // 调用 Sidecar：action="execute", type="code"
+        // Sidecar handle_request() 通过 getattr(handler, action) 路由
+        // CodeHandler 实现了 execute() 方法
+        let sidecar_params = json!({
+            "code": code,
+            "working_dir": workspace_root,
+            "timeout": timeout,
+        });
+
+        match self.doc_service.process("execute", "code", sidecar_params).await {
+            Ok(data) => {
+                let mut output = data;
+                output["description"] = json!(description);
+                SkillResult {
+                    success: true,
+                    output: Some(output),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                }
+            }
+            Err(e) => SkillResult {
+                success: false,
+                output: None,
+                error: Some(e.message),
+                duration_ms: start.elapsed().as_millis() as u64,
             },
         }
     }

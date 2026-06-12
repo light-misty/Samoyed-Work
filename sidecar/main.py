@@ -15,6 +15,7 @@ from handlers.excel_handler import ExcelHandler
 from handlers.ppt_handler import PptHandler
 from handlers.pdf_handler import PdfHandler
 from handlers.markdown_handler import MarkdownHandler
+from handlers.code_handler import CodeHandler
 from handlers.validator import DocumentValidator
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ HANDLERS = {
     "md": MarkdownHandler(),
     "markdown": MarkdownHandler(),
     "txt": MarkdownHandler(),
+    "code": CodeHandler(),  # Code Interpreter 代码执行处理器
 }
 
 # 文档验证器实例
