@@ -171,21 +171,15 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 检查是否为高风险操作（需要用户确认）
     /// 根据确认级别决定哪些操作需要用户确认：
     /// - Never: 任何操作都不需要确认
-    /// - EditOnly: 仅删除操作和文档修改操作需要确认
+    /// - EditOnly: 仅高风险操作需要确认
     /// - Always: 所有 Skill/Tool 调用都需要确认
-    fn needs_confirmation(&self, name: &str, params: &serde_json::Value) -> bool {
+    fn needs_confirmation(&self, name: &str, _params: &serde_json::Value) -> bool {
         match self.confirmation_level {
             ConfirmationLevel::Never => false,
             ConfirmationLevel::EditOnly => {
                 // 仅编辑/删除操作需要确认
                 // 1. delete_file 始终为高风险
-                // 2. 文档 Skill 的 modify 操作需要确认
                 if HIGH_RISK_SKILLS.contains(&name) {
-                    return true;
-                }
-                if matches!(name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
-                    && params["action"].as_str() == Some("modify")
-                {
                     return true;
                 }
                 false
@@ -196,19 +190,15 @@ impl<R: Runtime> AgentExecutor<R> {
 
     /// 从 Skill 参数中提取需要创建快照的文件路径列表
     /// delete_file: 单文件路径
-    /// 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）: action 为 modify 时提取 path
+    /// 文档 Skill（docx_skill/xlsx_skill/pptx_skill/pdf_skill）: 精简后不再有 modify 操作，无需快照
     fn extract_snapshot_paths(&self, skill_name: &str, params: &serde_json::Value) -> Vec<String> {
         match skill_name {
             "delete_file" => {
                 vec![params["path"].as_str().unwrap_or("").to_string()]
             }
             "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
-                // 仅在修改操作时创建快照
-                if params["action"].as_str() == Some("modify") {
-                    vec![params["path"].as_str().unwrap_or("").to_string()]
-                } else {
-                    Vec::new()
-                }
+                // 文档 Skill 精简后不再有 modify 操作，无需创建快照
+                Vec::new()
             }
             "code_interpreter_skill" => {
                 // Code Interpreter 可能修改多个文件，提取预期文件列表
@@ -253,10 +243,6 @@ impl<R: Runtime> AgentExecutor<R> {
                     "critical"
                 } else if tool_name == "code_interpreter_skill" {
                     "high"  // 代码执行始终为高风险
-                } else if matches!(tool_name, "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill")
-                    && arguments["action"].as_str() == Some("modify")
-                {
-                    "high"
                 } else {
                     "normal"
                 }
@@ -273,9 +259,9 @@ impl<R: Runtime> AgentExecutor<R> {
         let description = match tool_name {
             "delete_file" => format!("删除文件: {}", arguments["path"].as_str().unwrap_or("未知")),
             "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => {
-                let action = arguments["action"].as_str().unwrap_or("未知操作");
+                let action = arguments["action"].as_str().unwrap_or("操作");
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
-                format!("{} 文档 - {}: {}", tool_name, action, path)
+                format!("{} - {}: {}", tool_name, action, path)
             }
             "code_interpreter_skill" => {
                 // 展示代码描述和代码摘要
@@ -847,7 +833,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             if !file_path.is_empty() {
                                 let operation = match tool_call.name.as_str() {
                                     "delete_file" => "delete",
-                                    "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => "modify",
+                                    "docx_skill" | "xlsx_skill" | "pptx_skill" | "pdf_skill" => "read",
                                     "code_interpreter_skill" => "code_execute",
                                     _ => "unknown",
                                 };

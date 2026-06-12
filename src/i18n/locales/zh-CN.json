@@ -680,9 +680,7 @@
     }
   },
   "toolBrief": {
-    "generate": "生成",
     "read": "读取",
-    "modify": "修改",
     "convert": "转换",
     "analyze": "分析",
     "document": "文档",
@@ -691,7 +689,8 @@
     "file": "文件",
     "listDirectory": "列出目录",
     "write": "写入",
-    "executeCode": "执行代码"
+    "executeCode": "执行代码",
+    "codeInterpreter": "执行代码: {description}"
   },
   "session": {
     "newSession": "新会话"

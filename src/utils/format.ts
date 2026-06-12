@@ -61,9 +61,7 @@ import i18n from '../i18n';
 export function generateToolBrief(toolName: string, input: Record<string, unknown>): string {
   const f = (key: string) => String(input[key] ?? "");
   const actionMap: Record<string, string> = {
-    generate: i18n.t('toolBrief.generate'),
     read: i18n.t('toolBrief.read'),
-    modify: i18n.t('toolBrief.modify'),
     convert: i18n.t('toolBrief.convert'),
     analyze: i18n.t('toolBrief.analyze'),
   };

@@ -680,9 +680,7 @@
     }
   },
   "toolBrief": {
-    "generate": "Generate",
     "read": "Read",
-    "modify": "Modify",
     "convert": "Convert",
     "analyze": "Analyze",
     "document": "document",
@@ -691,7 +689,8 @@
     "file": "file",
     "listDirectory": "List directory",
     "write": "Write",
-    "executeCode": "Execute code"
+    "executeCode": "Execute code",
+    "codeInterpreter": "Execute code: {description}"
   },
   "session": {
     "newSession": "New Session"

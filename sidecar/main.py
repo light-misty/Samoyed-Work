@@ -1,6 +1,6 @@
 """DocAgent Python Sidecar
 文档处理引擎，通过 stdin/stdout JSON 协议与 Rust 后端通信
-支持 Word、Excel、PPT、PDF、Markdown 等文档的生成、读取、修改、转换
+支持 Word、Excel、PPT、PDF、Markdown 等文档的读取、转换、分析，以及代码执行
 """
 
 import sys
@@ -72,7 +72,7 @@ def handle_request(request: dict) -> dict:
     请求格式:
     {
         "id": "请求唯一ID",
-        "action": "generate|read|modify|delete|convert|analyze|ping",
+        "action": "read|convert|analyze|execute|validate|ping",
         "type": "docx|xlsx|pptx|pdf|md|health",
         "params": { ... }
     }
@@ -142,7 +142,7 @@ def handle_request(request: dict) -> dict:
         }
 
     # 将 Rust 端发送的 input_path 映射为 Python handler 期望的 path
-    # 适用于所有需要文件路径的操作（read、modify、convert、analyze 等）
+    # 适用于所有需要文件路径的操作（read、convert、analyze 等）
     if "input_path" in params and "path" not in params:
         params["path"] = params["input_path"]
 

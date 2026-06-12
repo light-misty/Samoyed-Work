@@ -793,11 +793,7 @@ impl AgentContext {
 
 ### 写入操作
 - 纯文本文件 -> write_text_file
-- 生成Word文档 -> docx_skill，action="generate"
-- 生成Excel文档 -> xlsx_skill，action="generate"
-- 生成PPT文档 -> pptx_skill，action="generate"
-- 生成PDF文档 -> pdf_skill，action="generate"
-- 修改已有文档 -> 对应 Skill 的 action="modify"
+- 生成/修改文档 -> code_interpreter_skill（编写 Python 代码生成或修改任意文档）
 
 ### 搜索操作
 - 按文件名搜索 -> search_files（设置include_content=false）
@@ -896,13 +892,13 @@ impl AgentContext {
             return String::new();
         }
 
-        format!("## 文档设计规范\n\n{}", guides.join("\n\n"))
+        format!("## 文档设计参考\n\n{}", guides.join("\n\n"))
     }
 
     /// Layer 7: 示例层（按需注入）
     fn layer_examples(task_type: &TaskType) -> String {
         let example_type = match task_type {
-            TaskType::Docx | TaskType::Xlsx | TaskType::Pptx | TaskType::Pdf | TaskType::Markdown => "generate",
+            TaskType::Docx | TaskType::Xlsx | TaskType::Pptx | TaskType::Pdf | TaskType::Markdown => "document",
             _ => return String::new(), // 其他类型不注入示例
         };
 
@@ -912,19 +908,16 @@ impl AgentContext {
     /// 默认示例内容
     fn default_examples(example_type: &str) -> String {
         match example_type {
-            "generate" => r#"<examples>
+            "document" => r#"<examples>
 ## 生成文档示例
 
 ### 示例: 生成Word文档
 用户: "帮我创建一份项目周报"
-思考: 用户需要生成Word文档，应使用docx_skill工具
-工具调用: docx_skill({
-  "action": "generate",
-  "path": "项目周报.docx",
-  "title": "项目周报",
-  "content": "...",
-  "pageSize": "a4",
-  "includeToc": true
+思考: 用户需要生成Word文档，应使用code_interpreter_skill编写Python代码
+工具调用: code_interpreter_skill({
+  "code": "doc = create_word_doc(title='项目周报', author='DocAgent')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
+  "description": "生成项目周报Word文档",
+  "expected_files": ["项目周报.docx"]
 })
 </examples>"#.to_string(),
             _ => String::new(),
@@ -1168,9 +1161,9 @@ mod tests {
             None,
         );
 
-        // 应包含 Word 规范
+        // 应包含 Word 设计参考
         assert!(prompt.contains("<guide type=\"docx\">"));
-        assert!(prompt.contains("Word 文档生成规范"));
+        assert!(prompt.contains("Word 文档设计参考"));
         // 不应包含其他规范
         assert!(!prompt.contains("<guide type=\"xlsx\">"));
         assert!(!prompt.contains("<guide type=\"pptx\">"));
@@ -1403,19 +1396,19 @@ mod tests {
         ctx.add_assistant_message("", Some(vec![LlmToolCall {
             index: 0,
             id: "call_1".to_string(),
-            name: "docx_skill".to_string(),
-            arguments: r#"{"action": "generate", "path": "周报.docx"}"#.to_string(),
+            name: "code_interpreter_skill".to_string(),
+            arguments: r#"{"code": "doc = create_word_doc()", "description": "生成周报"}"#.to_string(),
         }]), None);
         ctx.add_tool_result("call_1", "文档已成功生成");
         ctx.add_assistant_message("周报已生成，保存在 周报.docx", None, None);
 
-        let (user_goal, result_summary, files_involved, tools_used, errors_resolved) =
+        let (user_goal, result_summary, _files_involved, tools_used, errors_resolved) =
             ctx.extract_session_summary_info();
 
         assert_eq!(user_goal, "帮我生成一份项目周报");
         assert!(result_summary.contains("周报已生成"));
-        assert!(files_involved.contains("周报.docx"));
-        assert!(tools_used.contains("docx_skill"));
+        // code_interpreter_skill 的参数中没有 path 字段，files_involved 从 assistant 回复中提取
+        assert!(tools_used.contains("code_interpreter_skill"));
         assert_eq!(errors_resolved, "[]");
     }
 

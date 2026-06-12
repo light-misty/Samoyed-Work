@@ -202,8 +202,8 @@ mod tests {
             tool_calls: Some(vec![
                 ToolCall {
                     id: "call_1".to_string(),
-                    name: "docx_skill".to_string(),
-                    arguments: serde_json::json!({"action": "generate", "path": "周报.docx"}),
+                    name: "code_interpreter_skill".to_string(),
+                    arguments: serde_json::json!({"code": "doc = create_word_doc()", "description": "生成周报"}),
                     result: None,
                 },
             ]),
@@ -216,11 +216,11 @@ mod tests {
         assert_eq!(chat_msg.role, "assistant");
         let tool_calls = chat_msg.tool_calls.unwrap();
         assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].name, "docx_skill");
+        assert_eq!(tool_calls[0].name, "code_interpreter_skill");
         assert_eq!(tool_calls[0].id, "call_1");
         // arguments 应该是 JSON 字符串
         let args: serde_json::Value = serde_json::from_str(&tool_calls[0].arguments).unwrap();
-        assert_eq!(args["action"], "generate");
+        assert_eq!(args["description"], "生成周报");
     }
 
     /// 测试 tool 消息转换为 ChatMessage

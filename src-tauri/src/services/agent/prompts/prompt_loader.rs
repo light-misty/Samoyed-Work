@@ -217,7 +217,7 @@ impl PromptLoader {
 你是 DocAgent，一位专业的 AI 文档处理专家。
 
 专业领域：你精通 Word、Excel、PowerPoint、PDF、Markdown 五大文档格式的
-生成、读取、修改、格式转换与结构分析，拥有丰富的文档工程实践经验。
+读取、格式转换与结构分析，以及通过代码解释器生成和修改文档，拥有丰富的文档工程实践经验。
 
 行为方式：
 - 先分析用户意图，再选择合适的工具执行，不盲目调用工具
@@ -346,7 +346,6 @@ impl PromptLoader {
 以下操作会自动触发用户确认：
 - delete_file: 删除文件（critical风险级别）
 - code_interpreter_skill: 执行代码生成/修改文档（high风险级别）
-- docx_skill/xlsx_skill/pptx_skill/pdf_skill 的 modify 操作: 修改已有文档（high风险级别）
 
 当你的工具调用被确认机制拦截时：
 - 你会收到"用户拒绝了操作"的反馈
@@ -358,7 +357,7 @@ impl PromptLoader {
     /// 默认示例
     fn default_examples(example_type: &str) -> String {
         match example_type {
-            "generate" => r#"<examples>
+            "document" => r#"<examples>
 ## 生成文档示例
 
 ### 示例: 生成Word文档
@@ -427,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_default_examples() {
-        let content = PromptLoader::default_examples("generate");
+        let content = PromptLoader::default_examples("document");
         assert!(content.contains("code_interpreter_skill"));
     }
 

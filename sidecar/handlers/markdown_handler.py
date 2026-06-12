@@ -1,78 +1,18 @@
 """Markdown 文档处理器
-实现 Markdown 文档的生成、读取、修改、转换
+实现 Markdown 文档的读取、转换、分析
+精简版：仅支持 read/convert/analyze 操作
 """
 
 import os
 import re
 import html
 import logging
-from typing import Any
 
 
 class MarkdownHandler:
-    """Markdown (.md) 文档处理器"""
+    """Markdown (.md) 文档处理器（精简版，仅支持 read/convert/analyze）"""
 
     logger = logging.getLogger(__name__)
-
-    def generate(self, params: dict) -> dict:
-        """生成 Markdown 文档
-
-        params:
-            path: 输出文件路径
-            title: 文档标题
-            content: 文档内容
-        """
-        path = params.get("path", "")
-        title = params.get("title", "")
-        content = params.get("content", "")
-
-        if not path:
-            self.logger.error("generate: 缺少输出文件路径")
-            return {"error": "缺少输出文件路径"}
-
-        self.logger.info("generate: 开始生成 Markdown 文档, path=%s", path)
-
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-
-        lines = []
-        if title:
-            lines.append(f"# {title}")
-            lines.append("")
-
-        if isinstance(content, str):
-            lines.append(content)
-        elif isinstance(content, list):
-            for item in content:
-                if isinstance(item, str):
-                    lines.append(item)
-                    lines.append("")
-                elif isinstance(item, dict):
-                    block_type = item.get("type", "paragraph")
-                    text = item.get("text", "")
-                    if block_type == "heading":
-                        level = item.get("level", 1)
-                        lines.append(f"{'#' * level} {text}")
-                    elif block_type == "list":
-                        for li in item.get("items", []):
-                            lines.append(f"- {li}")
-                    elif block_type == "code":
-                        lang = item.get("language", "")
-                        lines.append(f"```{lang}")
-                        lines.append(text)
-                        lines.append("```")
-                    else:
-                        lines.append(text)
-                    lines.append("")
-
-        md_content = "\n".join(lines)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(md_content)
-
-        self.logger.info("generate: Markdown 文档已生成, path=%s", path)
-        return {
-            "path": path,
-            "message": f"Markdown 文档已生成: {path}",
-        }
 
     def read(self, params: dict) -> dict:
         """读取 Markdown 文档"""
@@ -102,66 +42,6 @@ class MarkdownHandler:
             "heading_count": len(headings),
             "line_count": content.count("\n") + 1,
             "char_count": len(content),
-        }
-
-    def modify(self, params: dict) -> dict:
-        """修改 Markdown 文档"""
-        path = params.get("path", "")
-        operations = params.get("operations", [])
-        if not path:
-            self.logger.error("modify: 缺少文件路径")
-            return {"error": "缺少文件路径"}
-        if not os.path.exists(path):
-            raise FileNotFoundError(path)
-
-        self.logger.info("modify: 开始修改 Markdown 文档, path=%s, 操作数=%d", path, len(operations))
-
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        modified_count = 0
-
-        for op in operations:
-            op_type = op.get("type", "")
-
-            if op_type == "replace":
-                old_text = op.get("old", "")
-                new_text = op.get("new", "")
-                if old_text in content:
-                    content = content.replace(old_text, new_text)
-                    modified_count += 1
-
-            elif op_type == "append":
-                text = op.get("text", "")
-                content = content.rstrip() + "\n\n" + text
-                modified_count += 1
-
-            elif op_type == "prepend":
-                text = op.get("text", "")
-                content = text + "\n\n" + content.lstrip()
-                modified_count += 1
-
-            elif op_type == "insert_after_heading":
-                heading_text = op.get("heading", "")
-                insert_text = op.get("text", "")
-                pattern = re.compile(
-                    rf"^(#{1,6}\s+{re.escape(heading_text)})$",
-                    re.MULTILINE,
-                )
-                match = pattern.search(content)
-                if match:
-                    insert_pos = match.end()
-                    content = content[:insert_pos] + "\n\n" + insert_text + content[insert_pos:]
-                    modified_count += 1
-
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-        self.logger.info("modify: Markdown 文档修改完成, path=%s, 修改数=%d", path, modified_count)
-        return {
-            "path": path,
-            "modified_count": modified_count,
-            "message": f"已执行 {modified_count} 项修改",
         }
 
     def convert(self, params: dict) -> dict:
