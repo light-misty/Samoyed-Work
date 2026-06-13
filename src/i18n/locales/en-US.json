@@ -323,16 +323,10 @@
     "skills": {
       "sectionTitle": "Skills Management",
       "builtinSkills": "Built-in Skills",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "enable": "Enable",
-      "disable": "Disable",
       "noSkills": "No Skills",
       "toolBadge": "Tool",
       "skillBadge": "Skill",
-      "advanced": "Advanced",
-      "toggleFailed": "Failed to toggle skill",
-      "codeInterpreterDisabledHint": "Code interpreter is disabled, document generation and modification will be unavailable"
+      "alwaysEnabled": "Always Enabled"
     },
     "tools": {
       "sectionTitle": "Tools Management",
@@ -631,7 +625,6 @@
       "confirmTimeout": "Operation confirmation timed out, please resend the request",
       "operationDenied": "Operation denied by user",
       "featureNotFound": "Requested feature does not exist",
-      "featureDisabled": "This feature is disabled, please enable it in settings",
       "executionError": "Agent execution error, please retry",
       "sessionNotFound": "Session not found, please create a new session"
     },

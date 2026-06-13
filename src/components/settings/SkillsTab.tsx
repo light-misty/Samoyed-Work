@@ -1,29 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import * as tauriCmd from "../../services/tauri";
-import { useToastStore } from "../../stores/useToastStore";
 
 export function SkillsTab() {
   const { t } = useTranslation();
-  const { skills, tools, refreshSkills } = useSettingsStore();
-  const addToast = useToastStore((s) => s.addToast);
-
-  // 内置 Skill 列表
-  const builtinSkills = skills.filter((s) => s.isBuiltin);
-
-  // 切换 Skill 启用/禁用状态
-  const handleToggleSkill = async (skillId: string, enabled: boolean) => {
-    try {
-      await tauriCmd.toggleSkill(skillId, enabled);
-      // 刷新 Skill 列表以反映最新状态
-      await refreshSkills();
-    } catch (err) {
-      addToast(
-        "error",
-        `${t('settings.skills.toggleFailed')}: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  };
+  const { skills, tools } = useSettingsStore();
 
   return (
     <div>
@@ -43,49 +23,34 @@ export function SkillsTab() {
               </div>
               <div className="skill-desc">{tool.description}</div>
             </div>
-            <div className="tool-always-on">
-              {t('settings.tools.alwaysEnabled')}
+            <div className="skill-always-on">
+              {t('settings.skills.alwaysEnabled')}
             </div>
           </div>
         ))}
       </div>
 
-      {/* 内置 Skills */}
+      {/* 内置 Skills（始终启用） */}
       <div className="section-header" style={{ marginTop: 24 }}>
         <span className="section-title">{t('settings.skills.builtinSkills')}</span>
-        <span className="section-badge">{builtinSkills.length}</span>
+        <span className="section-badge">{skills.length}</span>
       </div>
 
       <div className="skills-list">
-        {builtinSkills.map((s) => {
-          const isCodeInterpreter = s.id === "code_interpreter_skill";
-          return (
-            <div key={s.id} className="skill-item">
-              <div className="skill-item-info">
-                <div className="skill-name-row">
-                  <span className="skill-name">{s.name}</span>
-                  <span className="skill-skill-badge">{t('settings.skills.skillBadge')}</span>
-                  {isCodeInterpreter && (
-                    <span className="skill-advanced-badge">{t('settings.skills.advanced')}</span>
-                  )}
-                </div>
-                <div className="skill-desc">{s.description}</div>
-                {/* Code Interpreter 禁用时显示安全提示 */}
-                {isCodeInterpreter && !s.enabled && (
-                  <div className="skill-hint">{t('settings.skills.codeInterpreterDisabledHint')}</div>
-                )}
+        {skills.map((s) => (
+          <div key={s.id} className="skill-item">
+            <div className="skill-item-info">
+              <div className="skill-name-row">
+                <span className="skill-name">{s.name}</span>
+                <span className="skill-skill-badge">{t('settings.skills.skillBadge')}</span>
               </div>
-              <label className="skill-toggle">
-                <input
-                  type="checkbox"
-                  checked={s.enabled}
-                  onChange={(e) => handleToggleSkill(s.id, e.target.checked)}
-                />
-                <span className="skill-toggle-slider" />
-              </label>
+              <div className="skill-desc">{s.description}</div>
             </div>
-          );
-        })}
+            <div className="skill-always-on">
+              {t('settings.skills.alwaysEnabled')}
+            </div>
+          </div>
+        ))}
       </div>
 
       <style>{`
@@ -138,15 +103,7 @@ export function SkillsTab() {
           background: var(--color-purple-light);
           color: var(--color-purple);
         }
-        .skill-advanced-badge {
-          font-size: 10px;
-          font-weight: 500;
-          padding: 1px 6px;
-          border-radius: 4px;
-          background: var(--color-warning-light);
-          color: var(--color-warning-dark, #D97706);
-        }
-        .tool-always-on {
+        .skill-always-on {
           font-size: 11px;
           color: var(--color-text-quaternary);
           flex-shrink: 0;
@@ -160,56 +117,6 @@ export function SkillsTab() {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
-        }
-        .skill-hint {
-          font-size: 11px;
-          color: var(--color-warning, #D97706);
-          margin-top: 4px;
-        }
-        .skill-toggle {
-          position: relative;
-          display: inline-block;
-          width: 36px;
-          height: 20px;
-          flex-shrink: 0;
-          margin-left: 12px;
-        }
-        .skill-toggle input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-        .skill-toggle-slider {
-          position: absolute;
-          cursor: pointer;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: var(--color-border, #ccc);
-          transition: 0.2s;
-          border-radius: 20px;
-        }
-        .skill-toggle-slider::before {
-          position: absolute;
-          content: "";
-          height: 16px;
-          width: 16px;
-          left: 2px;
-          bottom: 2px;
-          background-color: white;
-          transition: 0.2s;
-          border-radius: 50%;
-        }
-        .skill-toggle input:checked + .skill-toggle-slider {
-          background-color: var(--color-accent, #2E75B6);
-        }
-        .skill-toggle input:checked + .skill-toggle-slider::before {
-          transform: translateX(16px);
-        }
-        .skill-toggle input:focus-visible + .skill-toggle-slider {
-          outline: 2px solid var(--color-accent, #2E75B6);
-          outline-offset: 2px;
         }
       `}</style>
     </div>

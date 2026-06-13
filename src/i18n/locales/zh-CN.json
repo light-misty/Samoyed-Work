@@ -323,16 +323,10 @@
     "skills": {
       "sectionTitle": "Skills 管理",
       "builtinSkills": "内置 Skills",
-      "enabled": "已启用",
-      "disabled": "已禁用",
-      "enable": "启用",
-      "disable": "禁用",
       "noSkills": "暂无 Skill",
       "toolBadge": "Tool",
       "skillBadge": "Skill",
-      "advanced": "高级",
-      "toggleFailed": "切换技能状态失败",
-      "codeInterpreterDisabledHint": "代码解释器已禁用，文档生成和修改功能将不可用"
+      "alwaysEnabled": "始终启用"
     },
     "tools": {
       "sectionTitle": "Tools 管理",
@@ -631,7 +625,6 @@
       "confirmTimeout": "操作确认超时，请重新发送请求",
       "operationDenied": "操作已被用户拒绝",
       "featureNotFound": "请求的功能不存在",
-      "featureDisabled": "该功能已被禁用，请在设置中启用",
       "executionError": "Agent 执行出错，请重试",
       "sessionNotFound": "会话不存在，请创建新会话"
     },

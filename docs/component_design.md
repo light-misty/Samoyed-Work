@@ -877,8 +877,7 @@ interface SettingsState {
   setActiveProvider: (id: string) => void;
   testLLMConnection: (id: string) => Promise<boolean>;
 
-  // 技能操作
-  toggleSkill: (id: string) => void;
+  // 技能操作（内置技能始终启用，仅展示信息）
   configureSkill: (id: string, config: Record<string, unknown>) => void;
 
   // 模板操作

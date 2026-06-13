@@ -54,7 +54,6 @@ const ERROR_MESSAGE_MAP: Record<number, string> = {
   2004: i18n.t("errors.agent.confirmTimeout"),
   2005: i18n.t("errors.agent.operationDenied"),
   2006: i18n.t("errors.agent.featureNotFound"),
-  2007: i18n.t("errors.agent.featureDisabled"),
   2008: i18n.t("errors.agent.executionError"),
   2010: i18n.t("errors.agent.sessionNotFound"),
 

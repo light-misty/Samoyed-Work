@@ -118,7 +118,7 @@ cargo clean
 │  │  │  │  └─ prompts/   System Prompt: document_design, prompt_loader, task_type, token_budget
 │  │  │  ├─ llm/         LLM多Provider适配: router, provider (trait),
 │  │  │  │                  openai_adapter, anthropic_adapter, gemini_adapter
-│  │  │  ├─ skill/       Skill引擎: registry (注册表+禁用管理), builtin
+│  │  │  ├─ skill/       Skill引擎: registry (注册表), builtin
 │  │  │  ├─ tool/        Tool引擎: registry, builtin, trait_def (文件系统操作，始终启用)
 │  │  │  ├─ document/    Python Sidecar进程管理 (自动重启、超时、重试)
 │  │  │  ├─ attachment.rs 文件附件处理 (图片/文档/文本，base64编码，MIME校验)
@@ -178,7 +178,7 @@ cargo clean
 - Provider 类型 (前端): `openai | anthropic | ollama | gemini | custom`；Rust 端以 String 存储，兼容更多类型
 - 每 5 分钟后台自动执行健康检查，自动标记不可用 Provider；Provider 切换时发射 `llm:provider_switch` 事件
 
-### Skill 系统（文档处理，可禁用）
+### Skill 系统（文档处理，始终启用）
 - 每个 Skill 实现 `Skill` trait: `skill_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
 - 内置 6 个文档处理 Skill（均通过 Python Sidecar 执行）:
   - `generate_document`: 生成 docx/xlsx/pptx/pdf/md（含 Excel 公式/条件格式、PPT 颜色方案/字体、PDF 水印/密码等）
@@ -187,7 +187,7 @@ cargo clean
   - `convert_format`: 格式转换（docx/pdf/md/txt/csv/html 等互转）
   - `analyze_document`: 分析文档结构和统计信息
   - `batch_process`: 批量处理（批量转换/修改/分析）
-- Skill 可禁用/启用，前端 SkillsTab 管理
+- Skill 始终启用，前端 SkillsTab 仅展示信息
 
 ### Tool 系统（文件系统操作，始终启用）
 - Tool 是轻量级、始终启用的基础文件系统操作，与 Skill 平行但不可禁用
@@ -214,13 +214,13 @@ AppState {
     doc_service: Arc<DocumentService>,
     llm_router: Arc<RwLock<Arc<LlmRouter>>>,
     tool_registry: Arc<ToolRegistry>,                    // 工具（始终启用，不加 Mutex）
-    skill_registry: Arc<Mutex<SkillRegistry>>,           // 技能（可禁用，需 Mutex）
+    skill_registry: Arc<Mutex<SkillRegistry>>,           // 技能（始终启用，Mutex 用于运行时注册保护）
     fs_watcher: Arc<FsWatcherService>,
     network_monitor: Arc<NetworkMonitor>,                 // 网络状态监控（Online/Offline）
 }
 ```
-- `tool_registry` 在运行时不变，无需 Mutex 保护；`skill_registry` 因运行时禁用/启用需 Mutex
-- 锁获取原则：Skill/Tool 执行时短暂持锁获取 `Arc` 引用后立即释放，避免阻塞注册表
+- `tool_registry` 在运行时不变，无需 Mutex 保护；`skill_registry` 使用 Mutex 保护运行时注册访问
+- 锁获取原则：Skill 执行时短暂持锁获取 `Arc` 引用后立即释放，避免阻塞注册表
 
 ### 前端组件要点
 - **懒加载**: PreviewOverlay、SettingsDialog、HistoryPanel 通过 `React.lazy` 延迟加载，减少首屏体积
@@ -255,7 +255,7 @@ AppState {
 
 错误码按模块分段：
 - 1000-1999: LLM (连接失败/认证/限流/超时/Provider不可用等)
-- 2000-2999: Agent (已运行/最大迭代/确认超时/Skill不存在/禁用等)
+- 2000-2999: Agent (已运行/最大迭代/确认超时/Skill不存在等)
 - 3000-3999: 文档处理 (文件不存在/格式不支持/解析错误/Sidecar错误等)
 - 4000-4999: 数据库 (连接/查询/记录不存在/约束冲突/迁移失败等)
 - 5000-5999: 配置 (格式无效/字段缺失/Provider不存在等)
@@ -291,7 +291,6 @@ AppState {
 - `WorkspaceDefaults`: 默认工作区 ID → **WorkspaceTab**
 - `Shortcuts`: 快捷键配置（newSession/closeSession/sendMessage/toggleSidebar/quickPrompt）→ **ShortcutsTab**
 - `UpdateSettings`: 自动检查更新(autoCheck) → 与 **GeneralTab** 关联
-- `disabled_skills`: 已禁用 Skill 列表 → **SkillsTab**
 - LLM Provider 配置管理 → **LLMConfig**（含 ProviderFormDialog 子弹窗，Provider 支持 contextWindow/supportsVision/extraParams）
 - Prompt 模板管理 → **TemplatesTab**（含 TemplateEditDialog 子弹窗，支持带变量的 Prompt 模板）
 

@@ -53,7 +53,6 @@ export interface AppSettings {
   versionSnapshot: VersionSnapshotSettings;
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
-  disabledSkills: string[];
   update: UpdateSettings;
 }
 

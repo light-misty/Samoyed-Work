@@ -72,7 +72,6 @@ const defaultSettings: AppSettings = {
     toggleSidebar: "Ctrl+B",
     quickPrompt: "Ctrl+/",
   },
-  disabledSkills: [],
   update: {
     autoCheck: true,
   },

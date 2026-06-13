@@ -242,18 +242,6 @@ pub fn run() {
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
             crate::services::tool::builtin::register_builtin_tools(&mut tool_registry);
 
-            // 从配置加载已禁用 Skill 列表
-            // 过滤掉内置 Skill 的 ID，确保内置 Skill 不被意外禁用
-            let app_settings = config_manager.load_app_settings().unwrap_or_default();
-            let builtin_skill_ids: Vec<&str> = vec![
-                "docx_skill", "xlsx_skill", "pptx_skill", "pdf_skill",
-            ];
-            let filtered_disabled: Vec<String> = app_settings.disabled_skills.iter()
-                .filter(|id| !builtin_skill_ids.contains(&id.as_str()))
-                .cloned()
-                .collect();
-            skill_registry = skill_registry.with_disabled_skills(filtered_disabled);
-
             log::info!("DocAgent 应用初始化完成");
 
             // 初始化文件监听服务
@@ -423,7 +411,6 @@ pub fn run() {
             // Skill 命令
             commands::skill::list_tools,
             commands::skill::list_skills,
-            commands::skill::toggle_skill,
             // 设置命令
             commands::settings::get_settings,
             commands::settings::update_settings,

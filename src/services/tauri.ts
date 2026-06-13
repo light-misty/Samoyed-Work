@@ -327,13 +327,6 @@ export async function listSkills(): Promise<SkillInfo[]> {
   return result.data;
 }
 
-/** 切换 Skill 的启用/禁用状态 */
-export async function toggleSkill(skillId: string, enabled: boolean): Promise<boolean> {
-  const result = await safeInvoke(() => invoke<boolean>("toggle_skill", { skillId, enabled }), { context: "toggleSkill" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
 // ================================================================
 // 设置命令
 // ================================================================
