@@ -2,7 +2,7 @@
 
 # DocAgent
 
-**AI 驱动的文档处理 Agent，用对话搞定一切文档工作**
+**AI-Powered Document Agent - Handle All Document Tasks Through Conversation**
 
 [![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/docagent)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-orange?logo=tauri)](https://v2.tauri.app/)
@@ -10,154 +10,154 @@
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-[中文](./README.md) | [English](./README_en.md)
+[English](./README.md) | [中文](./README_zh.md)
 
 </div>
 
 ---
 
-> 本项目目前处于早期开发阶段，可能存在一些不足之处，敬请谅解。我们诚挚欢迎志同道合的开发者加入，共同完善这个项目！
+> This project is currently in early development stage and may have some imperfections. We sincerely welcome like-minded developers to join us in improving this project!
 
-> [点击此处下载 Windows 发行版本](https://github.com/XuMingKe-06/DocAgent/releases/latest)
+> [Click here to download release for Windows](https://github.com/XuMingKe-06/DocAgent/releases/latest)
 
-## DocAgent 是什么？
+## What is DocAgent?
 
-DocAgent 是一款**本地优先**的 AI 文档处理桌面应用。你只需用自然语言描述需求，AI Agent 就会自动完成文档的生成、读取、修改、格式转换等操作。
+DocAgent is a **local-first** AI document processing desktop application. Simply describe your needs in natural language, and the AI Agent will automatically handle document generation, reading, modification, format conversion, and more.
 
-不再在 Word、Excel、PPT、PDF 之间来回切换工具 -- 一个对话窗口，覆盖所有文档格式。
+No more switching between Word, Excel, PPT, and PDF tools -- one conversation window covers all document formats.
 
 ---
 
-## 为什么选择 DocAgent？
+## Why Choose DocAgent?
 
-### 本地优先，数据安全
+### Local-First, Data Security
 
-所有文档处理和文件操作都在你的机器上完成，只有 LLM API 调用需要联网。你的文档内容不会上传到任何第三方服务器。
+All document processing and file operations are completed on your machine. Only LLM API calls require internet access. Your document content is never uploaded to any third-party servers.
 
-### 多 LLM Provider 支持
+### Multi-LLM Provider Support
 
-灵活接入 OpenAI、Anthropic Claude、Google Gemini、Ollama 等主流 LLM 服务，自动健康检查与故障切换，你不会被单一供应商锁定。
+Flexible integration with mainstream LLM services like OpenAI, Anthropic Claude, Google Gemini, and Ollama. Automatic health checks and failover ensure you won't be locked into a single provider.
 
-### 专业文档处理引擎
+### Professional Document Processing Engine
 
-内置 6 大文档处理技能，覆盖从生成到分析的完整工作流：
+Built-in 6 major document processing skills, covering the complete workflow from generation to analysis:
 
-| 技能 | 说明 |
+| Skill | Description |
 |------|------|
-| **generate_document** | 生成 Word / Excel / PPT / PDF / Markdown，支持公式、条件格式、颜色方案、水印等高级特性 |
-| **read_document** | 读取文档结构与内容，支持格式信息提取 |
-| **modify_document** | 30+ 修改操作：段落、表格、书签、超链接、页眉页脚、目录等 |
-| **convert_format** | docx / pdf / md / txt / csv / html 等格式互转 |
-| **analyze_document** | 文档结构分析与统计信息 |
-| **batch_process** | 批量转换、修改、分析 |
+| **generate_document** | Generate Word / Excel / PPT / PDF / Markdown with advanced features like formulas, conditional formatting, color schemes, watermarks, etc. |
+| **read_document** | Read document structure and content, supporting format information extraction |
+| **modify_document** | 30+ modification operations: paragraphs, tables, bookmarks, hyperlinks, headers/footers, table of contents, etc. |
+| **convert_format** | Convert between docx / pdf / md / txt / csv / html formats |
+| **analyze_document** | Document structure analysis and statistical information |
+| **batch_process** | Batch conversion, modification, and analysis |
 
-### 安全可控的操作确认
+### Secure and Controllable Operation Confirmation
 
-高风险操作（删除、修改、批量处理）需用户确认后才执行，支持三级确认策略：始终确认 / 仅编辑确认 / 从不确认。
+High-risk operations (delete, modify, batch processing) require user confirmation before execution. Supports three-level confirmation policy: Always confirm / Confirm edits only / Never confirm.
 
-### 版本快照与回滚
+### Version Snapshots and Rollback
 
-每次文档修改自动创建版本快照，一键回滚到任意历史版本，再也不怕改错。
+Automatic version snapshots are created for every document modification. One-click rollback to any historical version - no more worries about making mistakes.
 
-### 实时文件监听
+### Real-time File Monitoring
 
-工作区文件变更实时同步到界面，配合内置文件树浏览，文档状态一目了然。
-
----
-
-## 技术亮点
-
-- **Tauri 2.x** -- Rust 后端 + Web 前端，安装包小、启动快、内存占用低
-- **Rust Agent 引擎** -- 异步 Tool Calling 循环，流式输出，增量持久化防崩溃丢失
-- **Python Sidecar** -- 专业文档处理（python-docx / openpyxl / python-pptx / PyMuPDF / reportlab），进程级隔离，崩溃自动重启
-- **多 LLM 路由** -- Provider 健康检查、延迟追踪、自动 Fallback
-- **React 19 + Zustand 5** -- 现代前端架构，虚拟滚动优化长列表性能
-- **PDF Canvas 渲染** -- 基于 pdfjs-dist 的高性能 PDF 预览，支持缩放与翻页
-- **统一错误码体系** -- 按模块分段（LLM / Agent / Doc / DB / Config / FS / Runtime），精确定位问题
+Workspace file changes are synchronized to the interface in real-time, combined with built-in file tree browsing for clear document status visibility.
 
 ---
 
-## 界面预览
+## Technical Highlights
 
-### 主界面
-
-![DocAgent 主界面](./assets/screenshots/main-interface.png)
-
-### 文档生成效果
-
-![生成的Word文档](./assets/screenshots/document-preview.png)
-
----
-
-## 使用示例
-
-**生成一份项目周报：**
-
-> 帮我生成一份项目周报 Word 文档，包含本周完成事项、下周计划和风险提示三个部分
-
-**读取并分析 Excel：**
-
-> 读取 data/sales.xlsx，分析各区域的销售数据，生成一份统计摘要
-
-**批量格式转换：**
-
-> 把 workspace/docs 目录下所有 Markdown 文件转换为 PDF
-
-**修改现有文档：**
-
-> 在 report.docx 的第三段后面插入一个三行四列的表格，表头是"姓名、部门、职位、入职日期"
+- **Tauri 2.x** -- Rust backend + Web frontend, small installation package, fast startup, low memory footprint
+- **Rust Agent Engine** -- Asynchronous Tool Calling loop, streaming output, incremental persistence to prevent crash-induced data loss
+- **Python Sidecar** -- Professional document processing (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab), process-level isolation, automatic restart on crash
+- **Multi-LLM Routing** -- Provider health checks, latency tracking, automatic fallback
+- **React 19 + Zustand 5** -- Modern frontend architecture, virtual scrolling for optimized long list performance
+- **PDF Canvas Rendering** -- High-performance PDF preview based on pdfjs-dist, supporting zoom and page navigation
+- **Unified Error Code System** -- Segmented by module (LLM / Agent / Doc / DB / Config / FS / Runtime) for precise problem localization
 
 ---
 
-## 配置与自定义
+## Interface Preview
 
-### LLM Provider 配置
+### Main Interface
 
-支持 OpenAI、Anthropic、Gemini、Ollama 及任何兼容 OpenAI API 的服务。在设置页添加你的 API Key 和模型即可开始使用。
+![DocAgent Main Interface](./assets/screenshots/main-interface.png)
 
-### 技能管理
+### Document Generation Result
 
-6 个内置文档处理技能可按需启用/禁用，在设置页的技能标签页管理。
-
-### Prompt 模板
-
-内置模板管理系统，保存常用 Prompt，一键复用。
-
-### 快捷键
-
-可自定义快捷键：新建会话、关闭会话、发送消息、切换侧栏、快速 Prompt 等。
+![Generated Word Document](./assets/screenshots/document-preview.png)
 
 ---
 
-## 贡献
+## Usage Examples
 
-欢迎贡献代码、报告问题或提出建议！
+**Generate a project weekly report:**
 
-1. Fork 本仓库
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'feat: 添加某个很棒的功能'`)
-4. 推送分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
+> Help me generate a project weekly report Word document with three sections: completed items this week, next week's plan, and risk alerts
+
+**Read and analyze Excel:**
+
+> Read data/sales.xlsx, analyze sales data by region, and generate a statistical summary
+
+**Batch format conversion:**
+
+> Convert all Markdown files in the workspace/docs directory to PDF
+
+**Modify existing document:**
+
+> Insert a 3-row, 4-column table after the third paragraph in report.docx, with headers "Name, Department, Position, Hire Date"
 
 ---
 
-## 技术栈一览
+## Configuration and Customization
 
-| 类别 | 技术 |
+### LLM Provider Configuration
+
+Supports OpenAI, Anthropic, Gemini, Ollama, and any OpenAI API-compatible service. Simply add your API Key and model in the settings page to get started.
+
+### Skill Management
+
+6 built-in document processing skills can be enabled/disabled as needed, managed in the Skills tab of the settings page.
+
+### Prompt Templates
+
+Built-in template management system to save common Prompts for one-click reuse.
+
+### Keyboard Shortcuts
+
+Customizable shortcuts: new session, close session, send message, toggle sidebar, quick prompt, etc.
+
+---
+
+## Contributing
+
+Contributions, bug reports, and suggestions are welcome!
+
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Create a Pull Request
+
+---
+
+## Technology Stack
+
+| Category | Technology |
 |------|------|
-| 桌面框架 | Tauri 2.x |
-| 前端 | React 19 + TypeScript 5 + Vite 6 |
+| Desktop Framework | Tauri 2.x |
+| Frontend | React 19 + TypeScript 5 + Vite 6 |
 | UI | Shadcn/ui + Radix + Tailwind CSS 4 |
-| 状态管理 | Zustand 5 |
-| 后端 | Rust (Tokio 异步运行时) |
-| 数据库 | SQLite (rusqlite, bundled) |
-| 文档处理 | Python Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab) |
-| PDF 预览 | pdfjs-dist |
-| 图表 | Recharts |
-| 自动更新 | tauri-plugin-updater |
+| State Management | Zustand 5 |
+| Backend | Rust (Tokio async runtime) |
+| Database | SQLite (rusqlite, bundled) |
+| Document Processing | Python Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab) |
+| PDF Preview | pdfjs-dist |
+| Charts | Recharts |
+| Auto Update | tauri-plugin-updater |
 
 ---
 
-## 许可证
+## License
 
-本项目基于 [MIT 许可证](./LICENSE) 开源。
+This project is open-sourced under the [MIT License](./LICENSE).
