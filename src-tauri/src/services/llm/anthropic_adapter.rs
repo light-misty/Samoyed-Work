@@ -226,18 +226,20 @@ impl AnthropicAdapter {
     }
 
     /// 构建 Anthropic Messages API 请求体
+    /// max_tokens_override: 可选的 max_tokens 覆盖值，用于截断重试时增大输出限制
     fn build_request_body(
         &self,
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
         stream: bool,
+        max_tokens_override: Option<u32>,
     ) -> Value {
         let (system, anthropic_messages) = self.convert_messages(messages);
 
         let mut body = json!({
             "model": self.model,
             "messages": anthropic_messages,
-            "max_tokens": self.advanced.max_tokens,
+            "max_tokens": max_tokens_override.unwrap_or(self.advanced.max_tokens),
             "stream": stream,
         });
 
@@ -529,7 +531,7 @@ impl LlmProvider for AnthropicAdapter {
     ) -> Result<ChatResponse, CommandError> {
         log::info!("发送 Anthropic 非流式请求, model={}", self.model);
         let url = self.build_api_url();
-        let body = self.build_request_body(messages, tools, false);
+        let body = self.build_request_body(messages, tools, false, None);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
             log::error!("解析 Anthropic 非流式响应失败, model={}, 错误: {}", self.model, e);
@@ -546,7 +548,7 @@ impl LlmProvider for AnthropicAdapter {
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
         log::info!("发送 Anthropic 流式请求, model={}", self.model);
         let url = self.build_api_url();
-        let body = self.build_request_body(messages, tools, true);
+        let body = self.build_request_body(messages, tools, true, None);
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
         let response = self.send_streaming_with_retry(&url, &body).await?;
 
@@ -805,6 +807,248 @@ impl LlmProvider for AnthropicAdapter {
         Ok(rx)
     }
 
+    /// 流式对话，支持覆盖 max_tokens 参数
+    /// 用于响应截断时以更大的 max_tokens 重试
+    async fn chat_stream_with_max_tokens(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        max_tokens_override: u32,
+    ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
+        log::info!("发送 Anthropic 流式请求 (max_tokens={}), model={}", max_tokens_override, self.model);
+        let url = self.build_api_url();
+        let body = self.build_request_body(messages, tools, true, Some(max_tokens_override));
+        // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
+        let response = self.send_streaming_with_retry(&url, &body).await?;
+
+        let (tx, rx) = mpsc::channel(100);
+        let model_name = self.model.clone();
+
+        tokio::spawn(async move {
+            let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
+            // tool_use 块的计数器，用于生成 OpenAI 兼容的 tool_call index
+            let mut tool_call_counter: u32 = 0;
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        buffer.push_str(&text);
+
+                        // 解析 SSE 事件（以空行分隔）
+                        while let Some(pos) = buffer.find("\n\n") {
+                            let event_text = buffer[..pos].to_string();
+                            buffer = buffer[pos + 2..].to_string();
+
+                            // 解析事件类型和数据
+                            let mut event_type = String::new();
+                            let mut event_data = String::new();
+
+                            for line in event_text.lines() {
+                                if let Some(et) = line.strip_prefix("event: ") {
+                                    event_type = et.to_string();
+                                } else if let Some(d) = line.strip_prefix("data: ") {
+                                    event_data = d.to_string();
+                                } else if let Some(d) = line.strip_prefix("data:") {
+                                    event_data = d.to_string();
+                                }
+                            }
+
+                            if event_data.is_empty() {
+                                continue;
+                            }
+
+                            let data = event_data.trim();
+                            let value: Value = match serde_json::from_str(data) {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    log::error!("解析 Anthropic SSE 数据失败, model={}, 错误: {}", model_name, e);
+                                    let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                    continue;
+                                }
+                            };
+
+                            match event_type.as_str() {
+                                "message_start" => {
+                                    // 消息开始，提取 message id
+                                    let msg_id = value["message"]["id"].as_str().unwrap_or("").to_string();
+                                    let _ = msg_id; // 保留用于日志
+                                }
+                                "content_block_start" => {
+                                    // 新内容块开始
+                                    if let Some(content_block) = value.get("content_block") {
+                                        if content_block["type"] == "tool_use" {
+                                            // tool_use 块开始，提前发射 tool_call 事件
+                                            let tool_name = content_block["name"].as_str().unwrap_or("").to_string();
+                                            let tool_id = content_block["id"].as_str().unwrap_or("").to_string();
+                                            let index = tool_call_counter;
+                                            tool_call_counter += 1;
+
+                                            let chunk = StreamChunk {
+                                                id: String::new(),
+                                                choices: vec![StreamChoice {
+                                                    index: 0,
+                                                    delta: StreamDelta {
+                                                        role: None,
+                                                        content: None,
+                                                        reasoning_content: None,
+                                                        tool_calls: Some(vec![LlmToolCall {
+                                                            index,
+                                                            id: tool_id,
+                                                            name: tool_name,
+                                                            arguments: String::new(),
+                                                        }]),
+                                                    },
+                                                    finish_reason: None,
+                                                }],
+                                            };
+                                            if tx.send(Ok(chunk)).await.is_err() {
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                "content_block_delta" => {
+                                    // 内容块增量
+                                    if let Some(delta) = value.get("delta") {
+                                        let delta_type = delta["type"].as_str().unwrap_or("");
+
+                                        match delta_type {
+                                            "text_delta" => {
+                                                // 文本增量
+                                                let text = delta["text"].as_str().unwrap_or("");
+                                                let chunk = StreamChunk {
+                                                    id: String::new(),
+                                                    choices: vec![StreamChoice {
+                                                        index: 0,
+                                                        delta: StreamDelta {
+                                                            role: None,
+                                                            content: Some(text.to_string()),
+                                                            reasoning_content: None,
+                                                            tool_calls: None,
+                                                        },
+                                                        finish_reason: None,
+                                                    }],
+                                                };
+                                                if tx.send(Ok(chunk)).await.is_err() {
+                                                    return;
+                                                }
+                                            }
+                                            "thinking_delta" => {
+                                                // 思考增量（Extended Thinking）
+                                                let thought = delta["thinking"].as_str().unwrap_or("");
+                                                let chunk = StreamChunk {
+                                                    id: String::new(),
+                                                    choices: vec![StreamChoice {
+                                                        index: 0,
+                                                        delta: StreamDelta {
+                                                            role: None,
+                                                            content: None,
+                                                            reasoning_content: Some(thought.to_string()),
+                                                            tool_calls: None,
+                                                        },
+                                                        finish_reason: None,
+                                                    }],
+                                                };
+                                                if tx.send(Ok(chunk)).await.is_err() {
+                                                    return;
+                                                }
+                                            }
+                                            "input_json_delta" => {
+                                                // tool_use 参数增量
+                                                let partial_json = delta["partial_json"].as_str().unwrap_or("");
+                                                // 找到当前 tool_call 的索引（最后一个）
+                                                let index = tool_call_counter.saturating_sub(1);
+                                                let chunk = StreamChunk {
+                                                    id: String::new(),
+                                                    choices: vec![StreamChoice {
+                                                        index: 0,
+                                                        delta: StreamDelta {
+                                                            role: None,
+                                                            content: None,
+                                                            reasoning_content: None,
+                                                            tool_calls: Some(vec![LlmToolCall {
+                                                                index,
+                                                                id: String::new(),
+                                                                name: String::new(),
+                                                                arguments: partial_json.to_string(),
+                                                            }]),
+                                                        },
+                                                        finish_reason: None,
+                                                    }],
+                                                };
+                                                if tx.send(Ok(chunk)).await.is_err() {
+                                                    return;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                "content_block_stop" => {
+                                    // 内容块结束，无需特殊处理
+                                }
+                                "message_delta" => {
+                                    // 消息级增量（包含 stop_reason）
+                                    if let Some(delta) = value.get("delta") {
+                                        let stop_reason = delta["stop_reason"].as_str().map(|r| match r {
+                                            "end_turn" => "stop".to_string(),
+                                            "tool_use" => "tool_calls".to_string(),
+                                            "max_tokens" => "length".to_string(),
+                                            "stop_sequence" => "stop".to_string(),
+                                            other => other.to_string(),
+                                        });
+
+                                        let chunk = StreamChunk {
+                                            id: String::new(),
+                                            choices: vec![StreamChoice {
+                                                index: 0,
+                                                delta: StreamDelta {
+                                                    role: None,
+                                                    content: None,
+                                                    reasoning_content: None,
+                                                    tool_calls: None,
+                                                },
+                                                finish_reason: stop_reason,
+                                            }],
+                                        };
+                                        if tx.send(Ok(chunk)).await.is_err() {
+                                            return;
+                                        }
+                                    }
+                                }
+                                "message_stop" => {
+                                    // 消息结束
+                                    return;
+                                }
+                                "ping" => {
+                                    // 心跳，忽略
+                                }
+                                "error" => {
+                                    let error_msg = value["error"]["message"].as_str().unwrap_or("未知错误");
+                                    log::error!("Anthropic SSE 错误事件, model={}, 错误: {}", model_name, error_msg);
+                                    let _ = tx.send(Err(CommandError::llm(1000, format!("API 错误: {}", error_msg)))).await;
+                                    return;
+                                }
+                                _ => {
+                                    log::debug!("忽略未知 Anthropic SSE 事件类型: {}", event_type);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("流读取错误, model={}, 错误: {}", model_name, e);
+                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        return;
+                    }
+                }
+            }
+        });
+
+        Ok(rx)
+    }
+
     async fn test_connection(&self) -> Result<ConnectionResult, CommandError> {
         log::info!("测试 Anthropic 连接, model={}", self.model);
         let start = std::time::Instant::now();
@@ -818,7 +1062,7 @@ impl LlmProvider for AnthropicAdapter {
             attachments: None,
         }];
         let url = self.build_api_url();
-        let body = self.build_request_body(&test_messages, &[], false);
+        let body = self.build_request_body(&test_messages, &[], false, None);
 
         match self.send_with_retry(&url, &body).await {
             Ok(response) => {
@@ -868,6 +1112,10 @@ impl LlmProvider for AnthropicAdapter {
             .unwrap_or_default();
 
         log::info!("Anthropic 适配器客户端已重建");
+    }
+
+    fn get_max_tokens(&self) -> u32 {
+        self.advanced.max_tokens
     }
 
     /// 轻量级健康检查：仅发送 HEAD 请求到 /v1/messages 端点

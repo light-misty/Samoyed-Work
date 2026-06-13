@@ -69,6 +69,15 @@ pub trait LlmProvider: Send + Sync {
         tools: &[ToolDefinition],
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError>;
 
+    /// 流式对话，支持覆盖 max_tokens 参数
+    /// 用于响应截断时以更大的 max_tokens 重试，避免因输出限制导致 tool_call 参数不完整
+    async fn chat_stream_with_max_tokens(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        max_tokens_override: u32,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError>;
+
     /// 测试连接是否可用
     async fn test_connection(&self) -> Result<ConnectionResult, CommandError>;
 
@@ -80,4 +89,8 @@ pub trait LlmProvider: Send + Sync {
     async fn lightweight_health_check(&self) -> Result<ConnectionResult, CommandError> {
         self.test_connection().await
     }
+
+    /// 获取当前 Provider 的 max_tokens 配置
+    /// 用于截断重试时计算翻倍后的 max_tokens
+    fn get_max_tokens(&self) -> u32;
 }

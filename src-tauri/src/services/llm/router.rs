@@ -511,6 +511,48 @@ impl LlmRouter {
         self.fallback_chat_stream(messages, tools, &default_id, error).await
     }
 
+    /// 流式对话，支持覆盖 max_tokens 参数
+    /// 用于响应截断时以更大的 max_tokens 重试，避免因输出限制导致 tool_call 参数不完整
+    pub async fn chat_stream_with_max_tokens(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        max_tokens_override: u32,
+    ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
+        let default_id = self.default_id.clone()
+            .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))?;
+
+        log::info!("流式对话 (max_tokens={}), 使用默认 Provider: {}", max_tokens_override, default_id);
+
+        if self.is_provider_available(&default_id) {
+            let providers = self.providers.read().await;
+            if let Some(provider) = providers.get(&default_id) {
+                let start = std::time::Instant::now();
+                match provider.chat_stream_with_max_tokens(messages, tools, max_tokens_override).await {
+                    Ok(rx) => {
+                        let latency = start.elapsed().as_millis() as u64;
+                        self.mark_success(&default_id, latency);
+                        return Ok(rx);
+                    }
+                    Err(e) => {
+                        self.mark_failure(&default_id, &e.message);
+                        log::warn!("默认 Provider 流式请求 (max_tokens={}) 失败, 尝试 Fallback, 错误: {}", max_tokens_override, e.message);
+                        drop(providers);
+                        return self.fallback_chat_stream(messages, tools, &default_id, e).await;
+                    }
+                }
+            }
+        } else {
+            log::warn!("默认 Provider {} 不可用（健康检查未通过），跳过", default_id);
+        }
+
+        let error = CommandError::llm(
+            crate::errors::LLM_PROVIDER_UNAVAILABLE,
+            format!("默认 Provider {} 不可用", default_id),
+        );
+        self.fallback_chat_stream(messages, tools, &default_id, error).await
+    }
+
     /// 流式 Fallback 逻辑
     async fn fallback_chat_stream(
         &self,
@@ -560,6 +602,21 @@ impl LlmRouter {
     // ================================================================
     // 其他方法
     // ================================================================
+
+    /// 获取默认 Provider 的 max_tokens 配置
+    /// 用于截断重试时计算翻倍后的 max_tokens
+    pub async fn get_default_max_tokens(&self) -> u32 {
+        let default_id = match &self.default_id {
+            Some(id) => id.clone(),
+            None => return crate::config::llm_config::AdvancedConfig::default().max_tokens,
+        };
+        let providers = self.providers.read().await;
+        if let Some(provider) = providers.get(&default_id) {
+            provider.get_max_tokens()
+        } else {
+            crate::config::llm_config::AdvancedConfig::default().max_tokens
+        }
+    }
 
     /// 测试指定 Provider 的连接
     pub async fn test_connection(&self, provider_id: &str) -> Result<ConnectionResult, CommandError> {

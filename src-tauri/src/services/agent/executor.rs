@@ -23,6 +23,10 @@ const RETRY_DELAY_SECONDS: u64 = 2;
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 /// 始终需要确认的高风险 Skill 列表
 const HIGH_RISK_SKILLS: &[&str] = &["delete_file", "code_interpreter_skill"];
+/// 截断重试最大次数（每次翻倍 max_tokens）
+const MAX_TRUNCATION_RETRIES: u32 = 2;
+/// 截断重试时 max_tokens 的最大上限
+const MAX_TOKENS_CEILING: u32 = 131072;
 
 /// 检查错误码是否可重试
 fn is_retryable_error(code: u32) -> bool {
@@ -140,6 +144,11 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 检查是否应该停止
     fn check_stopped(&self, session_id: &str) -> bool {
         (self.should_stop)(session_id)
+    }
+
+    /// 获取当前 Provider 的 max_tokens 配置
+    async fn get_current_max_tokens(&self) -> u32 {
+        self.router.get_default_max_tokens().await
     }
 
     /// 检查并处理停止逻辑，如果需要停止则返回 Some(ExecutionResult)
@@ -725,7 +734,7 @@ impl<R: Runtime> AgentExecutor<R> {
             }
             // 检测响应是否因 max_tokens 不足被截断（DeepSeek R1 等推理模型的
             // reasoning_content 可能消耗大量 token 导致实际响应被截断）
-            let is_truncated = finish_reason.as_deref() == Some("length");
+            let mut is_truncated = finish_reason.as_deref() == Some("length");
             log::debug!("LLM 响应解析完成, session_id={}, tool_calls数={}, 内容长度={}, finish_reason={:?}", ctx.session_id, collected_tool_calls.len(), assistant_content.len(), finish_reason);
 
             if has_tool_calls {
@@ -735,6 +744,234 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 如果响应被截断，tool_call 的 JSON 参数可能不完整
                 if is_truncated {
                     log::warn!("LLM 响应被截断且包含 tool_calls, session_id={}, 检查参数完整性", ctx.session_id);
+                }
+
+                // 截断重试：当响应被截断且 tool_call 参数解析失败时，
+                // 回滚上下文，用翻倍的 max_tokens 重新调用 LLM
+                if is_truncated {
+                    let mut all_params_valid = true;
+                    let mut has_empty_code = false;
+
+                    for tool_call in collected_tool_calls.iter() {
+                        let params_result = serde_json::from_str::<serde_json::Value>(&tool_call.arguments);
+                        if params_result.is_err() {
+                            all_params_valid = false;
+                            log::warn!(
+                                "截断响应的 tool_call 参数解析失败, session_id={}, tool={}, arguments长度={}",
+                                ctx.session_id, tool_call.name, tool_call.arguments.len()
+                            );
+                            break;
+                        }
+                        // 检查 code_interpreter_skill 的 code 字段是否为空
+                        let params = params_result.unwrap_or(json!({}));
+                        if tool_call.name == "code_interpreter_skill"
+                            && params["code"].as_str().unwrap_or("").is_empty() {
+                                has_empty_code = true;
+                                log::warn!(
+                                    "截断响应的 code_interpreter_skill 参数中 code 为空, session_id={}",
+                                    ctx.session_id
+                                );
+                                break;
+                        }
+                    }
+
+                    if !all_params_valid || has_empty_code {
+                        // 回滚刚添加的不完整 assistant message
+                        ctx.pop_last_assistant_message();
+
+                        // 为截断响应中已提前发射 tool_call 事件的节点发射关闭事件
+                        // 避免前端节点永远处于加载状态
+                        for tool_call in collected_tool_calls.iter() {
+                            if early_announced_tool_indices.contains(&tool_call.index) {
+                                log::debug!(
+                                    "为截断的 tool_call 发射关闭事件, session_id={}, tool={}, call_id={}",
+                                    ctx.session_id, tool_call.name, tool_call.id
+                                );
+                                self.emitter.emit_tool_result(ToolResultPayload {
+                                    session_id: ctx.session_id.clone(),
+                                    call_id: if tool_call.id.is_empty() { format!("streaming_{}", tool_call.index) } else { tool_call.id.clone() },
+                                    success: false,
+                                    result: json!(null),
+                                    error: Some("响应被截断，正在增加输出限制重试...".to_string()),
+                                    duration_ms: 0,
+                                }).ok();
+                            }
+                        }
+
+                        // 发射思考事件，让用户看到重试提示
+                        self.emitter.emit_thinking(ThinkingPayload {
+                            session_id: ctx.session_id.clone(),
+                            step: total_steps,
+                            thought: "输出被截断，正在增加输出限制重试...".to_string(),
+                        }).ok();
+
+                        // 用翻倍的 max_tokens 重试 LLM 调用
+                        let mut truncation_retry_count = 0;
+                        let mut current_max_tokens = self.get_current_max_tokens().await;
+
+                        while truncation_retry_count < MAX_TRUNCATION_RETRIES {
+                            truncation_retry_count += 1;
+                            let new_max_tokens = std::cmp::min(current_max_tokens.saturating_mul(2), MAX_TOKENS_CEILING);
+                            log::info!(
+                                "截断重试 #{}, max_tokens: {} -> {}, session_id={}",
+                                truncation_retry_count, current_max_tokens, new_max_tokens, ctx.session_id
+                            );
+
+                            if self.check_stopped(&ctx.session_id) {
+                                return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).unwrap());
+                            }
+
+                            let retry_messages = ctx.get_messages_for_iteration(current_iteration);
+                            match self.router.chat_stream_with_max_tokens(&retry_messages, &tools, new_max_tokens).await {
+                                Ok(mut retry_rx) => {
+                                    // 收集重试响应
+                                    let mut retry_content = String::new();
+                                    let mut retry_reasoning = String::new();
+                                    let mut retry_tool_calls: HashMap<u32, LlmToolCall> = HashMap::new();
+                                    let mut retry_finish_reason: Option<String> = None;
+                                    let mut retry_message_id = String::new();
+
+                                    while let Some(chunk_result) = retry_rx.recv().await {
+                                        match chunk_result {
+                                            Ok(chunk) => {
+                                                retry_message_id = chunk.id.clone();
+                                                for choice in chunk.choices {
+                                                    if let Some(rc) = &choice.delta.reasoning_content {
+                                                        retry_reasoning.push_str(rc);
+                                                    }
+                                                    if let Some(content) = &choice.delta.content {
+                                                        retry_content.push_str(content);
+                                                        // 截断重试时不发射流式 content 事件
+                                                        // 避免与原始截断响应的 content 拼接导致重复
+                                                        // 重试完成后统一发射 is_streaming=false 事件替换
+                                                    }
+                                                    if let Some(tool_calls) = &choice.delta.tool_calls {
+                                                        for tc in tool_calls {
+                                                            let entry = retry_tool_calls.entry(tc.index).or_insert_with(|| LlmToolCall {
+                                                                index: tc.index,
+                                                                id: tc.id.clone(),
+                                                                name: tc.name.clone(),
+                                                                arguments: String::new(),
+                                                            });
+                                                            if !tc.id.is_empty() { entry.id = tc.id.clone(); }
+                                                            if !tc.name.is_empty() { entry.name = tc.name.clone(); }
+                                                            entry.arguments.push_str(&tc.arguments);
+                                                        }
+                                                    }
+                                                    if choice.finish_reason.is_some() {
+                                                        retry_finish_reason = choice.finish_reason.clone();
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::error!("截断重试流式响应错误, session_id={}, 错误: {}", ctx.session_id, e.message);
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    let retry_is_truncated = retry_finish_reason.as_deref() == Some("length");
+                                    let retry_has_tool_calls = !retry_tool_calls.is_empty();
+
+                                    // 重试完成后发射 is_streaming=false 的 content 事件
+                                    // 替换前端已有的原始截断响应内容，避免显示过时内容
+                                    self.emitter.emit_content(ContentPayload {
+                                        session_id: ctx.session_id.clone(),
+                                        message_id: retry_message_id.clone(),
+                                        content: retry_content.clone(),
+                                        is_streaming: false,
+                                        iteration: Some(current_iteration),
+                                    }).ok();
+
+                                    if !retry_reasoning.is_empty() {
+                                        self.emitter.emit_deep_thinking(DeepThinkingPayload {
+                                            session_id: ctx.session_id.clone(),
+                                            step: total_steps,
+                                            thought: String::new(),
+                                            is_streaming: false,
+                                            iteration: Some(current_iteration),
+                                        }).ok();
+                                    }
+
+                                    log::debug!(
+                                        "截断重试响应解析完成, session_id={}, tool_calls数={}, 内容长度={}, finish_reason={:?}",
+                                        ctx.session_id, retry_tool_calls.len(), retry_content.len(), retry_finish_reason
+                                    );
+
+                                    if retry_has_tool_calls {
+                                        // 将 HashMap 转为 Vec（按 index 排序）
+                                        let mut retry_tc_vec: Vec<LlmToolCall> = retry_tool_calls.values().cloned().collect();
+                                        retry_tc_vec.sort_by_key(|tc| tc.index);
+
+                                        // 添加重试的 assistant message
+                                        ctx.add_assistant_message(
+                                            &retry_content,
+                                            Some(retry_tc_vec.clone()),
+                                            if retry_reasoning.is_empty() { None } else { Some(retry_reasoning.clone()) },
+                                        );
+
+                                        // 检查重试响应的参数完整性
+                                        let mut retry_params_valid = true;
+                                        let mut retry_empty_code = false;
+                                        for tc in &retry_tc_vec {
+                                            let pr = serde_json::from_str::<serde_json::Value>(&tc.arguments);
+                                            if pr.is_err() {
+                                                retry_params_valid = false;
+                                                break;
+                                            }
+                                            let p = pr.unwrap_or(json!({}));
+                                            if tc.name == "code_interpreter_skill"
+                                                && p["code"].as_str().unwrap_or("").is_empty() {
+                                                    retry_empty_code = true;
+                                                    break;
+                                            }
+                                        }
+
+                                        if !retry_is_truncated && retry_params_valid && !retry_empty_code {
+                                            // 重试成功，用重试的 tool_calls 替换原来的
+                                            collected_tool_calls = retry_tc_vec;
+                                            assistant_content = retry_content;
+                                            reasoning_content = retry_reasoning;
+                                            is_truncated = false;
+                                            log::info!("截断重试成功, session_id={}, 新max_tokens={}", ctx.session_id, new_max_tokens);
+                                            break;
+                                        } else {
+                                            // 重试后仍然截断，回滚并继续重试
+                                            ctx.pop_last_assistant_message();
+                                            current_max_tokens = new_max_tokens;
+                                            if truncation_retry_count >= MAX_TRUNCATION_RETRIES {
+                                                log::warn!("截断重试次数耗尽, 降级为提示LLM重写, session_id={}", ctx.session_id);
+                                                // 降级：将最后一次截断的响应作为上下文，让 LLM 重写
+                                                ctx.add_assistant_message(
+                                                    &retry_content,
+                                                    Some(retry_tc_vec.clone()),
+                                                    if retry_reasoning.is_empty() { None } else { Some(retry_reasoning) },
+                                                );
+                                                // 使用重试的 tool_calls 继续处理（会在下面的 for 循环中走旧的截断处理逻辑）
+                                                collected_tool_calls = retry_tc_vec;
+                                                assistant_content = retry_content;
+                                                is_truncated = true;
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        // 重试后没有 tool_calls（LLM 直接回复了文本），直接使用
+                                        // 这种情况不太常见，但作为安全处理
+                                        collected_tool_calls.clear();
+                                        assistant_content = retry_content;
+                                        reasoning_content = retry_reasoning;
+                                        is_truncated = false;
+                                        break;
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("截断重试 LLM 调用失败, session_id={}, 错误: {}", ctx.session_id, e.message);
+                                    // 重试失败，降级为旧的截断处理逻辑
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 for tool_call in collected_tool_calls.iter() {
@@ -758,11 +995,11 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 尝试解析 tool_call 参数，如果响应被截断则参数可能不完整
                     let params_result = serde_json::from_str::<serde_json::Value>(&tool_call.arguments);
 
-                    // 截断响应时参数解析失败：跳过执行，反馈给LLM重新生成
-                    // 必须发射 tool_result 事件关闭前端加载状态，同时发射 thinking 事件提示重试
+                    // 截断重试耗尽后仍解析失败的降级处理：
+                    // 跳过执行，反馈给 LLM 重新生成
                     if is_truncated && params_result.is_err() {
                         log::warn!(
-                            "截断响应的 tool_call 参数解析失败, 跳过执行, session_id={}, tool={}, arguments长度={}",
+                            "截断响应的 tool_call 参数解析失败（重试耗尽）, 跳过执行, session_id={}, tool={}, arguments长度={}",
                             ctx.session_id, tool_call.name, tool_call.arguments.len()
                         );
                         let retry_msg = format!(
@@ -773,7 +1010,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         self.emitter.emit_thinking(ThinkingPayload {
                             session_id: ctx.session_id.clone(),
                             step: total_steps,
-                            thought: "代码较长导致响应被截断，正在重新生成...".to_string(),
+                            thought: "输出限制不足导致响应被截断，正在重新生成...".to_string(),
                         }).ok();
                         // 必须发射 tool_result 事件，否则前端对应节点永远显示加载动画
                         self.emitter.emit_tool_result(ToolResultPayload {
@@ -791,13 +1028,12 @@ impl<R: Runtime> AgentExecutor<R> {
 
                     let params = params_result.unwrap_or(json!({}));
 
-                    // 截断响应时，code_interpreter_skill 的 code 字段可能为空（参数部分截断）
-                    // 此时也应跳过执行，避免无意义的确认弹窗
+                    // 截断重试耗尽后 code_interpreter_skill 的 code 字段仍为空的降级处理
                     if is_truncated && tool_call.name == "code_interpreter_skill" {
                         let code_content = params["code"].as_str().unwrap_or("");
                         if code_content.is_empty() {
                             log::warn!(
-                                "截断响应的 code_interpreter_skill 参数中 code 为空, 跳过执行, session_id={}",
+                                "截断响应的 code_interpreter_skill 参数中 code 为空（重试耗尽）, 跳过执行, session_id={}",
                                 ctx.session_id
                             );
                             // 发射思考事件，让用户看到重试提示

@@ -64,10 +64,12 @@ impl GeminiAdapter {
 
     /// 构建 Gemini API 请求体
     /// 将内部 ChatMessage 格式转换为 Gemini contents 格式
+    /// max_tokens_override: 可选的 max_tokens 覆盖值，用于截断重试时增大输出限制
     fn build_request_body(
         &self,
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
+        max_tokens_override: Option<u32>,
     ) -> Value {
         let mut system_parts: Vec<Value> = Vec::new();
         let mut contents: Vec<Value> = Vec::new();
@@ -247,7 +249,7 @@ impl GeminiAdapter {
         body["generationConfig"] = json!({
             "temperature": self.advanced.temperature,
             "topP": self.advanced.top_p,
-            "maxOutputTokens": self.advanced.max_tokens,
+            "maxOutputTokens": max_tokens_override.unwrap_or(self.advanced.max_tokens),
             "thinkingConfig": {
                 "includeThoughts": true
             }
@@ -640,7 +642,7 @@ impl LlmProvider for GeminiAdapter {
     ) -> Result<ChatResponse, CommandError> {
         log::info!("发送非流式请求 (Gemini), model={}", self.model);
         let url = self.build_url();
-        let body = self.build_request_body(messages, tools);
+        let body = self.build_request_body(messages, tools, None);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
             log::error!(
@@ -661,7 +663,7 @@ impl LlmProvider for GeminiAdapter {
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
         log::info!("发送流式请求 (Gemini), model={}", self.model);
         let url = self.build_streaming_url();
-        let body = self.build_request_body(messages, tools);
+        let body = self.build_request_body(messages, tools, None);
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
         let response = self.send_streaming_with_retry(&url, &body).await?;
 
@@ -766,6 +768,168 @@ impl LlmProvider for GeminiAdapter {
         Ok(rx)
     }
 
+    /// 流式对话，支持覆盖 max_tokens 参数
+    /// 用于响应截断时以更大的 max_tokens 重试
+    async fn chat_stream_with_max_tokens(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        max_tokens_override: u32,
+    ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
+        log::info!("发送流式请求 (Gemini, max_tokens={}), model={}", max_tokens_override, self.model);
+        let url = self.build_streaming_url();
+        let body = self.build_request_body(messages, tools, Some(max_tokens_override));
+        // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
+        let response = self.send_streaming_with_retry(&url, &body).await?;
+
+        let (tx, rx) = mpsc::channel(100);
+        let model_name = self.model.clone();
+
+        tokio::spawn(async move {
+            let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        buffer.push_str(&text);
+
+                        // 解析 SSE 事件
+                        while let Some(pos) = buffer.find("\n\n") {
+                            let event_text = buffer[..pos].to_string();
+                            buffer = buffer[pos + 2..].to_string();
+
+                            for line in event_text.lines() {
+                                // SSE 规范允许 data: 后有无空格，先尝试带空格再尝试无空格
+                                let data = line
+                                    .strip_prefix("data: ")
+                                    .or_else(|| line.strip_prefix("data:"));
+                                if let Some(data) = data {
+                                    let data = data.trim();
+
+                                    match serde_json::from_str::<Value>(data) {
+                                        Ok(value) => {
+                                            // 检查是否为错误响应
+                                            if let Some(error) = value.get("error") {
+                                                let error_msg = error["message"]
+                                                    .as_str()
+                                                    .unwrap_or("未知错误");
+                                                log::error!(
+                                                    "Gemini 流式响应错误, model={}, 错误: {}",
+                                                    model_name,
+                                                    error_msg
+                                                );
+                                                let _ = tx
+                                                    .send(Err(CommandError::llm(
+                                                        1000,
+                                                        format!("API 错误: {}", error_msg),
+                                                    )))
+                                                    .await;
+                                                return;
+                                            }
+
+                                            let id = String::new();
+                                            let choices = value["candidates"]
+                                                .as_array()
+                                                .map(|arr| {
+                                                    arr.iter()
+                                                        .filter_map(|c| {
+                                                            let content = c.get("content")?;
+                                                            let parts = content.get("parts")?.as_array()?;
+                                                            let role = content["role"].as_str().unwrap_or("");
+
+                                                            let mut text_content = String::new();
+                                                            let mut thought_content = String::new();
+                                                            let mut tool_calls = Vec::new();
+
+                                                            for part in parts {
+                                                                if let Some(text) = part.get("text") {
+                                                                    let t = text.as_str().unwrap_or("");
+                                                                    // 检查是否为思考内容
+                                                                    if part.get("thought").and_then(|v| v.as_bool()).unwrap_or(false) {
+                                                                        thought_content.push_str(t);
+                                                                    } else {
+                                                                        text_content.push_str(t);
+                                                                    }
+                                                                }
+                                                                if let Some(fc) = part.get("functionCall") {
+                                                                    let name = fc["name"].as_str().unwrap_or("").to_string();
+                                                                    let args = fc["args"].clone();
+                                                                    tool_calls.push(LlmToolCall {
+                                                                        index: tool_calls.len() as u32,
+                                                                        id: String::new(),
+                                                                        name,
+                                                                        arguments: serde_json::to_string(&args).unwrap_or_default(),
+                                                                    });
+                                                                }
+                                                            }
+
+                                                            let finish_reason = c.get("finishReason").and_then(|r| r.as_str()).map(|r| match r {
+                                                                "STOP" => "stop",
+                                                                "MAX_TOKENS" => "length",
+                                                                "SAFETY" => "content_filter",
+                                                                "RECITATION" => "content_filter",
+                                                                other => other,
+                                                            });
+
+                                                            Some(StreamChoice {
+                                                                index: 0,
+                                                                delta: StreamDelta {
+                                                                    role: if role == "model" { None } else { Some(role.to_string()) },
+                                                                    content: if text_content.is_empty() { None } else { Some(text_content) },
+                                                                    reasoning_content: if thought_content.is_empty() { None } else { Some(thought_content) },
+                                                                    tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+                                                                },
+                                                                finish_reason: finish_reason.map(String::from),
+                                                            })
+                                                        })
+                                                        .collect::<Vec<_>>()
+                                                })
+                                                .unwrap_or_default();
+
+                                            let chunk = StreamChunk { id, choices };
+                                            if tx.send(Ok(chunk)).await.is_err() {
+                                                return;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!(
+                                                "解析 Gemini SSE 数据失败, model={}, 错误: {}",
+                                                model_name,
+                                                e
+                                            );
+                                            let _ = tx
+                                                .send(Err(CommandError::llm(
+                                                    1000,
+                                                    format!("解析 SSE 数据失败: {}", e),
+                                                )))
+                                                .await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("流读取错误 (Gemini), model={}, 错误: {}", model_name, e);
+                        let _ = tx
+                            .send(Err(CommandError::llm(
+                                1000,
+                                format!("流读取错误: {}", e),
+                            )))
+                            .await;
+                        return;
+                    }
+                }
+            }
+            // Gemini 流式响应正常结束，流自然关闭
+            // executor 侧通过 recv() 返回 None 检测流结束
+        });
+
+        Ok(rx)
+    }
+
     async fn test_connection(&self) -> Result<ConnectionResult, CommandError> {
         log::info!("测试连接 (Gemini), model={}", self.model);
         let start = std::time::Instant::now();
@@ -779,7 +943,7 @@ impl LlmProvider for GeminiAdapter {
             attachments: None,
         }];
         let url = self.build_url();
-        let body = self.build_request_body(&test_messages, &[]);
+        let body = self.build_request_body(&test_messages, &[], None);
 
         match self.send_with_retry(&url, &body).await {
             Ok(response) => {
@@ -841,6 +1005,10 @@ impl LlmProvider for GeminiAdapter {
             .unwrap_or_default();
 
         log::info!("Gemini 适配器客户端已重建");
+    }
+
+    fn get_max_tokens(&self) -> u32 {
+        self.advanced.max_tokens
     }
 
     /// 轻量级健康检查：仅发送 HEAD 请求到 Gemini API 根端点

@@ -315,6 +315,15 @@ impl AgentContext {
         });
     }
 
+    /// 回滚最后一条助手消息（用于截断重试时移除不完整的 assistant message）
+    pub fn pop_last_assistant_message(&mut self) {
+        if let Some(last) = self.messages.last() {
+            if last.role == "assistant" {
+                self.messages.pop();
+            }
+        }
+    }
+
     /// 更新任务类型（基于已调用的工具）
     pub fn update_task_type_from_tool(&mut self, tool_name: &str, _tool_params: Option<&serde_json::Value>) {
         // 如果已经是具体类型，不再覆盖

@@ -61,11 +61,13 @@ impl OpenAiAdapter {
     }
 
     /// 构建请求体
+    /// max_tokens_override: 可选的 max_tokens 覆盖值，用于截断重试时增大输出限制
     fn build_request_body(
         &self,
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
         stream: bool,
+        max_tokens_override: Option<u32>,
     ) -> Value {
         let mut body = json!({
             "model": self.model,
@@ -153,7 +155,7 @@ impl OpenAiAdapter {
         }
 
         body["temperature"] = json!(self.advanced.temperature);
-        body["max_tokens"] = json!(self.advanced.max_tokens);
+        body["max_tokens"] = json!(max_tokens_override.unwrap_or(self.advanced.max_tokens));
         body["top_p"] = json!(self.advanced.top_p);
 
         // 启用工具调用流式输出（tool_stream）
@@ -378,7 +380,7 @@ impl LlmProvider for OpenAiAdapter {
     ) -> Result<ChatResponse, CommandError> {
         log::info!("发送非流式请求, model={}", self.model);
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
-        let body = self.build_request_body(messages, tools, false);
+        let body = self.build_request_body(messages, tools, false, None);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
             log::error!("解析非流式响应失败, model={}, 错误: {}", self.model, e);
@@ -395,7 +397,7 @@ impl LlmProvider for OpenAiAdapter {
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
         log::info!("发送流式请求, model={}", self.model);
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
-        let body = self.build_request_body(messages, tools, true);
+        let body = self.build_request_body(messages, tools, true, None);
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
         let response = self.send_streaming_with_retry(&url, &body).await?;
 
@@ -491,6 +493,110 @@ impl LlmProvider for OpenAiAdapter {
         Ok(rx)
     }
 
+    /// 流式对话，支持覆盖 max_tokens 参数
+    /// 用于响应截断时以更大的 max_tokens 重试
+    async fn chat_stream_with_max_tokens(
+        &self,
+        messages: &[ChatMessage],
+        tools: &[ToolDefinition],
+        max_tokens_override: u32,
+    ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
+        log::info!("发送流式请求 (max_tokens={}), model={}", max_tokens_override, self.model);
+        let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
+        let body = self.build_request_body(messages, tools, true, Some(max_tokens_override));
+        // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
+        let response = self.send_streaming_with_retry(&url, &body).await?;
+
+        let (tx, rx) = mpsc::channel(100);
+        let model_name = self.model.clone();
+
+        tokio::spawn(async move {
+            let mut stream = response.bytes_stream();
+            let mut buffer = String::new();
+
+            while let Some(chunk_result) = stream.next().await {
+                match chunk_result {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        buffer.push_str(&text);
+
+                        // 解析 SSE 事件（以空行分隔）
+                        while let Some(pos) = buffer.find("\n\n") {
+                            let event_text = buffer[..pos].to_string();
+                            buffer = buffer[pos + 2..].to_string();
+
+                            for line in event_text.lines() {
+                                // SSE 规范允许 data: 后有无空格，先尝试带空格再尝试无空格
+                                let data = line
+                                    .strip_prefix("data: ")
+                                    .or_else(|| line.strip_prefix("data:"));
+                                if let Some(data) = data {
+                                    let data = data.trim();
+                                    if data == "[DONE]" {
+                                        return;
+                                    }
+
+                                    match serde_json::from_str::<Value>(data) {
+                                        Ok(value) => {
+                                            let id = value["id"].as_str().unwrap_or("").to_string();
+                                            let choices = value["choices"].as_array().map(|arr| {
+                                                arr.iter().map(|c| {
+                                                    let index = c["index"].as_u64().unwrap_or(0) as u32;
+                                                    let delta = &c["delta"];
+                                                    let role = delta["role"].as_str().map(String::from);
+                                                    let content = delta["content"].as_str().map(String::from);
+                                                    let reasoning_content = delta["reasoning_content"].as_str().map(String::from);
+                                                    let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
+                                                        tc_arr.iter().map(|tc| {
+                                                            let index = tc["index"].as_u64().unwrap_or(0) as u32;
+                                                            let id = tc["id"].as_str().unwrap_or("").to_string();
+                                                            let func = &tc["function"];
+                                                            let name = func["name"].as_str().unwrap_or("").to_string();
+                                                            let arguments = func["arguments"].as_str().unwrap_or("").to_string();
+                                                            LlmToolCall { index, id, name, arguments }
+                                                        }).collect::<Vec<_>>()
+                                                    });
+                                                    let finish_reason = c["finish_reason"].as_str().map(String::from);
+
+                                                    StreamChoice {
+                                                        index,
+                                                        delta: StreamDelta {
+                                                            role,
+                                                            content,
+                                                            reasoning_content,
+                                                            tool_calls,
+                                                        },
+                                                        finish_reason,
+                                                    }
+                                                }).collect::<Vec<_>>()
+                                            }).unwrap_or_default();
+
+                                            let chunk = StreamChunk { id, choices };
+                                            if tx.send(Ok(chunk)).await.is_err() {
+                                                return;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!("解析 SSE 数据失败, model={}, 错误: {}", model_name, e);
+                                            let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("流读取错误, model={}, 错误: {}", model_name, e);
+                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        return;
+                    }
+                }
+            }
+        });
+
+        Ok(rx)
+    }
+
     async fn test_connection(&self) -> Result<ConnectionResult, CommandError> {
         log::info!("测试连接, model={}", self.model);
         let start = std::time::Instant::now();
@@ -504,7 +610,7 @@ impl LlmProvider for OpenAiAdapter {
             attachments: None,
         }];
         let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
-        let body = self.build_request_body(&test_messages, &[], false);
+        let body = self.build_request_body(&test_messages, &[], false, None);
 
         match self.send_with_retry(&url, &body).await {
             Ok(response) => {
@@ -554,6 +660,10 @@ impl LlmProvider for OpenAiAdapter {
             .unwrap_or_default();
 
         log::info!("OpenAI 适配器客户端已重建");
+    }
+
+    fn get_max_tokens(&self) -> u32 {
+        self.advanced.max_tokens
     }
 
     /// 轻量级健康检查：仅发送 HEAD 请求到 /v1/models 端点
@@ -643,7 +753,7 @@ mod tests {
             attachments: None,
         }];
 
-        let body = adapter.build_request_body(&messages, &[], false);
+        let body = adapter.build_request_body(&messages, &[], false, None);
         let msg = &body["messages"][0];
 
         // reasoning_content 应该被合并到 content 中，使用 <agent-reasoning> 标签
@@ -671,7 +781,7 @@ mod tests {
             attachments: None,
         }];
 
-        let body = adapter.build_request_body(&messages, &[], false);
+        let body = adapter.build_request_body(&messages, &[], false, None);
         let msg = &body["messages"][0];
 
         // content 应该保持原样
@@ -695,7 +805,7 @@ mod tests {
             attachments: None,
         }];
 
-        let body = adapter.build_request_body(&messages, &[], false);
+        let body = adapter.build_request_body(&messages, &[], false, None);
         let msg = &body["messages"][0];
 
         // content 应该保持原样
