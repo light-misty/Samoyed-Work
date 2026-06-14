@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { WorkflowNode, ToolNodeData } from "../../types";
 import { useTranslation } from 'react-i18next';
 import { Icon } from "../common/Icon";
@@ -17,12 +17,38 @@ export function ToolNode({ node }: ToolNodeProps) {
   const isCodeInterpreter = data.toolName === "code_interpreter_handler";
   const [errorExpanded, setErrorExpanded] = useState(false);
 
+  // 代码预览展开/收缩状态
+  // 初始展开：代码正在流式输出时展开，完成后收缩
+  const [codeExpanded, setCodeExpanded] = useState(true);
+  const prevIsCodeStreamingRef = useRef<boolean | undefined>(undefined);
+
+  // 当代码流式输出结束时，自动收缩代码预览
+  useEffect(() => {
+    if (prevIsCodeStreamingRef.current === true && !data.isCodeStreaming) {
+      setCodeExpanded(false);
+    }
+    prevIsCodeStreamingRef.current = data.isCodeStreaming;
+  }, [data.isCodeStreaming]);
+
   // 代码解释器错误：截断显示，可展开
   const errorText = data.error || "";
   const shouldTruncateError = isCodeInterpreter && errorText.length > 150;
   const displayError = shouldTruncateError && !errorExpanded
     ? errorText.slice(0, 150) + "..."
     : errorText;
+
+  // 代码内容：优先使用流式代码，回退到 input.code
+  const codeContent = data.streamingCode
+    || (data.input?.code as string | undefined)
+    || "";
+  const isCodeStreaming = data.isCodeStreaming ?? false;
+
+  // 收缩状态下显示前几行代码（最多3行），而非仅用省略号
+  const collapsedMaxLines = 3;
+  const codeLines = codeContent.split('\n');
+  const collapsedCodePreview = codeLines.length <= collapsedMaxLines
+    ? codeContent
+    : codeLines.slice(0, collapsedMaxLines).join('\n');
 
   return (
     <div className={`wf-node animate-node-in${isRunning ? " wf-tool-running" : ""}`}>
@@ -42,47 +68,67 @@ export function ToolNode({ node }: ToolNodeProps) {
         )}
       </div>
 
-      <div className="wf-tool-brief">
-        <span className="font-mono">{data.toolName}</span>
-        <span> · </span>
-        <span>{data.briefDescription}</span>
-        {isRunning && (
-          <span className="wf-tool-status-running">{t('toolNode.executing')}</span>
-        )}
-        {hasError && data.error && (
-          <span className="wf-tool-error">
-            {" — "}
-            {isCodeInterpreter ? t('toolNode.codeExecutionFailed') + ": " : ""}
-            {displayError}
-            {shouldTruncateError && (
-              <button
-                className="wf-error-expand-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setErrorExpanded(!errorExpanded);
-                }}
-              >
-                {errorExpanded ? t('toolNode.collapseError') : t('toolNode.expandError')}
-              </button>
+      <div className="wf-tool-content">
+        {/* 工具名称和简要描述 */}
+        <div className="wf-tool-brief">
+          <span className="font-mono">{data.toolName}</span>
+          <span> · </span>
+          <span>{data.briefDescription}</span>
+          {isRunning && (
+            <span className="wf-tool-status-running">{t('toolNode.executing')}</span>
+          )}
+          {hasError && data.error && (
+            <span className="wf-tool-error">
+              {" — "}
+              {isCodeInterpreter ? t('toolNode.codeExecutionFailed') + ": " : ""}
+              {displayError}
+              {shouldTruncateError && (
+                <button
+                  className="wf-error-expand-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setErrorExpanded(!errorExpanded);
+                  }}
+                >
+                  {errorExpanded ? t('toolNode.collapseError') : t('toolNode.expandError')}
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+
+        {/* 代码预览区域（仅 code_interpreter_handler 显示） */}
+        {isCodeInterpreter && codeContent && (
+          <div className={`wf-code-preview ${codeExpanded ? "wf-code-preview-expanded" : "wf-code-preview-collapsed"}`}>
+            <div className="wf-code-preview-header">
+              <span className="wf-code-preview-label">
+                {isCodeStreaming ? t('toolNode.writingCode') : t('toolNode.codePreview')}
+              </span>
+              {!isCodeStreaming && (
+                <button
+                  className="wf-code-preview-toggle"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCodeExpanded(!codeExpanded);
+                  }}
+                >
+                  {codeExpanded ? t('toolNode.collapseCode') : t('toolNode.expandCode')}
+                </button>
+              )}
+            </div>
+            {codeExpanded ? (
+              <pre className="wf-code-preview-content">
+                {codeContent}
+                {isCodeStreaming && <span className="wf-code-cursor" />}
+              </pre>
+            ) : (
+              <div className="wf-code-preview-collapsed-text">
+                {collapsedCodePreview}
+              </div>
             )}
-          </span>
+          </div>
         )}
       </div>
-
-      <style>{`
-        .wf-error-expand-btn {
-          font-size: 10px;
-          color: var(--color-accent);
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0 2px;
-          margin-left: 4px;
-        }
-        .wf-error-expand-btn:hover {
-          text-decoration: underline;
-        }
-      `}</style>
     </div>
   );
 }

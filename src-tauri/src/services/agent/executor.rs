@@ -22,7 +22,7 @@ const RETRY_DELAY_SECONDS: u64 = 2;
 /// 确认操作超时时间（秒）
 const CONFIRM_TIMEOUT_SECS: u64 = 300;
 /// 始终需要确认的高风险 Handler 列表
-const HIGH_RISK_HANDLERS: &[&str] = &["delete_file", "code_interpreter_handler"];
+const HIGH_RISK_HANDLERS: &[&str] = &["delete_file"];
 /// 截断重试最大次数（每次翻倍 max_tokens）
 const MAX_TRUNCATION_RETRIES: u32 = 2;
 /// 截断重试时 max_tokens 的最大上限
@@ -177,12 +177,97 @@ impl<R: Runtime> AgentExecutor<R> {
         }
     }
 
+    /// 在流式阶段的不完整 JSON 字符串中查找 "code" 字段值的起始位置
+    /// LLM 输出格式通常为 {"code":"xxx","description":"xxx"}
+    /// 此方法查找 "code" 键后紧跟的 ":" 和引号，返回值内容的起始字节偏移
+    /// 返回 None 表示尚未找到 "code" 键的值起始位置
+    fn find_code_value_start(json_str: &str) -> Option<usize> {
+        // 查找 "code" 键
+        let key_pattern = "\"code\"";
+        let key_pos = json_str.find(key_pattern)?;
+        let after_key = &json_str[key_pos + key_pattern.len()..];
+        // 使用 char_indices 遍历，跳过空白找到冒号和引号
+        let mut chars = after_key.char_indices().peekable();
+        // 跳过空白
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        // 期望冒号
+        if chars.peek().map(|&(_, c)| c) != Some(':') {
+            return None;
+        }
+        chars.next(); // 消费冒号
+        // 跳过冒号后的空白
+        while let Some(&(_, c)) = chars.peek() {
+            if c.is_whitespace() {
+                chars.next();
+            } else {
+                break;
+            }
+        }
+        // 期望双引号（JSON 标准使用双引号）
+        if chars.peek().map(|&(_, c)| c) != Some('"') {
+            return None;
+        }
+        chars.next(); // 消费开头引号
+        // 计算值内容在原始字符串中的起始字节偏移
+        let value_start_in_after_key = chars.peek().map(|&(i, _)| i).unwrap_or(after_key.len());
+        Some(key_pos + key_pattern.len() + value_start_in_after_key)
+    }
+
+    /// 反转义 JSON 字符串中的转义序列
+    /// 将 \n → 换行, \t → 制表符, \" → 双引号, \\ → 反斜杠 等
+    /// 遇到未闭合的转义序列（如末尾单独的 \）时安全截断
+    fn unescape_json_string(raw: &str) -> String {
+        let mut result = String::with_capacity(raw.len());
+        let mut chars = raw.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                match chars.next() {
+                    Some('n') => result.push('\n'),
+                    Some('t') => result.push('\t'),
+                    Some('r') => result.push('\r'),
+                    Some('"') => result.push('"'),
+                    Some('\\') => result.push('\\'),
+                    Some('/') => result.push('/'),
+                    Some('b') => result.push('\x08'),
+                    Some('f') => result.push('\x0C'),
+                    Some('u') => {
+                        // Unicode 转义: \uXXXX
+                        let hex: String = chars.by_ref().take(4).collect();
+                        if let Ok(code) = u32::from_str_radix(&hex, 16) {
+                            if let Some(ch) = char::from_u32(code) {
+                                result.push(ch);
+                            }
+                        }
+                    }
+                    Some(other) => result.push(other), // 未知转义，保留原字符
+                    None => result.push('\\'),         // 末尾单独的 \，保留
+                }
+            } else if c == '"' {
+                // 遇到闭合引号，说明 code 字符串值结束
+                break;
+            } else {
+                result.push(c);
+            }
+        }
+        result
+    }
+
     /// 检查是否为高风险操作（需要用户确认）
     /// 根据确认级别决定哪些操作需要用户确认：
     /// - Never: 任何操作都不需要确认
     /// - EditOnly: 仅高风险操作需要确认
     /// - Always: 所有 Handler/Tool 调用都需要确认
     fn needs_confirmation(&self, name: &str, _params: &serde_json::Value) -> bool {
+        // code_interpreter_handler 始终不需要确认（代码自动执行）
+        if name == "code_interpreter_handler" {
+            return false;
+        }
         match self.confirmation_level {
             ConfirmationLevel::Never => false,
             ConfirmationLevel::EditOnly => {
@@ -250,8 +335,6 @@ impl<R: Runtime> AgentExecutor<R> {
                 // 全部需确认模式下，根据操作类型区分风险等级
                 if tool_name == "delete_file" {
                     "critical"
-                } else if tool_name == "code_interpreter_handler" {
-                    "high"  // 代码执行始终为高风险
                 } else {
                     "normal"
                 }
@@ -271,21 +354,6 @@ impl<R: Runtime> AgentExecutor<R> {
                 let action = arguments["action"].as_str().unwrap_or("操作");
                 let path = arguments["path"].as_str().unwrap_or("未知文件");
                 format!("{} - {}: {}", tool_name, action, path)
-            }
-            "code_interpreter_handler" => {
-                // 展示代码描述和代码摘要
-                let desc = arguments["description"].as_str().unwrap_or("执行代码");
-                // 安全截取：按字符边界切片，避免在多字节UTF-8字符中间切割导致panic
-                let code_preview: String = arguments["code"].as_str()
-                    .map(|c| {
-                        if c.chars().count() > 200 {
-                            format!("{}...", c.chars().take(200).collect::<String>())
-                        } else {
-                            c.to_string()
-                        }
-                    })
-                    .unwrap_or_default();
-                format!("执行代码: {}\n{}", desc, code_preview)
             }
             _ => format!("执行操作: {}", tool_name),
         };
@@ -515,6 +583,8 @@ impl<R: Runtime> AgentExecutor<R> {
             // 追踪已在流式阶段提前发射 agent:tool_call 事件的工具索引
             // 避免 LLM 流式输出工具参数期间前端无反馈，也避免流结束后重复发射
             let mut early_announced_tool_indices: HashSet<u32> = HashSet::new();
+            // 代码流式状态：记录每个 code_interpreter_handler tool_call 已发射的 code 长度
+            let mut code_streaming_state: HashMap<u32, usize> = HashMap::new();
 
             while let Some(chunk_result) = stream_rx.recv().await {
                 match chunk_result {
@@ -583,6 +653,41 @@ impl<R: Runtime> AgentExecutor<R> {
                                                     arguments: early_params,
                                                     iteration: Some(current_iteration),
                                                 }).ok();
+                                            }
+                                        }
+                                    }
+
+                                    // 代码流式增量：当检测到 code_interpreter_handler 时，发射 code_streaming 事件
+                                    // 注意：流式阶段 arguments 是不完整的 JSON，不能用 serde_json::from_str 解析
+                                    // 改用字符串搜索定位 "code" 字段的值，提取后反转义 JSON 转义序列
+                                    // 由于转义序列可能被流式分块切割，无法正确计算增量（delta），
+                                    // 因此每次发射完整的反转义代码内容，前端直接替换而非追加
+                                    if let Some(collected) = collected_tool_calls.get(&tc_index) {
+                                        if collected.name == "code_interpreter_handler" {
+                                            let args = &collected.arguments;
+                                            if let Some(code_start) = Self::find_code_value_start(args) {
+                                                let raw_code_so_far = &args[code_start..];
+                                                // 反转义 JSON 转义序列（\n → 换行, \t → 制表符 等）
+                                                let unescaped_code = Self::unescape_json_string(raw_code_so_far);
+                                                // 用 raw 字节偏移判断是否有新内容（raw 偏移单调递增，不受转义影响）
+                                                let prev_raw_len = code_streaming_state
+                                                    .get(&tc_index)
+                                                    .copied()
+                                                    .unwrap_or(0);
+                                                if raw_code_so_far.len() > prev_raw_len {
+                                                    self.emitter.emit_code_streaming(CodeStreamingPayload {
+                                                        session_id: ctx.session_id.clone(),
+                                                        call_id: if collected.id.is_empty() {
+                                                            format!("streaming_{}", tc_index)
+                                                        } else {
+                                                            collected.id.clone()
+                                                        },
+                                                        // 发射完整的反转义代码（非增量），前端直接替换
+                                                        code_delta: unescaped_code,
+                                                        is_final: false,
+                                                    }).ok();
+                                                    code_streaming_state.insert(tc_index, raw_code_so_far.len());
+                                                }
                                             }
                                         }
                                     }
@@ -667,6 +772,22 @@ impl<R: Runtime> AgentExecutor<R> {
                             }
                         }
                     }
+                }
+            }
+
+            // 为所有 code_interpreter_handler 的 tool_call 发射 is_final 事件
+            for (tc_index, collected) in collected_tool_calls.iter() {
+                if collected.name == "code_interpreter_handler" {
+                    self.emitter.emit_code_streaming(CodeStreamingPayload {
+                        session_id: ctx.session_id.clone(),
+                        call_id: if collected.id.is_empty() {
+                            format!("streaming_{}", tc_index)
+                        } else {
+                            collected.id.clone()
+                        },
+                        code_delta: String::new(),
+                        is_final: true,
+                    }).ok();
                 }
             }
 

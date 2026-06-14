@@ -830,6 +830,108 @@
   50% { opacity: 0.85; }
 }
 
+/* ===== 代码预览卡片样式 ===== */
+
+/* 工具节点内容容器 */
+.wf-tool-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 代码预览区域 */
+.wf-code-preview {
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 代码预览头部 */
+.wf-code-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--color-bg-sub);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.wf-code-preview-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+}
+
+.wf-code-preview-toggle {
+  font-size: 10px;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.wf-code-preview-toggle:hover {
+  text-decoration: underline;
+}
+
+/* 展开状态 - 代码内容区域 */
+.wf-code-preview-content {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  background: var(--color-bg);
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 收缩状态 - 显示前几行代码 */
+.wf-code-preview-collapsed-text {
+  padding: 4px 10px;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-quaternary);
+  background: var(--color-bg);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 56px;
+  overflow: hidden;
+}
+
+/* 流式光标 */
+.wf-code-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--color-accent);
+  margin-left: 1px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+/* 错误展开按钮 */
+.wf-error-expand-btn {
+  font-size: 10px;
+  color: var(--color-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: 4px;
+}
+.wf-error-expand-btn:hover {
+  text-decoration: underline;
+}
+
 .wf-confirm-flat {
   padding: 2px 0;
   flex: 1;

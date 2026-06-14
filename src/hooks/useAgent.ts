@@ -13,6 +13,7 @@ import {
   onAgentError,
   onAgentStopped,
   onAgentNetworkRetry,
+  onAgentCodeStreaming,
   type ThinkingPayload,
   type DeepThinkingPayload,
   type ToolCallPayload,
@@ -21,6 +22,7 @@ import {
   type TodoUpdatePayload,
   type DonePayload,
   type NetworkRetryPayload,
+  type CodeStreamingPayload,
 } from "../services/event";
 import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
@@ -39,6 +41,7 @@ export interface UseAgentReturn {
   doneResult: DonePayload | null;
   isStopped: boolean;
   networkRetry: NetworkRetryPayload | null;
+  codeStreaming: CodeStreamingPayload | null;
   sendMessage: (prompt: string, options?: Record<string, unknown>) => Promise<void>;
   stopAgent: () => Promise<void>;
   confirmOperation: (operationId: string, approved: boolean, feedback?: string) => Promise<void>;
@@ -60,6 +63,7 @@ const initialState = {
   doneResult: null as DonePayload | null,
   isStopped: false,
   networkRetry: null as NetworkRetryPayload | null,
+  codeStreaming: null as CodeStreamingPayload | null,
 };
 
 /** 将后台会话事件路由到 useWorkflowStore 的缓存 */
@@ -81,6 +85,7 @@ export function useAgent(): UseAgentReturn {
   const [doneResult, setDoneResult] = useState<DonePayload | null>(null);
   const [isStopped, setIsStopped] = useState(false);
   const [networkRetry, setNetworkRetry] = useState<NetworkRetryPayload | null>(null);
+  const [codeStreaming, setCodeStreaming] = useState<CodeStreamingPayload | null>(null);
 
   const unlistenRefs = useRef<(() => void)[]>([]);
   const sessionIdRef = useRef<string | null>(null);
@@ -234,6 +239,19 @@ export function useAgent(): UseAgentReturn {
           if (payload.sessionId !== sessionIdRef.current) return;
           setNetworkRetry(payload);
         }),
+        onAgentCodeStreaming((payload) => {
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "code_streaming",
+              callId: payload.callId,
+              codeDelta: payload.codeDelta,
+              isFinal: payload.isFinal,
+            });
+            return;
+          }
+          setCodeStreaming(payload);
+        }),
         onAgentDone((payload) => {
           // 后台会话：路由到缓存
           if (payload.sessionId !== sessionIdRef.current) {
@@ -307,6 +325,7 @@ export function useAgent(): UseAgentReturn {
       setDoneResult(null);
       setIsStopped(false);
       setNetworkRetry(null);
+      setCodeStreaming(null);
       setIsLoading(true);
       contentEpochRef.current += 1;
       lastContentEpochRef.current = contentEpochRef.current;
@@ -392,6 +411,7 @@ export function useAgent(): UseAgentReturn {
     setDoneResult(initialState.doneResult);
     setIsStopped(initialState.isStopped);
     setNetworkRetry(initialState.networkRetry);
+    setCodeStreaming(initialState.codeStreaming);
     deepThinkingContentRef.current = "";
     lastDeepThinkingStepRef.current = 0;
     seenToolCallIdsRef.current.clear();
@@ -417,6 +437,7 @@ export function useAgent(): UseAgentReturn {
     doneResult,
     isStopped,
     networkRetry,
+    codeStreaming,
     sendMessage,
     stopAgent,
     confirmOperation,

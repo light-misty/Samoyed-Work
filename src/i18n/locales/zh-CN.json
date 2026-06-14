@@ -91,7 +91,11 @@
     "executionFailed": "执行失败",
     "codeExecutionFailed": "代码执行失败",
     "expandError": "展开详情",
-    "collapseError": "收起详情"
+    "collapseError": "收起详情",
+    "writingCode": "正在编写代码...",
+    "codePreview": "代码预览",
+    "collapseCode": "收缩代码",
+    "expandCode": "展开代码"
   },
   "fileTree": {
     "sectionTitle": "工作区文件",

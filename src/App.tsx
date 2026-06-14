@@ -89,6 +89,7 @@ export default function App() {
     doneResult,
     isStopped,
     networkRetry,
+    codeStreaming,
     sendMessage,
     stopAgent,
     confirmOperation,
@@ -100,6 +101,8 @@ export default function App() {
   const streamingNodeIdRef = useRef<string | null>(null);
   const thinkingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
+  // 暂存 code_streaming 数据：当 ToolNode 尚未创建时缓存增量，等创建后一次性应用
+  const pendingCodeStreamingRef = useRef<Map<string, { code: string; isStreaming: boolean }>>(new Map());
   // 追踪当前迭代轮次，用于将 iteration 传递给 content/tool 节点
   const currentIterationRef = useRef<number | undefined>(undefined);
   // 追踪最后一次 tool_call 的迭代轮次，用于过滤残余 content 事件
@@ -330,12 +333,22 @@ export default function App() {
           streamingNodeIdRef.current = null;
         }
         const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
+        // 检查是否有暂存的 code_streaming 数据，在创建节点时一并注入
+        const pendingStreaming = currentToolCall.callId
+          ? pendingCodeStreamingRef.current.get(currentToolCall.callId)
+          : undefined;
         addNode("tool", {
           toolName: currentToolCall.toolName,
           input: currentToolCall.arguments,
           briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
           callId: currentToolCall.callId,
+          streamingCode: pendingStreaming?.code,
+          isCodeStreaming: pendingStreaming?.isStreaming,
         }, "running", toolIteration);
+        // 清除暂存
+        if (currentToolCall.callId && pendingStreaming) {
+          pendingCodeStreamingRef.current.delete(currentToolCall.callId);
+        }
       }
     }
   }, [currentToolCall, addNode, updateNode]);
@@ -353,17 +366,55 @@ export default function App() {
         return runningTools.length > 0 ? runningTools[runningTools.length - 1] : undefined;
       })();
       if (targetNode) {
+        const existingData = targetNode.data as ToolNodeData;
         updateNode(targetNode.id, {
           status: lastToolResult.success ? "completed" : "failed",
           data: {
-            ...targetNode.data,
+            ...existingData,
             success: lastToolResult.success,
             error: lastToolResult.success ? undefined : (lastToolResult.error || t('toolNode.executionFailed')),
+            // 工具执行完毕，代码流式输出也必然结束
+            isCodeStreaming: false,
           },
         });
       }
     }
   }, [lastToolResult, updateNode]);
+
+  // 代码流式事件：更新对应 ToolNode 的流式代码内容
+  // 后端每次发射完整的反转义代码（非增量），前端直接替换
+  useEffect(() => {
+    if (codeStreaming) {
+      // 通过 callId 匹配已有的 ToolNode
+      const toolNode = codeStreaming.callId
+        ? useWorkflowStore.getState().nodes.find(
+            (n) => n.type === "tool" && (n.data as ToolNodeData).callId === codeStreaming.callId
+          )
+        : undefined;
+
+      if (toolNode) {
+        const existingData = toolNode.data as ToolNodeData;
+        // is_final 事件仅更新流式状态，不替换代码内容（codeDelta 为空）
+        const isFinal = codeStreaming.isFinal;
+        updateNode(toolNode.id, {
+          data: {
+            ...existingData,
+            streamingCode: isFinal ? existingData.streamingCode : codeStreaming.codeDelta,
+            isCodeStreaming: !isFinal,
+          },
+        });
+      } else if (codeStreaming.callId) {
+        // ToolNode 尚未创建，暂存最新数据（直接覆盖，非追加）
+        // is_final 时不暂存空代码
+        if (!codeStreaming.isFinal) {
+          pendingCodeStreamingRef.current.set(codeStreaming.callId, {
+            code: codeStreaming.codeDelta,
+            isStreaming: true,
+          });
+        }
+      }
+    }
+  }, [codeStreaming, updateNode]);
 
   useEffect(() => {
     if (content !== undefined && content !== null) {
@@ -503,6 +554,13 @@ export default function App() {
 
   useEffect(() => {
     if (pendingConfirmation) {
+      // 防御性检查：code_interpreter_handler 不应再触发确认流程
+      // 如果仍然收到，直接自动确认（兼容性兜底）
+      if (pendingConfirmation.operationType === "code_interpreter_handler") {
+        confirmOperation(pendingConfirmation.operationId, true);
+        return;
+      }
+
       // 从 details 中提取代码（仅 code_interpreter_handler 操作时存在）
       const details = pendingConfirmation.details as Record<string, unknown> | undefined;
       const code = details?.code as string | undefined;

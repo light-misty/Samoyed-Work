@@ -52,7 +52,8 @@ export type BackgroundAgentEvent =
   | { type: "context_update"; contextUsage: ContextUsageInfo }
   | { type: "done"; summary: string; totalSteps: number; durationMs: number }
   | { type: "error"; code: number; message: string; recoverable: boolean }
-  | { type: "stopped"; completedSteps: number; reason: string };
+  | { type: "stopped"; completedSteps: number; reason: string }
+  | { type: "code_streaming"; callId: string; codeDelta: string; isFinal: boolean };
 
 interface WorkflowState {
   nodes: WorkflowNode[];
@@ -707,6 +708,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
         executionStatus = "cancelled";
         bgLastClosedStreamingNodeId = null;
+        break;
+      }
+      case "code_streaming": {
+        // 通过 callId 匹配工具节点，替换流式代码内容（非增量追加）
+        const codeToolNode = event.callId
+          ? nodes.find((n) => n.type === "tool" && (n.data as { callId?: string }).callId === event.callId)
+          : undefined;
+        if (codeToolNode) {
+          const existingCode = (codeToolNode.data as { streamingCode?: string }).streamingCode;
+          nodes = nodes.map((n) =>
+            n.id === codeToolNode.id
+              ? {
+                  ...n,
+                  data: {
+                    ...n.data,
+                    // is_final 事件仅更新流式状态，不替换代码内容
+                    streamingCode: event.isFinal ? existingCode : event.codeDelta,
+                    isCodeStreaming: !event.isFinal,
+                  },
+                }
+              : n
+          );
+        }
         break;
       }
     }

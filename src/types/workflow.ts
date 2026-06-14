@@ -36,6 +36,10 @@ export interface ToolNodeData {
   callId?: string;
   success?: boolean;
   error?: string;
+  /** 流式代码内容（仅 code_interpreter_handler 时使用） */
+  streamingCode?: string;
+  /** 代码是否正在流式输出中 */
+  isCodeStreaming?: boolean;
 }
 
 export interface ConfirmNodeData {

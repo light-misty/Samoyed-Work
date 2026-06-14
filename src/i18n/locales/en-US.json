@@ -91,7 +91,11 @@
     "executionFailed": "Execution failed",
     "codeExecutionFailed": "Code execution failed",
     "expandError": "Show details",
-    "collapseError": "Hide details"
+    "collapseError": "Hide details",
+    "writingCode": "Writing code...",
+    "codePreview": "Code Preview",
+    "collapseCode": "Collapse",
+    "expandCode": "Expand"
   },
   "fileTree": {
     "sectionTitle": "Workspace Files",
