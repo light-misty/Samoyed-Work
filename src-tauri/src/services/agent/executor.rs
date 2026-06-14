@@ -27,6 +27,10 @@ const HIGH_RISK_HANDLERS: &[&str] = &["delete_file"];
 const MAX_TRUNCATION_RETRIES: u32 = 2;
 /// 截断重试时 max_tokens 的最大上限
 const MAX_TOKENS_CEILING: u32 = 131072;
+/// 缓存友好：工具结果最大字符数，超过此长度的结果会被截断
+/// 大工具结果（如 read_file 的文件内容）会占据大量对话历史 token，
+/// 且每次读取内容不同导致缓存无法命中，截断后缓存命中率显著提升
+const MAX_TOOL_RESULT_CHARS: usize = 6000;
 
 /// 检查错误码是否可重试
 fn is_retryable_error(code: u32) -> bool {
@@ -449,6 +453,23 @@ impl<R: Runtime> AgentExecutor<R> {
         let model_name = self.router.current_model_name();
         let cache_type = self.router.current_cache_type().to_string();
 
+        // 缓存诊断：记录本轮和累计的缓存命中统计
+        if let Some(u) = usage {
+            let total = u.prompt_cache_hit_tokens + u.prompt_cache_miss_tokens;
+            let hit_rate = if total > 0 { u.prompt_cache_hit_tokens as f64 / total as f64 * 100.0 } else { 0.0 };
+            log::info!(
+                "缓存诊断: session_id={}, provider_cache_type={}, 本轮缓存命中={}/{}({:.1}%), 累计命中率={:.1}%",
+                ctx.session_id, cache_type,
+                u.prompt_cache_hit_tokens, total, hit_rate,
+                {
+                    let lt = ctx.lifetime_cache_hit_tokens + u.prompt_cache_hit_tokens;
+                    let lm = ctx.lifetime_cache_miss_tokens + u.prompt_cache_miss_tokens;
+                    let lt_total = lt + lm;
+                    if lt_total > 0 { lt as f64 / lt_total as f64 * 100.0 } else { 0.0 }
+                },
+            );
+        }
+
         let usage_info = ctx.calculate_context_usage(response_tokens, model_name, cache_type, usage);
 
         if let Some(ref persist_fn) = self.context_usage_persist_fn {
@@ -503,6 +524,16 @@ impl<R: Runtime> AgentExecutor<R> {
             .join(" ");
         ctx.function_definitions_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(&func_defs_str);
 
+        // 缓存诊断：记录工具定义序列化稳定性（若工具定义 JSON 在各会话间不一致，将导致缓存持续未命中）
+        // 使用 char_indices 安全地截取前 80 个字符，避免切割多字节 UTF-8 字符导致 panic
+        let safe_prefix = func_defs_str.chars().take(80).collect::<String>();
+        log::debug!(
+            "缓存诊断: 工具定义序列化={{长度={}, 工具数量={}, 前80字符={}}}",
+            func_defs_str.len(),
+            tools.len(),
+            safe_prefix,
+        );
+
         self.emitter.emit_todo_update(TodoUpdatePayload {
             session_id: ctx.session_id.clone(),
             todos: vec![TodoItem {
@@ -534,6 +565,18 @@ impl<R: Runtime> AgentExecutor<R> {
                     return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).unwrap());
                 }
                 
+                // 缓存诊断：记录每次 LLM 调用的消息特征，便于分析跨迭代/跨会话缓存命中率
+                let msg_summary: String = messages.iter()
+                    .map(|m| m.role.chars().next().unwrap_or('?').to_string())
+                    .collect::<Vec<_>>()
+                    .join("");
+                let estimated_prompt_tokens = crate::services::agent::prompts::token_budget::TokenBudgetManager::estimate_tokens(
+                    &messages.iter().map(|m| format!("{}:{}", m.role, m.content)).collect::<String>()
+                );
+                log::debug!(
+                    "缓存诊断: session_id={}, 迭代#{}, 消息模式={}, 消息数={}, 估算输入token={}",
+                    ctx.session_id, current_iteration, msg_summary, messages.len(), estimated_prompt_tokens,
+                );
                 log::debug!("调用 LLM 流式接口, session_id={}, 消息数={}, 重试次数={}", ctx.session_id, messages.len(), llm_retry_count);
                 match self.router.chat_stream(&messages, &tools).await {
                     Ok(rx) => break rx,
@@ -1349,8 +1392,43 @@ impl<R: Runtime> AgentExecutor<R> {
                     }).ok();
 
                     // 将工具结果添加到上下文
+                    // 缓存优化：对大结果进行截断，避免巨量动态内容冲淡缓存命中率
                     let result_content = if result.success {
-                        serde_json::to_string(&result.output).unwrap_or_default()
+                        let output_val = result.output.as_ref().map(|v| {
+                            // 如果是 JSON 对象且包含 content 字段，截断该字段
+                            if let Some(obj) = v.as_object() {
+                                if let Some(content_val) = obj.get("content") {
+                                    if let Some(content_str) = content_val.as_str() {
+                                        if content_str.len() > MAX_TOOL_RESULT_CHARS {
+                                            let mut truncated = v.clone();
+                                            let truncated_content = format!(
+                                                "{}...\n[已截断: 原始内容 {} 字符，仅保留前 {} 字符]",
+                                                &content_str[..MAX_TOOL_RESULT_CHARS],
+                                                content_str.len(),
+                                                MAX_TOOL_RESULT_CHARS,
+                                            );
+                                            truncated.as_object_mut().unwrap().insert(
+                                                "content".to_string(),
+                                                json!(truncated_content),
+                                            );
+                                            return truncated;
+                                        }
+                                    }
+                                }
+                            }
+                            v.clone()
+                        });
+                        let serialized = serde_json::to_string(&output_val).unwrap_or_default();
+                        // 最终的字符串级安全截断（防止递归嵌套等极端情况）
+                        // 使用 chars().take() 避免切割多字节 UTF-8 字符导致 panic
+                        if serialized.len() > MAX_TOOL_RESULT_CHARS * 2 {
+                            let safe_truncated: String = serialized.chars().take(MAX_TOOL_RESULT_CHARS * 2).collect();
+                            format!("{}...\n[已截断: 工具结果过大，仅保留前 {} 字符]",
+                                safe_truncated,
+                                MAX_TOOL_RESULT_CHARS * 2)
+                        } else {
+                            serialized
+                        }
                     } else {
                         format!("错误: {}", result.error.clone().unwrap_or_default())
                     };

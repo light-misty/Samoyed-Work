@@ -487,18 +487,20 @@ impl AnthropicAdapter {
         });
 
         // 映射 usage（Anthropic 使用 input_tokens / output_tokens + 缓存字段）
-        let usage = value["usage"].as_object().map(|u| ChatUsage {
-            prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
-            completion_tokens: u["output_tokens"].as_u64().unwrap_or(0),
-            total_tokens: u["input_tokens"].as_u64().unwrap_or(0)
-                + u["output_tokens"].as_u64().unwrap_or(0),
-            // Anthropic 缓存字段（Prompt Caching）
-            prompt_cache_hit_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
-            prompt_cache_miss_tokens: u["input_tokens"].as_u64().unwrap_or(0)
-                .saturating_sub(u["cache_read_input_tokens"].as_u64().unwrap_or(0)),
-            cache_creation_input_tokens: u["cache_creation_input_tokens"].as_u64().unwrap_or(0),
-            cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
-            cached_content_token_count: 0,
+        // 缓存字段兼容 DeepSeek 原生命名 (prompt_cache_hit_tokens) 和 Anthropic 命名 (cache_read_input_tokens)
+        let usage = value["usage"].as_object().map(|u| {
+            let (cache_hit, cache_miss, cache_creation) = extract_cache_fields(u);
+            ChatUsage {
+                prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
+                completion_tokens: u["output_tokens"].as_u64().unwrap_or(0),
+                total_tokens: u["input_tokens"].as_u64().unwrap_or(0)
+                    + u["output_tokens"].as_u64().unwrap_or(0),
+                prompt_cache_hit_tokens: cache_hit,
+                prompt_cache_miss_tokens: cache_miss,
+                cache_creation_input_tokens: cache_creation,
+                cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
+                cached_content_token_count: 0,
+            }
         });
 
         Ok(ChatResponse {
@@ -523,6 +525,33 @@ impl AnthropicAdapter {
             usage,
         })
     }
+}
+
+/// 从 Anthropic/DeepSeek 响应中提取缓存字段
+/// 兼容两种命名规范：
+/// - Anthropic: cache_read_input_tokens
+/// - DeepSeek:  prompt_cache_hit_tokens / prompt_cache_miss_tokens
+fn extract_cache_fields(u: &serde_json::Map<String, serde_json::Value>) -> (u64, u64, u64) {
+    let cache_hit = u.get("cache_read_input_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+        .max(u.get("prompt_cache_hit_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0));
+
+    let cache_miss = u.get("prompt_cache_miss_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or_else(|| {
+            let input = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let read = u.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            input.saturating_sub(read)
+        });
+
+    let creation = u.get("cache_creation_input_tokens")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
+
+    (cache_hit, cache_miss, creation)
 }
 
 #[async_trait]
@@ -613,16 +642,16 @@ impl LlmProvider for AnthropicAdapter {
                                         .unwrap_or("")
                                         .to_string();
 
-                                    // 捕获输入 usage（含 cache 字段）
+                                    // 捕获输入 usage（含 cache 字段，兼容 Anthropic 和 DeepSeek 命名）
                                     if let Some(u) = data["message"]["usage"].as_object() {
+                                        let (cache_hit, cache_miss, cache_creation) = extract_cache_fields(u);
                                         input_usage = Some(ChatUsage {
                                             prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
                                             completion_tokens: 0,
                                             total_tokens: u["input_tokens"].as_u64().unwrap_or(0),
-                                            prompt_cache_hit_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
-                                            prompt_cache_miss_tokens: u["input_tokens"].as_u64().unwrap_or(0)
-                                                .saturating_sub(u["cache_read_input_tokens"].as_u64().unwrap_or(0)),
-                                            cache_creation_input_tokens: u["cache_creation_input_tokens"].as_u64().unwrap_or(0),
+                                            prompt_cache_hit_tokens: cache_hit,
+                                            prompt_cache_miss_tokens: cache_miss,
+                                            cache_creation_input_tokens: cache_creation,
                                             cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
                                             cached_content_token_count: 0,
                                         });
@@ -930,16 +959,16 @@ impl LlmProvider for AnthropicAdapter {
                                     // 消息开始，提取 message id 和 usage（含缓存字段）
                                     let _ = value["message"]["id"].as_str().unwrap_or("").to_string();
 
-                                    // 捕获输入 usage（含 cache 字段）
+                                    // 捕获输入 usage（含 cache 字段，兼容 Anthropic 和 DeepSeek 命名）
                                     if let Some(u) = value["message"]["usage"].as_object() {
+                                        let (cache_hit, cache_miss, cache_creation) = extract_cache_fields(u);
                                         input_usage = Some(ChatUsage {
                                             prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
                                             completion_tokens: 0,
                                             total_tokens: u["input_tokens"].as_u64().unwrap_or(0),
-                                            prompt_cache_hit_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
-                                            prompt_cache_miss_tokens: u["input_tokens"].as_u64().unwrap_or(0)
-                                                .saturating_sub(u["cache_read_input_tokens"].as_u64().unwrap_or(0)),
-                                            cache_creation_input_tokens: u["cache_creation_input_tokens"].as_u64().unwrap_or(0),
+                                            prompt_cache_hit_tokens: cache_hit,
+                                            prompt_cache_miss_tokens: cache_miss,
+                                            cache_creation_input_tokens: cache_creation,
                                             cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
                                             cached_content_token_count: 0,
                                         });

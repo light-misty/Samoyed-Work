@@ -179,13 +179,14 @@ impl AgentContext {
         };
 
         // --- 缓存统计（累积跨轮） ---
-        let (cache_hit_tokens, cache_miss_tokens, cache_creation_tokens) = match usage {
-            Some(u) => (u.prompt_cache_hit_tokens, u.prompt_cache_miss_tokens, u.cache_creation_input_tokens),
-            None => (0, 0, 0),
+        // 当 usage 为 None（如流中断时未收到最终 chunk），跳过本轮累加以避免 (0,0) 稀释累计命中率
+        let (cache_hit_tokens, cache_miss_tokens, cache_creation_tokens) = if let Some(u) = usage {
+            self.lifetime_cache_hit_tokens += u.prompt_cache_hit_tokens;
+            self.lifetime_cache_miss_tokens += u.prompt_cache_miss_tokens;
+            (u.prompt_cache_hit_tokens, u.prompt_cache_miss_tokens, u.cache_creation_input_tokens)
+        } else {
+            (0, 0, 0)
         };
-
-        self.lifetime_cache_hit_tokens += cache_hit_tokens;
-        self.lifetime_cache_miss_tokens += cache_miss_tokens;
         let total_lifetime = self.lifetime_cache_hit_tokens + self.lifetime_cache_miss_tokens;
         let cache_hit_rate = if total_lifetime > 0 {
             self.lifetime_cache_hit_tokens as f64 / total_lifetime as f64
@@ -420,13 +421,13 @@ impl AgentContext {
     /// 获取针对指定迭代轮次优化后的消息列表
     /// 与 get_messages 的区别：
     /// 1. 压缩早期迭代的 reasoning_content（保留最近 1 轮完整，更早轮次截取前 200 字符）
-    /// 2. 迭代 > 1 时将迭代上下文作为独立 user 消息（不修改 system prompt），保持前缀稳定
-    /// 3. 根据迭代阶段动态注入规范层和迭代上下文
-    /// 4. 对话历史超过预算时进行滑动窗口压缩
+    /// 2. 迭代 > 1 时将迭代上下文追加到**末尾**，确保 system prompt + 对话历史前缀稳定
+    /// 3. 对话历史超过预算时进行滑动窗口压缩
     ///
-    /// 缓存优化说明：
-    /// 系统提示词始终保持原始内容不变（从 token 0 匹配），迭代上下文作为独立 user 消息追加，
-    /// 确保 DeepSeek 磁盘缓存可命中稳定前缀（系统提示词 + 工具定义 + 首条 user 消息开头）
+    /// 缓存优化说明（DeepSeek 磁盘前缀缓存）：
+    /// 将迭代上下文放在消息列表末尾而非 system prompt 之后，确保从 token 0 开始的稳定前缀
+    /// （system prompt + 首条 user 消息 + 早期 conversation history）在各迭代间保持一致。
+    /// 这使 DeepSeek V4 的公共前缀检测可以缓存完整的稳定前缀部分，大幅提升跨迭代缓存命中率。
     pub fn get_messages_for_iteration(&self, current_iteration: u32) -> Vec<ChatMessage> {
         // 系统提示词始终为原始内容，不附加任何迭代上下文
         let mut all = vec![ChatMessage {
@@ -438,25 +439,6 @@ impl AgentContext {
             reasoning_content: None,
             attachments: None,
         }];
-
-        // 迭代上下文作为独立 user 消息（不修改 system prompt）
-        if current_iteration > 1 {
-            all.push(ChatMessage {
-                role: "user".to_string(),
-                content: format!(
-                    "<iteration_context>\n## 当前执行进度\n\n迭代轮次: {}/{}\n{}当前步骤: [进行中] {}\n\n请基于以上进度继续执行，不要重复已完成的步骤。\n</iteration_context>",
-                    current_iteration,
-                    self.max_iterations,
-                    self.format_completed_steps(),
-                    self.current_step,
-                ),
-                content_parts: None,
-                tool_calls: None,
-                tool_call_id: None,
-                reasoning_content: None,
-                attachments: None,
-            });
-        }
 
         // 对话历史压缩处理
         let compression_result = self.compress_history_if_needed();
@@ -489,6 +471,26 @@ impl AgentContext {
             }
 
             all.push(compressed_msg);
+        }
+
+        // 缓存优化：迭代上下文作为独立 user 消息追加到**末尾**而非 system prompt 之后，
+        // 确保前缀（system prompt + 对话历史）在各迭代间字节级一致，最大化 DeepSeek 磁盘缓存命中率
+        if current_iteration > 1 {
+            all.push(ChatMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "<iteration_context>\n## 当前执行进度\n\n迭代轮次: {}/{}\n{}当前步骤: [进行中] {}\n\n请基于以上进度继续执行，不要重复已完成的步骤。\n</iteration_context>",
+                    current_iteration,
+                    self.max_iterations,
+                    self.format_completed_steps(),
+                    self.current_step,
+                ),
+                content_parts: None,
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_content: None,
+                attachments: None,
+            });
         }
 
         all

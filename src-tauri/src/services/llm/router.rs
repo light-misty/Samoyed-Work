@@ -691,15 +691,17 @@ impl LlmRouter {
             .as_ref()
             .and_then(|id| self.meta.get(id))
             .map(|m| match m.provider_type.as_str() {
-                "openai" | "custom" => {
-                    // DeepSeek 使用 OpenAI 兼容接口，通过模型名判断
+                "openai" | "custom" | "anthropic" => {
+                    // DeepSeek 可通过 OpenAI ChatCompletions 或 Anthropic Messages 两种接口访问，
+                    // 其磁盘缓存机制相同，均以 prompt_cache_hit_tokens / prompt_cache_miss_tokens 标识
                     if m.model.to_lowercase().contains("deepseek") {
                         "deepseek"
+                    } else if m.provider_type == "anthropic" {
+                        "anthropic"
                     } else {
                         "none"
                     }
                 }
-                "anthropic" => "anthropic",
                 "gemini" => "gemini",
                 "ollama" => "none",
                 _ => "none",

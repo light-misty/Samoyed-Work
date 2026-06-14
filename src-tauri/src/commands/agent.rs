@@ -284,14 +284,15 @@ pub async fn get_context_usage(
     use crate::services::agent::prompts::token_budget::TokenBudgetManager;
     use crate::services::agent::prompts::task_type::TaskType;
 
-    // 获取当前活跃 Provider 的上下文窗口大小和模型名称
-    let (context_window, model_name) = {
+    // 获取当前活跃 Provider 的上下文窗口大小、模型名称和缓存类型
+    let (context_window, model_name, provider_cache_type) = {
         let router = state.llm_router.read().await;
         let providers = router.list_providers();
         let default_provider = providers.iter().find(|p| p.is_default);
+        let cache_type = router.current_cache_type();
         match default_provider {
-            Some(p) => (p.context_window, p.model.clone()),
-            None => (128_000, String::new()),
+            Some(p) => (p.context_window, p.model.clone(), cache_type.to_string()),
+            None => (128_000, String::new(), cache_type.to_string()),
         }
     };
 
@@ -390,7 +391,7 @@ pub async fn get_context_usage(
         lifetime_cache_hit_tokens: 0,
         lifetime_cache_miss_tokens: 0,
         cache_hit_rate: 0.0,
-        provider_cache_type: String::new(),
+        provider_cache_type,
     })
 }
 
