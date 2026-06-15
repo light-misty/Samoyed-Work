@@ -991,7 +991,7 @@ impl AgentContext {
 用户: "帮我创建一份项目周报"
 思考: 用户需要生成Word文档，应使用code_interpreter_handler编写Python代码
 工具调用: code_interpreter_handler({
-  "code": "doc = create_word_doc(title='项目周报', author='DocAgent')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
+  "code": "doc = create_word_doc(title='项目周报', author='作者名')\ndoc.add_heading('本周工作总结', level=1)\ndoc.add_paragraph('本周完成了以下工作...')\nsave_word_doc(doc, '项目周报.docx', working_dir=working_dir)",
   "description": "生成项目周报Word文档",
   "expected_files": ["项目周报.docx"]
 })

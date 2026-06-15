@@ -30,7 +30,7 @@ pub const CODE_INTERPRETER_GUIDE: &str = r#"
 
 #### 示例：生成带图表的 Word 报告
 
-    doc = create_word_doc(title="销售分析报告", author="DocAgent")
+    doc = create_word_doc(title="销售分析报告", author="作者名")
     doc.add_heading('季度销售概览', level=1)
     doc.add_paragraph('本报告分析了2024年各季度的销售数据。')
     chart_path = create_chart(

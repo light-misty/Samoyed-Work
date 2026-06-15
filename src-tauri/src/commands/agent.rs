@@ -738,8 +738,6 @@ async fn run_agent(
         return Err(CommandError::llm(1002, error_msg.to_string()));
     }
 
-    let system_prompt = crate::services::agent::context::AgentContext::build_system_prompt(workspace_path);
-
     // 从配置中解析作者信息（工作区覆盖优先于全局设置）
     let author_info = {
         let cfg = tokio::task::block_in_place(|| config.blocking_lock());
@@ -792,7 +790,7 @@ async fn run_agent(
         }
     };
 
-    let mut ctx = AgentContext::new(session_id.to_string(), system_prompt, context_window);
+    let mut ctx = AgentContext::new(session_id.to_string(), crate::services::agent::context::AgentContext::build_system_prompt(workspace_path), context_window);
     ctx.max_iterations = max_iterations;
     ctx.workspace_path = workspace_path.to_string();
     ctx.workspace_id = workspace_id.to_string();
