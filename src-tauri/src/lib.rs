@@ -434,6 +434,10 @@ pub fn run() {
             commands::update::check_update,
             #[cfg(desktop)]
             commands::update::download_and_install_update,
+            #[cfg(desktop)]
+            commands::update::download_update,
+            #[cfg(desktop)]
+            commands::update::install_downloaded_update,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {

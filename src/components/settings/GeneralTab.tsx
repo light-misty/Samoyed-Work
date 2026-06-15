@@ -4,7 +4,6 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useToastStore } from "../../stores/useToastStore";
 import * as tauriCmd from "../../services/tauri";
-import { check as checkUpdate } from "@tauri-apps/plugin-updater";
 import { getVersion } from "@tauri-apps/api/app";
 
 export function GeneralTab() {
@@ -244,7 +243,7 @@ export function GeneralTab() {
               setCheckingUpdate(true);
               setUpdateCheckResult(null);
               try {
-                const result = await checkUpdate();
+                const result = await tauriCmd.checkUpdate();
                 if (result) {
                   setUpdateCheckResult("available");
                   addToast("success", t('update.newVersionFound', { version: result.version }));

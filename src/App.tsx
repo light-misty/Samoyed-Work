@@ -130,23 +130,24 @@ export default function App() {
       contextUsageCleanup = unlisten;
     });
 
-    // 监听窗口关闭事件：如果有待安装的更新，在关闭前安装
+    // 监听窗口关闭事件：如果有待安装的更新，在关闭前安装（不自动重启）
     let closeUnlisten: (() => void) | null = null;
     getCurrentWindow().onCloseRequested(async (event) => {
-      const { pendingUpdate, clearPendingUpdate } = useUpdateStore.getState();
-      if (pendingUpdate) {
+      const { pendingUpdatePath, clearPendingUpdatePath } = useUpdateStore.getState();
+      if (pendingUpdatePath) {
         // 阻止默认关闭行为，先安装更新
         event.preventDefault();
         try {
-          await pendingUpdate.install();
-          // 安装完成，清除待安装状态
-          clearPendingUpdate();
-          // 安装成功后销毁窗口（绕过 closeRequested 事件）
+          // 安装更新但不自动重启（restart=false，NSIS 不传 /R 参数）
+          // install_downloaded_update 内部会调用 ShellExecuteW 启动安装器 + std::process::exit(0)
+          await tauriCmd.installDownloadedUpdate(pendingUpdatePath, false);
+          // 如果执行到这里说明安装启动失败，清除状态并关闭窗口
+          clearPendingUpdatePath();
           await getCurrentWindow().destroy();
         } catch (err) {
           console.error("[App] 关闭时安装更新失败:", err);
           // 安装失败也允许关闭，避免用户无法退出应用
-          clearPendingUpdate();
+          clearPendingUpdatePath();
           await getCurrentWindow().destroy();
         }
       }
@@ -207,8 +208,7 @@ export default function App() {
       // 开发环境下跳过自动检查更新
       if (import.meta.env.DEV) return;
       try {
-        const { check } = await import("@tauri-apps/plugin-updater");
-        const result = await check();
+        const result = await tauriCmd.checkUpdate();
         if (result) {
           setUpdateNotificationOpen(true);
         }

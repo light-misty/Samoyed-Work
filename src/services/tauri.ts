@@ -452,3 +452,64 @@ export async function getLogPath(): Promise<{ logSource: string; downloadDir: st
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
+
+// ================================================================
+// 更新命令
+// ================================================================
+
+/** 更新信息 */
+export interface UpdateInfo {
+  /** 新版本号 */
+  version: string;
+  /** 当前版本号 */
+  currentVersion: string;
+  /** 发布日期 */
+  date?: string;
+  /** 更新说明 */
+  body?: string;
+}
+
+/** 下载更新进度事件 */
+export type DownloadUpdateEvent =
+  | { event: "progress"; data: { downloaded: number; contentLength?: number } }
+  | { event: "finished" };
+
+/** 下载更新结果 */
+export interface DownloadUpdateResult {
+  /** 安装包临时文件路径 */
+  installerPath: string;
+}
+
+/** 检查更新 */
+export async function checkUpdate(): Promise<UpdateInfo | null> {
+  const result = await safeInvoke(() => invoke<UpdateInfo | null>("check_update"), { context: "checkUpdate" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 下载更新（保存到临时文件，不安装） */
+export async function downloadUpdate(
+  onEvent: (event: DownloadUpdateEvent) => void,
+): Promise<DownloadUpdateResult> {
+  const { Channel } = await import("@tauri-apps/api/core");
+  const channel = new Channel<DownloadUpdateEvent>();
+  channel.onmessage = onEvent;
+  const result = await safeInvoke(
+    () => invoke<DownloadUpdateResult>("download_update", { onEvent: channel }),
+    { context: "downloadUpdate" },
+  );
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 安装已下载的更新 */
+export async function installDownloadedUpdate(
+  installerPath: string,
+  restart: boolean,
+): Promise<void> {
+  const result = await safeInvoke(
+    () => invoke("install_downloaded_update", { installerPath, restart }),
+    { context: "installDownloadedUpdate" },
+  );
+  if (!result.ok) throw result.error.raw;
+}
