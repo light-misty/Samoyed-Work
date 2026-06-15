@@ -117,9 +117,7 @@ export function AgentInfoSection() {
           font-weight: 500;
           transition: background 0.2s;
         }
-        .ai-model-badge.online {
-          background: var(--color-success-bg);
-        }
+
         .ai-status-dot {
           width: 6px;
           height: 6px;
