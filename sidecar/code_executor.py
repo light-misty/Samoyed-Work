@@ -76,10 +76,41 @@ BLOCKED_MODULES = {
 }
 
 # 禁止的代码模式（正则表达式）
+# 覆盖常见逃逸和危险操作，与 BLOCKED_MODULES 形成纵深防御
 BLOCKED_PATTERNS = [
+    # 基础导入逃逸
     r'__import__\s*\(',          # 禁止直接调用 __import__
-    r'os\.system\s*\(',          # 禁止 os.system
     r'subprocess\.',             # 禁止 subprocess 模块
+
+    # os 模块危险函数
+    r'os\.system\s*\(',          # 禁止 os.system 执行 shell 命令
+    r'os\.popen\s*\(',           # 禁止 os.popen 执行 shell 命令
+    r'os\.exec[a-z]*\s*\(',      # 禁止 os.exec/l/execv/execve 等进程替换
+    r'os\.spawn[a-z]*\s*\(',     # 禁止 os.spawnl/spawnv 等进程创建
+    r'os\.chmod\s*\(',           # 禁止修改文件权限
+    r'os\.chown\s*\(',           # 禁止修改文件所有者
+    r'os\.fork\s*\(',            # 禁止进程 fork（Unix）
+    r'os\.kill\s*\(',            # 禁止发送信号
+    r'os\.remove\s*\(',          # 禁止删除文件（防止删除审计日志等关键文件）
+    r'os\.unlink\s*\(',          # 禁止删除文件（os.remove 别名）
+    r'os\.rmdir\s*\(',           # 禁止删除目录
+    r'os\.removedirs\s*\(',      # 禁止递归删除目录
+
+    # sys 模块危险操作
+    r'sys\.path\.\w+',           # 禁止修改 sys.path（插入恶意路径）
+    r'globals\s*\(\s*\)',        # 禁止访问 globals() 获取命名空间
+    r'locals\s*\(\s*\)',         # 禁止访问 locals()
+    r'vars\s*\(\s*\)',           # 禁止访问 vars()
+    r'__builtins__',             # 禁止直接访问 __builtins__ 字典
+    r'__subclasses__',           # 禁止通过 __subclasses__ 逃逸
+
+    # eval/exec/compile 直接调用
+    r'\beval\s*\(',              # 禁止 eval 执行字符串代码
+    r'\bexec\s*\(',              # 禁止 exec 执行字符串代码
+    r'\bcompile\s*\(',           # 禁止 compile 编译代码对象
+
+    # ctypes 逃逸（虽在 BLOCKED_MODULES，正则作为二次拦截）
+    r'ctypes\.',
 ]
 
 
@@ -126,11 +157,11 @@ def build_namespace(working_dir: str) -> dict:
     import builtins
 
     # 复制内建函数，移除危险项
-    # 注意：不从 safe_builtins 中移除 exec，因为 _execute_with_timeout
-    # 内部使用 exec(code, namespace) 执行用户代码，exec 需要在 __builtins__ 中可用
-    # 但用户代码无法直接调用 exec/eval/compile，因为它们不在命名空间顶层
+    # 从 safe_builtins 中移除 exec/eval/compile，防止用户代码通过 __builtins__ 访问
+    # 内部执行用户代码时直接使用 builtins.exec 引用（在 execute_with_timeout 中）
     safe_builtins = {k: v for k, v in builtins.__dict__.items()
-                     if k not in ('__import__', 'breakpoint', 'exit', 'quit')}
+                     if k not in ('__import__', 'breakpoint', 'exit', 'quit',
+                                   'exec', 'eval', 'compile')}
 
     # 自定义安全导入函数
     def safe_import(name, *args, **kwargs):
@@ -150,13 +181,21 @@ def build_namespace(working_dir: str) -> dict:
         file_str = str(file)
         # 只允许读取操作和写入工作区目录
         if 'w' in mode or 'a' in mode:
-            # 使用 os.path.abspath 规范化路径后比较，避免路径遍历攻击
-            # Windows 下路径不区分大小写，使用 os.path.normcase 规范化
-            abs_path = os.path.abspath(file_str)
-            norm_working_dir = os.path.normcase(os.path.abspath(working_dir))
-            norm_file = os.path.normcase(abs_path)
-            if not norm_file.startswith(norm_working_dir):
-                raise PermissionError(f"只允许写入工作区目录: {working_dir}")
+            # 使用 os.path.realpath 解析符号链接，防止符号链接逃逸攻击
+            # （用户可能先 os.symlink('/etc/passwd', './evil') 再 safe_open('./evil', 'w')）
+            abs_path = os.path.realpath(os.path.abspath(file_str))
+            real_working_dir = os.path.realpath(os.path.abspath(working_dir))
+
+            # 使用 os.path.commonpath 做组件级路径校验
+            # 避免 startswith 的前缀碰撞风险（/tmp/work vs /tmp/work-secret）
+            try:
+                common = os.path.commonpath([abs_path, real_working_dir])
+                # Windows 路径不区分大小写，normcase 后比较
+                if os.path.normcase(common) != os.path.normcase(real_working_dir):
+                    raise PermissionError(f"只允许写入工作区目录: {working_dir}")
+            except ValueError:
+                # commonpath 在不同驱动器（Windows）或绝对/相对路径混合时抛出 ValueError
+                raise PermissionError(f"路径不在工作区内: {file_str}")
         return builtins.open(file, mode, *args, **kwargs)
 
     safe_builtins['open'] = safe_open
@@ -281,7 +320,10 @@ def execute_with_timeout(
 
         def run_code():
             try:
-                exec(code, namespace)
+                # 使用 builtins.exec 直接引用，避免依赖命名空间中的 exec
+                # （safe_builtins 已移除 exec/eval/compile）
+                import builtins
+                builtins.exec(code, namespace)
                 exec_result[0] = True
             except MemoryError:
                 exec_error[0] = MemoryError("代码执行超出内存限制")
@@ -410,6 +452,56 @@ def execute_with_timeout(
 
 
 # ============================================================================
+# 进程级资源限制（P3-5 + P3-6）
+# ============================================================================
+
+def _apply_resource_limits(max_memory_mb: int, timeout: int):
+    """设置进程级资源限制
+
+    在代码执行前调用，限制子进程的内存和 CPU 时间。
+    - RLIMIT_AS: 限制进程虚拟内存大小，覆盖 C 扩展（numpy/matplotlib/PIL）的内存分配
+      tracemalloc 只能追踪 Python 对象分配，无法限制 C 扩展内存
+    - RLIMIT_CPU: 限制进程 CPU 时间（秒），防止用户代码长时间占用 CPU
+      超出 CPU 限制会触发 SIGXCPU 信号（Unix）
+
+    Windows 平台不支持 resource 模块，回退到 tracemalloc + wall time 方案。
+
+    Args:
+        max_memory_mb: 最大内存限制（MB）
+        timeout: 执行超时（秒），CPU 时间限制设为 timeout + 10 秒缓冲
+    """
+    try:
+        import resource
+
+        # RLIMIT_AS: 限制进程虚拟内存
+        # 设置软限制和硬限制相同，超过时 malloc/mmap 返回 NULL，Python 抛出 MemoryError
+        # 额外增加 256MB 缓冲，避免 Python 解释器自身开销导致误触发
+        memory_limit_bytes = (max_memory_mb + 256) * 1024 * 1024
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (memory_limit_bytes, memory_limit_bytes))
+            log_info = f"RLIMIT_AS 设置为 {max_memory_mb + 256}MB"
+        except (ValueError, OSError):
+            log_info = "RLIMIT_AS 设置失败（可能不支持）"
+
+        # RLIMIT_CPU: 限制 CPU 时间
+        # 软限制触发 SIGXCPU 信号（可捕获），硬限制触发 SIGKILL
+        # CPU 时间设为 timeout + 10 秒，避免 wall time 超时前 CPU 限制误触发
+        cpu_limit = timeout + 10
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit))
+            log_info += f", RLIMIT_CPU 设置为 {cpu_limit}秒"
+        except (ValueError, OSError):
+            log_info += ", RLIMIT_CPU 设置失败（可能不支持）"
+
+        sys.stderr.write(f"[code_executor] 资源限制: {log_info}\n")
+    except ImportError:
+        # Windows 平台没有 resource 模块，回退到 tracemalloc + wall time
+        sys.stderr.write("[code_executor] Windows 平台不支持 resource 模块，使用 tracemalloc 回退方案\n")
+    except Exception as e:
+        sys.stderr.write(f"[code_executor] 资源限制设置异常: {type(e).__name__}: {e}\n")
+
+
+# ============================================================================
 # 主入口
 # ============================================================================
 
@@ -461,6 +553,12 @@ def main():
             sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
             sys.stdout.flush()
             return
+
+        # 设置进程级资源限制（Unix 平台）
+        # RLIMIT_AS: 限制进程虚拟内存，覆盖 C 扩展（numpy/matplotlib/PIL）的内存分配
+        # RLIMIT_CPU: 限制 CPU 时间，防止用户代码长时间占用 CPU
+        # Windows 平台不支持 resource 模块，回退到 tracemalloc + wall time
+        _apply_resource_limits(max_memory_mb, timeout)
 
         # 构建受限命名空间
         namespace = build_namespace(working_dir)
