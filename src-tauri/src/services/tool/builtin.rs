@@ -589,41 +589,29 @@ impl Tool for ReadFileTool {
         let resolved_path = resolve_path(file_path, workspace_root);
         let path = std::path::Path::new(&resolved_path);
 
-        // 路径安全校验
+        // 路径安全校验（使用统一的校验函数，包含词法归一化防线）
         if !workspace_root.is_empty() {
-            let canonical_file = match crate::utils::canonicalize(path) {
-                Ok(p) => p,
-                Err(_) => {
-                    log::warn!("read_file 失败: 文件不存在或路径无效, path={}, workspace={}", file_path, workspace_root);
+            let (canonical_file, _) = match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+                Ok(result) => result,
+                Err(e) => {
+                    // 根据错误消息区分错误码：路径越界 vs 路径不存在
+                    let is_out_of_bounds = e.contains("路径不在工作区内");
+                    let error_code = if is_out_of_bounds {
+                        Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
+                    } else {
+                        None
+                    };
+                    log::warn!("read_file 失败: {}, path={}, workspace={}", e, file_path, workspace_root);
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                        error: Some(e),
+                        duration_ms: start.elapsed().as_millis() as u64, error_code,
                     };
                 }
             };
-            let canonical_root = match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
-                Ok(p) => p,
-                Err(_) => {
-                    log::warn!("read_file 失败: 工作区根目录路径无效, workspace={}", workspace_root);
-                    return ToolResult {
-                        success: false,
-                        output: None,
-                        error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                    };
-                }
-            };
-            if !canonical_file.starts_with(&canonical_root) {
-                log::warn!("read_file 失败: 路径越界, path={}, workspace={}", file_path, workspace_root);
-                return ToolResult {
-                    success: false,
-                    output: None,
-                    error: Some("文件路径不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
-                };
-            }
+            // 校验通过后，使用 canonical 路径继续读取
+            let _ = canonical_file; // 已通过校验，path 变量继续使用（下方会重新 canonicalize 或直接读取）
         }
 
         if !path.exists() {
@@ -1068,36 +1056,21 @@ impl Tool for FileInfoTool {
         let resolved_path = resolve_path(file_path, workspace_root);
         let path = std::path::Path::new(&resolved_path);
 
-        // 路径安全校验
+        // 路径安全校验（使用统一的校验函数，包含词法归一化防线）
         if !workspace_root.is_empty() {
-            let canonical_file = match crate::utils::canonicalize(path) {
-                Ok(p) => p,
-                Err(_) => {
-                    return ToolResult {
-                        success: false,
-                        output: None,
-                        error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                    };
-                }
-            };
-            let canonical_root = match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
-                Ok(p) => p,
-                Err(_) => {
-                    return ToolResult {
-                        success: false,
-                        output: None,
-                        error: Some("工作区根目录路径无效".to_string()),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                    };
-                }
-            };
-            if !canonical_file.starts_with(&canonical_root) {
+            if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let error_code = if is_out_of_bounds {
+                    Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
+                } else {
+                    None
+                };
+                log::warn!("file_info 路径校验失败: {}, path={}, workspace={}", e, file_path, workspace_root);
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("文件路径不在工作区内，拒绝访问".to_string()),
-                    duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code,
                 };
             }
         }
@@ -1213,19 +1186,39 @@ impl Tool for FileExistsTool {
         let resolved_path = resolve_path(file_path, workspace_root);
         let path = std::path::Path::new(&resolved_path);
 
-        // 路径安全校验
+        // 路径安全校验（使用统一的校验函数，包含词法归一化防线）
+        // 注意：file_exists 即使路径不存在也必须先校验越界，否则攻击者可探测工作区外文件
         if !workspace_root.is_empty() {
-            if let Ok(canonical_file) = crate::utils::canonicalize(path) {
-                if let Ok(canonical_root) = crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
-                    if !canonical_file.starts_with(&canonical_root) {
-                        return ToolResult {
-                            success: false,
-                            output: None,
-                            error: Some("路径不在工作区内，拒绝访问".to_string()),
-                            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
-                        };
-                    }
+            if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+                // 路径不存在时 validate 会返回"路径不存在或无效"，但需要先检查是否越界
+                // validate 内部已先做词法归一化，越界会返回"路径不在工作区内"
+                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let error_code = if is_out_of_bounds {
+                    Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
+                } else {
+                    None
+                };
+                // 路径不存在但未越界时，返回 exists=false 而非错误
+                if !is_out_of_bounds {
+                    return ToolResult {
+                        success: true,
+                        output: Some(json!({
+                            "path": file_path,
+                            "exists": false,
+                            "is_dir": false,
+                            "is_file": false,
+                        })),
+                        error: None,
+                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                    };
                 }
+                log::warn!("file_exists 路径越界: {}, path={}, workspace={}", e, file_path, workspace_root);
+                return ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code,
+                };
             }
         }
 
@@ -1300,39 +1293,25 @@ impl Tool for DeleteFileTool {
 
         let resolved_path = resolve_path(file_path, workspace_root);
 
-        // 规范化路径并校验
-        let canonical_file = match crate::utils::canonicalize(std::path::Path::new(&resolved_path)) {
-            Ok(p) => p,
-            Err(_) => {
+        // 路径安全校验（使用统一的校验函数，包含词法归一化防线）
+        let canonical_file = match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
+            Ok((canonical_file, _)) => canonical_file,
+            Err(e) => {
+                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let error_code = if is_out_of_bounds {
+                    Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
+                } else {
+                    None
+                };
+                log::warn!("delete_file 路径校验失败: {}, path={}, workspace={}", e, file_path, workspace_root);
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("文件不存在或路径无效: {}", file_path)),
-                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                    error: Some(e),
+                    duration_ms: start.elapsed().as_millis() as u64, error_code,
                 };
             }
         };
-
-        let canonical_root = match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
-            Ok(p) => p,
-            Err(_) => {
-                return ToolResult {
-                    success: false,
-                    output: None,
-                    error: Some(format!("工作区根目录不存在或路径无效: {}", workspace_root)),
-                    duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                };
-            }
-        };
-
-        if !canonical_file.starts_with(&canonical_root) {
-            return ToolResult {
-                success: false,
-                output: None,
-                error: Some("文件路径不在工作区内，拒绝删除操作".to_string()),
-                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
-            };
-        }
 
         if !canonical_file.is_file() {
             return ToolResult {
