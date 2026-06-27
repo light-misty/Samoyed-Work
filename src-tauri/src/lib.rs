@@ -34,6 +34,9 @@ pub struct AppState {
     pub handler_registry: Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
     pub network_monitor: Arc<crate::services::network_monitor::NetworkMonitor<tauri::Wry>>,
+    /// Scratchpad 共享状态：智能体草稿本，按 session_id 隔离
+    /// 由 ScratchpadTool 写入，由 AgentContext 在每轮迭代时读取摘要
+    pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
 }
 
 pub fn run() {
@@ -247,7 +250,7 @@ pub fn run() {
 
             // 初始化 Tool 注册表并注册内置工具
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
-            crate::services::tool::builtin::register_builtin_tools(&mut tool_registry);
+            let scratchpad_states = crate::services::tool::builtin::register_builtin_tools(&mut tool_registry);
 
             log::info!("DocAgent 应用初始化完成");
 
@@ -271,6 +274,7 @@ pub fn run() {
                 handler_registry: Arc::new(tokio::sync::Mutex::new(handler_registry)),
                 fs_watcher: Arc::new(fs_watcher),
                 network_monitor: Arc::new(network_monitor),
+                scratchpad_states,
             };
 
             app.manage(state);

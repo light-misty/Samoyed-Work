@@ -89,12 +89,13 @@ pub async fn start_agent(
     let active_agents = Arc::clone(&state.active_agents);
     let db = Arc::clone(&state.db);
     let confirm_channels = Arc::clone(&state.confirm_channels);
+    let scratchpad_states = Arc::clone(&state.scratchpad_states);
 
     let max_iterations = options
         .as_ref()
         .and_then(|o| o.get("maxIterations"))
         .and_then(|v| v.as_u64())
-        .unwrap_or(20) as u32;
+        .unwrap_or(100) as u32;
 
     let workspace_path = options
         .as_ref()
@@ -172,6 +173,7 @@ pub async fn start_agent(
             &confirm_channels,
             &config,
             &doc_service,
+            &scratchpad_states,
         ).await;
 
         if let Err(e) = &result {
@@ -723,6 +725,7 @@ async fn run_agent(
     confirm_channels: &Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<crate::ConfirmDecision>>>>,
     config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     doc_service: &Arc<crate::services::document::DocumentService>,
+    scratchpad_states: &crate::services::tool::builtin::SharedScratchpadStates,
 ) -> Result<(), CommandError> {
     log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
 
@@ -794,6 +797,9 @@ async fn run_agent(
     ctx.max_iterations = max_iterations;
     ctx.workspace_path = workspace_path.to_string();
     ctx.workspace_id = workspace_id.to_string();
+    // 注入 Scratchpad 共享状态（与 ScratchpadTool 持有同一 Arc）
+    // executor 每轮迭代开始时会调用 refresh_scratchpad_summary 读取笔记摘要
+    ctx.set_scratchpad_states(scratchpad_states.clone());
 
     // 根据用户首条消息识别任务类型，动态重建系统提示词
     let task_type = crate::services::agent::prompts::task_type::TaskType::from_user_message(prompt);

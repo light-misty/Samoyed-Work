@@ -97,7 +97,7 @@ impl<R: Runtime> AgentExecutor<R> {
             registry,
             emitter,
             confirm_channels,
-            max_iterations: 50,
+            max_iterations: 100,
             should_stop: Arc::new(|_| false),
             persist_fn: None,
             context_usage_persist_fn: None,
@@ -576,6 +576,13 @@ impl<R: Runtime> AgentExecutor<R> {
             log::debug!("Agent 迭代 #{}, session_id={}", iteration + 1, ctx.session_id);
 
             let current_iteration = iteration + 1;
+
+            // 每轮迭代开始时刷新 Scratchpad 笔记摘要
+            // 这会从共享状态中读取当前会话的笔记，格式化为摘要字符串
+            // get_messages_for_iteration 会将摘要作为独立 user 消息追加到末尾
+            // 设计依据：Anthropic Effective Context Engineering 的 Structured Note-taking 模式
+            ctx.refresh_scratchpad_summary();
+
             let messages = ctx.get_messages_for_iteration(current_iteration);
             
             let mut llm_retry_count = 0;
@@ -1020,6 +1027,8 @@ impl<R: Runtime> AgentExecutor<R> {
                                 return Ok(self.handle_stop_if_needed(ctx, total_steps, start_time).expect("check_stopped 返回 true 但 handle_stop_if_needed 返回 None"));
                             }
 
+                            // 重试前刷新 Scratchpad 摘要（笔记可能在重试间隔被更新）
+                            ctx.refresh_scratchpad_summary();
                             let retry_messages = ctx.get_messages_for_iteration(current_iteration);
                             match self.router.chat_stream_with_max_tokens(&retry_messages, &tools, new_max_tokens).await {
                                 Ok(mut retry_rx) => {
@@ -1259,9 +1268,6 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 更新任务类型（基于已调用的工具）
                     ctx.update_task_type_from_tool(&tool_call.name, Some(&params));
 
-                    // 记录当前执行的步骤
-                    ctx.set_current_step(format!("执行 {}", tool_call.name));
-
                     if self.needs_confirmation(&tool_call.name, &params) {
                         // 高风险技能：始终发射 tool_call 事件
                         // 若流式阶段已提前发射，此处携带完整参数重新发射，前端通过 callId 去重更新
@@ -1333,6 +1339,14 @@ impl<R: Runtime> AgentExecutor<R> {
                         safe_params["workspace_root"] = json!(ctx.workspace_path);
                     }
 
+                    // 对 update_notes 工具，注入 _session_id 和 _iteration
+                    // 这些系统参数以下划线开头，不暴露给 LLM（工具 schema 中未声明）
+                    // _session_id 用于按会话隔离笔记状态，_iteration 用于调试和排序
+                    if tool_call.name == "update_notes" {
+                        safe_params["_session_id"] = json!(ctx.session_id);
+                        safe_params["_iteration"] = json!(current_iteration);
+                    }
+
                     // 对 code_interpreter_handler 的 patch 模式，注入上一次代码作为 base_code
                     // patch 模式由 LLM 提供 patches 参数触发，系统自动注入 base_code（LLM 无需也无法手动传入）
                     if tool_call.name == "code_interpreter_handler" && safe_params.get("patches").is_some() {
@@ -1356,7 +1370,6 @@ impl<R: Runtime> AgentExecutor<R> {
                                     duration_ms: 0,
                                 }).ok();
                                 ctx.add_tool_result(&tool_call.id, &result_content);
-                                ctx.record_completed_step(format!("{} - 失败: {}", tool_call.name, err_msg));
                                 continue;
                             }
                         }
@@ -1565,14 +1578,6 @@ impl<R: Runtime> AgentExecutor<R> {
                         format!("错误: {}", result.error.clone().unwrap_or_default())
                     };
                     ctx.add_tool_result(&tool_call.id, &result_content);
-
-                    // 记录已完成的步骤
-                    let step_desc = if result.success {
-                        format!("{} - 成功", tool_call.name)
-                    } else {
-                        format!("{} - 失败: {}", tool_call.name, result.error.as_deref().unwrap_or("未知错误"))
-                    };
-                    ctx.record_completed_step(step_desc);
                 }
 
                 // 每轮迭代后增量持久化，防止崩溃丢失消息

@@ -3,15 +3,22 @@
 // 完整重构文件结构（移动测试模块到末尾）超出当前任务范围，这里以 allow 抑制 lint。
 #![allow(clippy::items_after_test_module)]
 
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
-use crate::models::tool::ToolResult;
+use crate::models::tool::{ScratchpadEntry, ScratchpadState, ToolResult};
 use super::trait_def::Tool;
 use super::registry::ToolRegistry;
+
+/// Scratchpad 共享状态类型
+/// 全局唯一实例，按 session_id 隔离不同会话的笔记
+/// 由 ScratchpadTool 持有写权限，AgentContext 持有读权限（用于每轮刷新摘要）
+pub type SharedScratchpadStates = Arc<RwLock<HashMap<String, ScratchpadState>>>;
 
 /// 将相对路径解析为绝对路径
 fn resolve_path(path: &str, workspace_root: &str) -> String {
@@ -27,7 +34,8 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
 }
 
 /// 注册所有内置工具
-pub fn register_builtin_tools(registry: &mut ToolRegistry) {
+/// 返回 Scratchpad 共享状态 Arc，供 AgentContext 在每轮迭代时读取笔记摘要
+pub fn register_builtin_tools(registry: &mut ToolRegistry) -> SharedScratchpadStates {
     log::info!("开始注册内置工具");
     registry.register(Box::new(ListDirectoryTool));
     registry.register(Box::new(SearchFilesTool));
@@ -43,7 +51,17 @@ pub fn register_builtin_tools(registry: &mut ToolRegistry) {
     registry.register(Box::new(DeleteDirectoryTool));
     registry.register(Box::new(GetFileHashTool));
     registry.register(Box::new(ReadFileLinesTool));
-    log::info!("内置工具注册完成, 共注册 13 个工具");
+
+    // Scratchpad 工具：智能体草稿本，由 agent 自主调用 update_notes 写入
+    // 设计参考 Anthropic《Effective Context Engineering for AI Agents》的
+    // "Structured Note-taking" 模式，替代外部硬编码迭代元数据注入
+    let scratchpad_states: SharedScratchpadStates = Arc::new(RwLock::new(HashMap::new()));
+    registry.register(Box::new(ScratchpadTool {
+        states: scratchpad_states.clone(),
+    }));
+
+    log::info!("内置工具注册完成, 共注册 14 个工具");
+    scratchpad_states
 }
 
 // ============================================================
@@ -728,11 +746,11 @@ mod tests {
     #[test]
     fn test_register_builtin_tools() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _scratchpad_states = register_builtin_tools(&mut registry);
 
-        // 验证 13 个工具都已注册（8 个原有 + 5 个阶段三新增）
+        // 验证 14 个工具都已注册（8 个原有 + 5 个阶段三新增 + 1 个 scratchpad）
         let tools = registry.list_tools();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 14);
 
         // 验证每个工具的基本属性
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
@@ -750,15 +768,17 @@ mod tests {
         assert!(tool_names.contains(&"delete_directory"));
         assert!(tool_names.contains(&"get_file_hash"));
         assert!(tool_names.contains(&"read_file_lines"));
+        // Scratchpad 工具
+        assert!(tool_names.contains(&"update_notes"));
     }
 
     #[test]
     fn test_tool_definitions_count() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _scratchpad_states = register_builtin_tools(&mut registry);
 
         let defs = registry.tool_definitions();
-        assert_eq!(defs.len(), 13);
+        assert_eq!(defs.len(), 14);
 
         // 验证每个定义都有 type 和 function 字段
         for def in &defs {
@@ -772,7 +792,7 @@ mod tests {
     #[test]
     fn test_tool_info_properties() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tools = registry.list_tools();
         for tool in &tools {
@@ -781,14 +801,15 @@ mod tests {
             assert_eq!(tool.version, "1.0.0");
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
-            assert_eq!(tool.category, "filesystem");
+            // 文件系统工具为 "filesystem"，Scratchpad 笔记工具为 "memory"
+            assert!(tool.category == "filesystem" || tool.category == "memory");
         }
     }
 
     #[tokio::test]
     async fn test_file_exists_nonexistent() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("file_exists").unwrap();
         let result = tool.execute(json!({
@@ -805,7 +826,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("read_file").unwrap();
         let result = tool.execute(json!({
@@ -821,7 +842,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_directory_missing_path() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("create_directory").unwrap();
         let result = tool.execute(json!({
@@ -837,7 +858,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_text_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("write_text_file").unwrap();
         let result = tool.execute(json!({
@@ -854,7 +875,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_file_missing_workspace() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("delete_file").unwrap();
         let result = tool.execute(json!({
@@ -870,7 +891,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_files_empty_query_and_extensions() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("search_files").unwrap();
         let result = tool.execute(json!({
@@ -885,7 +906,7 @@ mod tests {
     #[tokio::test]
     async fn test_file_info_missing_path() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         let tool = registry.get_arc("file_info").unwrap();
         let result = tool.execute(json!({
@@ -903,7 +924,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_file_with_gbk_encoding() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
@@ -949,7 +970,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_default_utf8_encoding() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
@@ -984,7 +1005,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_unsupported_encoding_fallback() {
         let mut registry = ToolRegistry::new();
-        register_builtin_tools(&mut registry);
+        let _ = register_builtin_tools(&mut registry);
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
@@ -1013,6 +1034,270 @@ mod tests {
         // 清理临时文件
         let _ = tokio::fs::remove_file(&abs_path).await;
         let _ = tokio::fs::remove_dir(&temp_dir).await;
+    }
+
+    /// 测试 Scratchpad 工具的 add 操作
+    #[tokio::test]
+    async fn test_scratchpad_add_notes() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        // 第一条笔记
+        let result = tool.execute(json!({
+            "action": "add",
+            "content": "已读取 sample.docx，包含 3 个章节",
+            "_session_id": "test-session-1",
+            "_iteration": 1
+        })).await;
+
+        assert!(result.success, "add 失败: {:?}", result.error);
+        let output = result.output.unwrap();
+        assert_eq!(output["action"], "add");
+        assert_eq!(output["total_notes"], 1);
+
+        // 第二条笔记
+        let result2 = tool.execute(json!({
+            "action": "add",
+            "content": "识别到需要修改第 2 章的日期",
+            "_session_id": "test-session-1",
+            "_iteration": 2
+        })).await;
+
+        assert!(result2.success);
+        assert_eq!(result2.output.unwrap()["total_notes"], 2);
+    }
+
+    /// 测试 Scratchpad 工具的 read 操作
+    #[tokio::test]
+    async fn test_scratchpad_read_notes() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        // 先添加两条笔记
+        tool.execute(json!({
+            "action": "add",
+            "content": "笔记 A",
+            "_session_id": "test-session-read"
+        })).await;
+        tool.execute(json!({
+            "action": "add",
+            "content": "笔记 B",
+            "_session_id": "test-session-read"
+        })).await;
+
+        // 读取笔记
+        let result = tool.execute(json!({
+            "action": "read",
+            "_session_id": "test-session-read"
+        })).await;
+
+        assert!(result.success);
+        let output = result.output.unwrap();
+        assert_eq!(output["action"], "read");
+        assert_eq!(output["total_notes"], 2);
+        let notes = output["notes"].as_array().unwrap();
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0], "笔记 A");
+        assert_eq!(notes[1], "笔记 B");
+    }
+
+    /// 测试 Scratchpad 工具的 clear 操作
+    #[tokio::test]
+    async fn test_scratchpad_clear_notes() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        // 添加笔记
+        tool.execute(json!({
+            "action": "add",
+            "content": "待清理的笔记",
+            "_session_id": "test-session-clear"
+        })).await;
+
+        // 清空
+        let result = tool.execute(json!({
+            "action": "clear",
+            "_session_id": "test-session-clear"
+        })).await;
+
+        assert!(result.success);
+        let output = result.output.unwrap();
+        assert_eq!(output["action"], "clear");
+        assert_eq!(output["cleared_notes"], 1);
+
+        // 验证已清空
+        let read_result = tool.execute(json!({
+            "action": "read",
+            "_session_id": "test-session-clear"
+        })).await;
+        assert_eq!(read_result.output.unwrap()["total_notes"], 0);
+    }
+
+    /// 测试 Scratchpad 工具的会话隔离
+    #[tokio::test]
+    async fn test_scratchpad_session_isolation() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        // session-A 添加笔记
+        tool.execute(json!({
+            "action": "add",
+            "content": "会话 A 的笔记",
+            "_session_id": "session-A"
+        })).await;
+
+        // session-B 添加笔记
+        tool.execute(json!({
+            "action": "add",
+            "content": "会话 B 的笔记 1",
+            "_session_id": "session-B"
+        })).await;
+        tool.execute(json!({
+            "action": "add",
+            "content": "会话 B 的笔记 2",
+            "_session_id": "session-B"
+        })).await;
+
+        // 验证 session-A 只有 1 条
+        let result_a = tool.execute(json!({
+            "action": "read",
+            "_session_id": "session-A"
+        })).await;
+        assert_eq!(result_a.output.unwrap()["total_notes"], 1);
+
+        // 验证 session-B 有 2 条
+        let result_b = tool.execute(json!({
+            "action": "read",
+            "_session_id": "session-B"
+        })).await;
+        assert_eq!(result_b.output.unwrap()["total_notes"], 2);
+    }
+
+    /// 测试 Scratchpad 缺少 _session_id 时返回错误
+    #[tokio::test]
+    async fn test_scratchpad_missing_session_id() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        let result = tool.execute(json!({
+            "action": "add",
+            "content": "测试笔记"
+        })).await;
+
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("缺少会话标识"));
+        assert_eq!(result.error_code, Some(crate::errors::TOOL_INVALID_PARAMS));
+    }
+
+    /// 测试 Scratchpad add 时 content 为空返回错误
+    #[tokio::test]
+    async fn test_scratchpad_add_empty_content() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        let result = tool.execute(json!({
+            "action": "add",
+            "content": "",
+            "_session_id": "test-session"
+        })).await;
+
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("content 不能为空"));
+    }
+
+    /// 测试 Scratchpad 未知 action 返回错误
+    #[tokio::test]
+    async fn test_scratchpad_unknown_action() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        let result = tool.execute(json!({
+            "action": "delete",
+            "_session_id": "test-session"
+        })).await;
+
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("未知 action"));
+    }
+
+    /// 测试 Scratchpad 笔记长度限制（500 字符）
+    #[tokio::test]
+    async fn test_scratchpad_content_length_limit() {
+        let mut registry = ToolRegistry::new();
+        let _states = register_builtin_tools(&mut registry);
+        let tool = registry.get_arc("update_notes").unwrap();
+
+        // 构造 1000 字符的长内容
+        let long_content = "a".repeat(1000);
+
+        let result = tool.execute(json!({
+            "action": "add",
+            "content": long_content,
+            "_session_id": "test-session-limit"
+        })).await;
+
+        assert!(result.success);
+
+        // 验证存储的内容被截断到 500 字符
+        let read_result = tool.execute(json!({
+            "action": "read",
+            "_session_id": "test-session-limit"
+        })).await;
+        let binding = read_result.output.unwrap();
+        let notes = binding["notes"].as_array().unwrap();
+        assert_eq!(notes[0].as_str().unwrap().len(), 500);
+    }
+
+    /// 测试 format_scratchpad_summary 函数
+    #[test]
+    fn test_format_scratchpad_summary() {
+        use std::time::SystemTime;
+
+        let states: SharedScratchpadStates = Arc::new(RwLock::new(HashMap::new()));
+
+        // 空状态返回 None
+        assert!(format_scratchpad_summary(&states, "empty-session").is_none());
+
+        // 添加笔记
+        {
+            let mut states_write = states.write().unwrap();
+            states_write.insert("test-session".to_string(), vec![
+                ScratchpadEntry {
+                    content: "第一条笔记".to_string(),
+                    iteration: 1,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                },
+                ScratchpadEntry {
+                    content: "第二条笔记".to_string(),
+                    iteration: 2,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64,
+                },
+            ]);
+        }
+
+        let summary = format_scratchpad_summary(&states, "test-session");
+        assert!(summary.is_some());
+        let summary = summary.unwrap();
+        assert!(summary.contains("<scratchpad>"));
+        assert!(summary.contains("第一条笔记"));
+        assert!(summary.contains("第二条笔记"));
+        assert!(summary.contains("1. 第一条笔记"));
+        assert!(summary.contains("2. 第二条笔记"));
+        assert!(summary.contains("update_notes"));
     }
 }
 
@@ -2664,4 +2949,216 @@ impl Tool for ReadFileLinesTool {
             }
         }
     }
+}
+
+// ============================================================
+// update_notes - 智能体草稿本（Scratchpad）
+// ============================================================
+//
+// 设计依据：Anthropic《Effective Context Engineering for AI Agents》(2025-09-29)
+// 的 "Structured Note-taking" 模式。Agent 在长程任务中自主调用本工具记录关键进度、
+// 决策点、待办事项，避免外部硬编码迭代元数据（如"迭代轮次 3/100"、"当前步骤"）
+// 注入消息列表，从而：
+//   1. 避免角色混淆（Role Confusion）——伪 user 消息注入元数据是反模式
+//   2. 节省注意力预算——笔记内容是 agent 主动写的，信噪比高于外部猜测
+//   3. 培养 agent 自我规划能力——由 agent 决定记录什么、何时记录
+//
+// 状态隔离：通过 session_id 在 HashMap 中隔离不同会话的笔记
+// 注入方式：executor 每轮迭代开始时读取当前 session 的笔记，刷新到
+//           AgentContext::scratchpad_summary，由 get_messages_for_iteration
+//           追加到消息列表末尾（保留前缀稳定性以最大化缓存命中）
+
+/// Scratchpad 工具：智能体草稿本
+/// 持有全局共享状态 Arc，按 session_id 隔离不同会话
+pub struct ScratchpadTool {
+    pub states: SharedScratchpadStates,
+}
+
+/// Scratchpad 工具的 action 枚举
+const ACTION_ADD: &str = "add";
+const ACTION_READ: &str = "read";
+const ACTION_CLEAR: &str = "clear";
+
+#[async_trait]
+impl Tool for ScratchpadTool {
+    fn tool_name(&self) -> &str { "update_notes" }
+
+    fn description(&self) -> &str {
+        "智能体草稿本：记录或读取任务笔记，用于跨迭代轮次保持上下文。\
+         适用场景：复杂多步骤任务中记录关键决策、待办事项、文件路径、中间结果。\
+         建议在完成关键步骤后调用 action=add 记录要点；当任务上下文变长时，\
+         action=read 可回顾已有笔记；任务完成后 action=clear 清理。\
+         笔记内容会在后续迭代中自动注入到你的上下文，无需重复读取。"
+    }
+
+    fn category(&self) -> &str { "memory" }
+
+    fn parameters(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["add", "read", "clear"],
+                    "description": "操作类型：add=追加笔记；read=读取所有笔记；clear=清空笔记",
+                    "default": "add"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "笔记内容（action=add 时必填）。建议简明扼要，每条不超过200字"
+                }
+            },
+            "required": ["action"]
+        })
+    }
+
+    async fn execute(&self, params: Value) -> ToolResult {
+        let start = Instant::now();
+
+        // 从 params 中取出 _session_id（由 executor 在调用前注入）
+        // _session_id 以下划线开头，表示是系统注入参数，不暴露给 LLM
+        let session_id = params["_session_id"].as_str().unwrap_or("").to_string();
+        if session_id.is_empty() {
+            log::warn!("update_notes 调用缺少 _session_id 参数");
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some("内部错误：缺少会话标识".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        let action = params["action"].as_str().unwrap_or(ACTION_ADD);
+        let content = params["content"].as_str().unwrap_or("").to_string();
+        let iteration = params["_iteration"].as_u64().unwrap_or(0) as u32;
+
+        match action {
+            ACTION_ADD => {
+                if content.is_empty() {
+                    return ToolResult {
+                        success: false,
+                        output: None,
+                        error: Some("action=add 时 content 不能为空".to_string()),
+                        duration_ms: start.elapsed().as_millis() as u64,
+                        error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+                    };
+                }
+
+                // 限制单条笔记长度，防止滥用
+                let safe_content: String = content.chars().take(500).collect();
+                let entry = ScratchpadEntry {
+                    content: safe_content,
+                    iteration,
+                    timestamp_ms: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0),
+                };
+
+                let entry_count = {
+                    let mut states = self.states.write().expect("scratchpad states 锁中毒");
+                    let state = states.entry(session_id.clone()).or_default();
+                    state.push(entry);
+                    state.len()
+                };
+
+                log::info!(
+                    "update_notes 追加笔记: session_id={}, 当前笔记数={}",
+                    session_id, entry_count
+                );
+
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "action": "add",
+                        "total_notes": entry_count,
+                        "message": format!("笔记已记录（共 {} 条）", entry_count),
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            ACTION_READ => {
+                let states = self.states.read().expect("scratchpad states 锁中毒");
+                let notes: Vec<&ScratchpadEntry> = states
+                    .get(&session_id)
+                    .map(|s| s.iter().collect())
+                    .unwrap_or_default();
+
+                log::info!(
+                    "update_notes 读取笔记: session_id={}, 笔记数={}",
+                    session_id, notes.len()
+                );
+
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "action": "read",
+                        "total_notes": notes.len(),
+                        "notes": notes.iter().map(|e| &e.content).collect::<Vec<_>>(),
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            ACTION_CLEAR => {
+                let cleared_count = {
+                    let mut states = self.states.write().expect("scratchpad states 锁中毒");
+                    states.remove(&session_id)
+                        .map(|s| s.len())
+                        .unwrap_or(0)
+                };
+
+                log::info!(
+                    "update_notes 清空笔记: session_id={}, 已清除 {} 条",
+                    session_id, cleared_count
+                );
+
+                ToolResult {
+                    success: true,
+                    output: Some(json!({
+                        "action": "clear",
+                        "cleared_notes": cleared_count,
+                        "message": format!("已清空 {} 条笔记", cleared_count),
+                    })),
+                    error: None,
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: None,
+                }
+            }
+            _ => {
+                log::warn!("update_notes 未知 action: {}", action);
+                ToolResult {
+                    success: false,
+                    output: None,
+                    error: Some(format!("未知 action: {}（支持 add/read/clear）", action)),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+                }
+            }
+        }
+    }
+}
+
+/// 格式化 Scratchpad 笔记列表为摘要字符串（供 AgentContext 注入消息列表）
+/// 返回 None 表示无笔记，调用方应跳过注入
+pub fn format_scratchpad_summary(
+    states: &SharedScratchpadStates,
+    session_id: &str,
+) -> Option<String> {
+    let states = states.read().ok()?;
+    let state = states.get(session_id)?;
+    if state.is_empty() {
+        return None;
+    }
+
+    let mut summary = String::from("<scratchpad>\n## 你的任务笔记\n\n以下是你之前记录的任务笔记，请基于这些笔记继续工作（无需重复读取）：\n\n");
+    for (i, entry) in state.iter().enumerate() {
+        summary.push_str(&format!("{}. {}\n", i + 1, entry.content));
+    }
+    summary.push_str("\n如需更新笔记，请调用 update_notes 工具。\n</scratchpad>");
+    Some(summary)
 }
