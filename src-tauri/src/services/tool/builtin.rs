@@ -1,4 +1,4 @@
-﻿// 允许在测试模块之后定义工具：项目原有结构将测试模块置于文件中部，
+// 允许在测试模块之后定义工具：项目原有结构将测试模块置于文件中部，
 // WriteTextFileTool 及阶段三 3.5 新增的 5 个工具均位于测试模块之后。
 // 完整重构文件结构（移动测试模块到末尾）超出当前任务范围，这里以 allow 抑制 lint。
 #![allow(clippy::items_after_test_module)]
@@ -577,6 +577,7 @@ impl Tool for ReadFileTool {
         let encoding_label = params["encoding"].as_str().unwrap_or("utf-8");
 
         if file_path.is_empty() {
+            log::warn!("read_file 失败: 缺少文件路径");
             return ToolResult {
                 success: false,
                 output: None,
@@ -593,6 +594,7 @@ impl Tool for ReadFileTool {
             let canonical_file = match crate::utils::canonicalize(path) {
                 Ok(p) => p,
                 Err(_) => {
+                    log::warn!("read_file 失败: 文件不存在或路径无效, path={}, workspace={}", file_path, workspace_root);
                     return ToolResult {
                         success: false,
                         output: None,
@@ -604,6 +606,7 @@ impl Tool for ReadFileTool {
             let canonical_root = match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
                 Ok(p) => p,
                 Err(_) => {
+                    log::warn!("read_file 失败: 工作区根目录路径无效, workspace={}", workspace_root);
                     return ToolResult {
                         success: false,
                         output: None,
@@ -613,6 +616,7 @@ impl Tool for ReadFileTool {
                 }
             };
             if !canonical_file.starts_with(&canonical_root) {
+                log::warn!("read_file 失败: 路径越界, path={}, workspace={}", file_path, workspace_root);
                 return ToolResult {
                     success: false,
                     output: None,
@@ -623,6 +627,7 @@ impl Tool for ReadFileTool {
         }
 
         if !path.exists() {
+            log::warn!("read_file 失败: 文件不存在, path={}", file_path);
             return ToolResult {
                 success: false,
                 output: None,
@@ -632,6 +637,7 @@ impl Tool for ReadFileTool {
         }
 
         if !path.is_file() {
+            log::warn!("read_file 失败: 路径不是文件, path={}", file_path);
             return ToolResult {
                 success: false,
                 output: None,
@@ -644,6 +650,7 @@ impl Tool for ReadFileTool {
         let metadata = match tokio::fs::metadata(&resolved_path).await {
             Ok(m) => m,
             Err(e) => {
+                log::warn!("read_file 失败: 获取文件信息失败, path={}, 错误: {}", file_path, e);
                 return ToolResult {
                     success: false,
                     output: None,
@@ -654,6 +661,7 @@ impl Tool for ReadFileTool {
         };
 
         if metadata.len() as usize > max_size {
+            log::warn!("read_file 失败: 文件过大, path={}, size={}字节, max={}字节", file_path, metadata.len(), max_size);
             return ToolResult {
                 success: false,
                 output: None,
@@ -1592,7 +1600,7 @@ struct WriteTextFileTool;
 #[async_trait]
 impl Tool for WriteTextFileTool {
     fn tool_name(&self) -> &str { "write_text_file" }
-    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。" }
+    fn description(&self) -> &str { "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。内容大小限制4KB（约4000字符），超出可能触发LLM响应截断；对于大文件（如6000+字符的测试文件、长文档），请改用code_interpreter_handler通过Python代码生成（如循环写入、字符串拼接），避免将大段内容作为工具参数传输。" }
     fn category(&self) -> &str { "filesystem" }
     fn parameters(&self) -> Value {
         json!({
