@@ -25,18 +25,31 @@ def setup_logging():
     )
 
     # mode='w' 覆盖写入，每次启动时清空上一次的日志
+    # 文件 handler 保留 DEBUG 级别，本地 sidecar.log 仍可详细调试
     file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
+    # stderr handler 提升到 INFO 级别，避免 pdfminer/PIL/openpyxl 等第三方库的
+    # DEBUG 日志通过 stderr 传输到 Rust 端被记录为 INFO，污染主日志
     stderr_handler = logging.StreamHandler(sys.stderr)
-    stderr_handler.setLevel(logging.DEBUG)
+    stderr_handler.setLevel(logging.INFO)
     stderr_handler.setFormatter(formatter)
 
+    # root logger 设为 INFO，默认过滤第三方库 DEBUG 日志
+    # 应用自身的 handlers.* logger 显式设为 DEBUG，保持业务日志详细度
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stderr_handler)
+
+    # 应用自身 logger 保持 DEBUG 级别（业务逻辑详细日志）
+    logging.getLogger("handlers").setLevel(logging.DEBUG)
+    logging.getLogger(__name__).setLevel(logging.DEBUG)
+
+    # 已知噪声第三方库强制提升到 WARNING 级别（即使 root 设为 INFO，这里显式声明意图）
+    for noisy_logger in ("pdfminer", "PIL", "openpyxl", "pptx", "docx", "urllib3"):
+        logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
     logger.info("Sidecar 日志系统初始化完成, 日志文件: %s", log_file)
 
