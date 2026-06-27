@@ -12,6 +12,31 @@
    - `sample.xlsx` - 包含表头和数据的 Excel 文件
    - `large_file.txt` - 超过 6000 字符的文本文件（用于截断测试）
    - `中文内容.md` - 包含中文的 Markdown 文件
+5. **可选：安装 LibreOffice**（用于 8.3 PPT 转 PDF 测试）
+   - 下载：https://www.libreoffice.org/download/
+   - 确认 `soffice` 命令在 PATH 中：`soffice --version`
+   - 未安装时 8.3 测试将跳过，不影响其他测试项
+
+### 日志文件位置
+
+测试过程中请同步检查日志文件以验证可观测性：
+
+| 日志文件 | 路径 | 说明 |
+|---------|------|------|
+| docagent.log | `D:\DeskTop\DocAgent\log\docagent.log` | Rust 主进程日志（Agent 迭代、Tool 执行、错误） |
+| sidecar.log | `D:\DeskTop\DocAgent\src-tauri\target\debug\log\sidecar.log` | Python Sidecar 日志（Handler 执行、代码执行） |
+
+**日志检查命令**（PowerShell）：
+```powershell
+# 查看最近的 WARN/ERROR
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern 'WARN|ERROR' | Select-Object -Last 20
+
+# 查看 Agent 迭代和完成状态
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern 'Agent 迭代|Agent 执行完成|Agent 执行失败'
+
+# 查看工具结果截断日志
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern '已截断|工具结果'
+```
 
 ---
 
@@ -240,7 +265,10 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 2. 观察工具结果
 
 **预期结果**：
-- `error_code` 为 `3011`（DOC_PERMISSION_DENIED）
+- 操作被拒绝
+- `error_code` 为 `9004`（TOOL_PATH_OUT_OF_BOUNDS）
+- `error` 消息包含"路径不在工作区内，拒绝访问"
+- **注意**：第一轮测试发现该文件因权限不足导致 canonicalize 失败，原代码返回"文件不存在或路径无效"且 error_code=None。已修复为统一使用 `validate_existing_path_in_workspace`，现在会先做词法归一化检查，正确识别绝对路径越界
 
 ---
 
@@ -362,12 +390,148 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 ### 8.3 PPT LibreOffice 集成
 
 **测试步骤**：
-1. 向 Agent 发送：`将 sample.pptx 转换为 pdf`
-2. 确认系统已安装 LibreOffice
+1. 确认系统已安装 LibreOffice：`soffice --version`
+2. 向 Agent 发送：`将 sample.pptx 转换为 pdf`
+3. 观察转换结果
 
 **预期结果**：
 - 转换成功生成 PDF 文件
 - PDF 内容与 PPT 一致
+- 日志无 ERROR
+
+**环境依赖说明**：
+- 若未安装 LibreOffice，测试将返回错误"PPT 转 PDF 需要 LibreOffice 支持，但当前环境未安装"
+- 这是环境依赖，非代码缺陷。代码已集成 LibreOffice headless 模式（P0 修复）
+- 安装 LibreOffice 后即可通过
+
+---
+
+## 九、安全防护一致性测试（第一轮发现的问题）
+
+> 第一轮测试发现：5 个新增工具使用了带词法归一化防线的 `validate_existing_path_in_workspace`，但 4 个老工具（read_file、file_info、file_exists、delete_file）仍使用内联校验逻辑，存在安全防护不一致。已统一修复，本章验证修复效果。
+
+### 9.1 老工具 `../` 越界防护
+
+**测试步骤**：
+1. 向 Agent 发送：`读取 ../outside.txt 文件`（相对路径越界，文件不存在）
+2. 向 Agent 发送：`获取 ../outside.txt 的文件信息`
+3. 向 Agent 发送：`检查 ../outside.txt 是否存在`
+4. 向 Agent 发送：`删除 ../outside.txt 文件`
+
+**预期结果**：
+- 所有工具返回"路径不在工作区内，拒绝访问"（而非"文件不存在或路径无效"）
+- `error_code` 为 `9004`（TOOL_PATH_OUT_OF_BOUNDS）
+- **关键验证**：`../` 越界不应泄露文件存在性信息
+
+**日志验证**：
+```
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern '路径越界|路径不在工作区内'
+```
+
+### 9.2 绝对路径越界防护（canonicalize 失败场景）
+
+**测试步骤**：
+1. 向 Agent 发送：`读取 C:\Windows\System32\config\SAM 文件`（存在但无权限）
+2. 向 Agent 发送：`读取 C:\Windows\System32\drivers\etc\hosts 文件`（存在且可读但越界）
+
+**预期结果**：
+- 两个文件都返回"路径不在工作区内，拒绝访问"
+- `error_code` 为 `9004`
+- **关键验证**：canonicalize 失败（权限不足）时，词法归一化防线仍能识别越界
+
+**背景说明**：
+- 第一轮测试中，`C:\Windows\System32\config\SAM` 因权限不足导致 canonicalize 失败，原代码返回"文件不存在或路径无效"且 error_code=None
+- 修复后增加词法归一化防线，不依赖文件系统即可识别绝对路径越界
+
+### 9.3 FileExistsTool 安全防线验证
+
+**测试步骤**：
+1. 向 Agent 发送：`检查 ../outside.txt 是否存在`（越界且不存在）
+2. 向 Agent 发送：`检查 C:\Windows\System32\drivers\etc\hosts 是否存在`（越界但存在）
+
+**预期结果**：
+- 越界路径返回错误"路径不在工作区内，拒绝访问"（而非 `exists: false`）
+- `error_code` 为 `9004`
+- **关键验证**：FileExistsTool 不应通过 `exists: false` 绕过安全校验
+
+**背景说明**：
+- 第一轮测试发现 FileExistsTool 原逻辑：`if let Ok(canonicalize)` —— canonicalize 失败时完全跳过安全校验，直接返回 `exists: false`，攻击者可探测工作区外文件存在性
+- 修复后：即使路径不存在，也先做词法归一化校验，越界路径直接拒绝
+
+### 9.4 深层 `..` 回退验证
+
+**测试步骤**：
+1. 在工作区创建 `a/b/c/file.txt` 目录结构
+2. 向 Agent 发送：`读取 a/b/../../c/file.txt`（合法回退到工作区内）
+3. 向 Agent 发送：`读取 a/b/../../../outside.txt`（先回退再越界）
+
+**预期结果**：
+- `a/b/../../c/file.txt` 读取成功（合法回退）
+- `a/../../../outside.txt` 返回"路径不在工作区内"（越界拒绝）
+
+**验证目的**：词法归一化能正确处理多层 `..` 回退，不会误判合法路径为越界
+
+---
+
+## 十、日志可观测性测试（第一轮发现的问题）
+
+> 第一轮测试发现：工具结果截断和 reasoning_content 压缩都执行了，但日志中无任何记录，导致智能体读大文档时中间章节丢失无法诊断。已补充日志，本章验证可观测性。
+
+### 10.1 工具结果截断日志
+
+**测试步骤**：
+1. 创建一个超过 6000 字符的文件（如 `large_chinese.txt`，6629 字符）
+2. 向 Agent 发送：`读取 large_chinese.txt 的全部内容`
+3. 检查 docagent.log
+
+**预期结果**：
+- 工具结果包含 `[已截断: 原始 N 字符，保留头部 4200 + 尾部 1800，省略中间 N 字符]`
+- **日志包含 INFO 记录**：
+  ```
+  [INFO] 工具结果内容字段已截断, tool=read_file, 原始 6629 字符 -> 保留头部 4200 + 尾部 1800, 省略中间 629 字符
+  ```
+
+**日志验证命令**：
+```powershell
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern '工具结果内容字段已截断'
+```
+
+### 10.2 reasoning_content 压缩日志
+
+**测试步骤**：
+1. 执行需要多轮迭代的复杂任务（如完成多个测试项）
+2. 检查 docagent.log 中的压缩记录
+
+**预期结果**：
+- 日志包含 DEBUG 记录：
+  ```
+  [DEBUG] 压缩早期 reasoning_content: 原始长度=N, 压缩后长度=M, 消息索引=K
+  ```
+- **压缩比例验证**：
+  - 阈值 1200 字符（原 500，已提升）
+  - 保留 500 字符（原 200，已提升）
+  - 压缩比例应 ≤ 60%（第一轮测试中 2625→1046，约 60%；原 2625→448 约 83%）
+
+**日志验证命令**：
+```powershell
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern '压缩早期 reasoning_content' | Select-Object -Last 10
+```
+
+### 10.3 Agent 迭代次数监控
+
+**测试步骤**：
+1. 执行复杂任务（如一次性完成 5 个工具测试）
+2. 检查 Agent 迭代次数
+
+**预期结果**：
+- Agent 正常完成，日志显示"Agent 执行完成, 总步骤=N"
+- 总步骤 ≤ 30（MAX_ITERATIONS 已从 20 提升到 30）
+- **不应出现**："Agent 执行超过最大迭代次数"
+
+**日志验证命令**：
+```powershell
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern 'Agent 执行完成|Agent 执行失败|超过最大迭代'
+```
 
 ---
 
@@ -385,8 +549,11 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 | 2.3 Excel 表头 | | | |
 | 3.1 Schema 一致性 | | | |
 | 4.1 中文截断 | | | |
+| 4.2 英文截断 | | | |
 | 5.1 路径越界错误码 | | | |
 | 5.2 参数缺失错误码 | | | |
+| 5.3 Handler 不存在错误码 | | | |
+| 5.4 权限拒绝错误码 | | | |
 | 6.1 Markdown 验证 | | | |
 | 6.2 纯文本验证 | | | |
 | 7.1 Word 格式读取 | | | |
@@ -395,6 +562,72 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 | 7.4 PPT 扩展读取 | | | |
 | 8.1 路径遍历防护 | | | |
 | 8.3 PPT 转换 | | | |
+| 9.1 老工具 ../ 越界防护 | | | |
+| 9.2 绝对路径越界防护 | | | |
+| 9.3 FileExistsTool 安全防线 | | | |
+| 9.4 深层 .. 回退验证 | | | |
+| 10.1 工具结果截断日志 | | | |
+| 10.2 reasoning 压缩日志 | | | |
+| 10.3 Agent 迭代次数监控 | | | |
+
+---
+
+## 测试方法学指导（基于第一轮测试经验）
+
+### 1. 测试结果判定原则
+
+**不要仅依赖智能体自述结果**。第一轮测试发现，智能体可能将测试标记为"通过"，但日志中存在 ERROR。判定测试通过前，必须检查日志：
+
+```powershell
+# 检查测试时间范围内的所有 ERROR
+Select-String -Path 'D:\DeskTop\DocAgent\log\docagent.log' -Pattern 'ERROR' | Select-Object -Last 20
+```
+
+**判定标准**：
+- ✅ 通过：功能正常 + 日志无 ERROR（或 ERROR 属于预期的边界测试，如 8.1 路径遍历拒绝）
+- ⚠️ 部分通过：核心功能正常但存在非预期 ERROR（如 7.2 Excel 读取时 MergedCell 错误）
+- ❌ 未通过：功能失败或存在安全漏洞
+
+### 2. 测试日期规范
+
+**测试日期必须使用实际测试日期**，不要使用 LLM 生成的日期。第一轮测试发现智能体可能产生日期幻觉（如写入 `2024-12-06` 而实际是 `2026-06-28`）。
+
+**推荐做法**：
+- 测试前记录当前日期：`Get-Date -Format 'yyyy-MM-dd'`
+- 测试后核对智能体填写的日期与实际日期是否一致
+
+### 3. 日志 ERROR 分类处理
+
+测试过程中遇到的 ERROR 分为三类：
+
+| 类型 | 示例 | 处理方式 |
+|------|------|---------|
+| 预期 ERROR | 8.1 路径遍历被拒绝 | 正常，测试通过 |
+| 边界测试 ERROR | 5.4 权限拒绝错误码 | 正常，测试通过 |
+| 非预期 ERROR | 7.2 MergedCell 读取错误 | 需排查根因，可能是产品 Bug 或测试代码问题 |
+
+### 4. 智能体困惑识别
+
+第一轮测试发现，智能体在以下情况可能陷入困惑：
+
+- **工具结果截断**：智能体读取大文档时，中间章节被截断丢失，智能体可能质疑"文档被截断"
+- **reasoning_content 压缩**：多轮迭代后早期推理被压缩，智能体可能丢失任务上下文
+- **迭代次数耗尽**：复杂任务可能超过 MAX_ITERATIONS，智能体被强制停止
+
+**识别方法**：检查日志中的"压缩早期 reasoning_content"和"Agent 执行失败"记录
+
+### 5. 测试反馈写入验证
+
+第一轮测试发现，智能体声称"已写入测试结果"但用户感觉文件无变化。实际是文件已更新但变化较小（如仅更新表格一行）。
+
+**验证方法**：
+```powershell
+# 检查文件修改时间
+Get-Item 'D:\test_workspace\tools_handlers_validation.md' | Select-Object LastWriteTime
+
+# 查看文件末尾的测试结果记录表格
+Get-Content 'D:\test_workspace\tools_handlers_validation.md' -Tail 30
+```
 
 ---
 
@@ -414,4 +647,25 @@ python -c "import ast, os; [ast.parse(open(os.path.join(r,f),encoding='utf-8').r
 
 # Python 导入和功能测试
 python -c "import sys; sys.path.insert(0, 'sidecar'); from handlers.doc_helpers.common import apply_theme, THEME_COLORS; from handlers.doc_helpers.ppt_helpers import create_ppt_doc, get_ppt_color_scheme; from handlers.doc_helpers.excel_helpers import create_excel_doc, apply_excel_header_style, THEME; print('All imports OK')"
+```
+
+### 第一轮测试后的补充验证命令
+
+```powershell
+# 验证路径安全校验一致性（第九章）
+# 检查所有工具是否使用统一的 validate_existing_path_in_workspace
+Select-String -Path 'D:\DeskTop\DocAgent\src-tauri\src\services\tool\builtin.rs' -Pattern 'validate_existing_path_in_workspace' | Measure-Object | Select-Object -ExpandProperty Count
+# 预期：≥ 9（1 个函数定义 + 8 个调用点：read_file/file_info/file_exists/delete_file/rename_file/copy_file/delete_directory/get_file_hash/read_file_lines）
+
+# 验证 reasoning_content 压缩阈值（第十章）
+Select-String -Path 'D:\DeskTop\DocAgent\src-tauri\src\services\agent\context.rs' -Pattern 'REASONING_COMPRESS_THRESHOLD|REASONING_COMPRESS_KEEP'
+# 预期：THRESHOLD=1200, KEEP=500
+
+# 验证 MAX_ITERATIONS（第十章）
+Select-String -Path 'D:\DeskTop\DocAgent\src-tauri\src\services\agent\executor.rs' -Pattern 'max_iterations'
+# 预期：30
+
+# 验证工具结果截断日志（第十章）
+Select-String -Path 'D:\DeskTop\DocAgent\src-tauri\src\services\agent\executor.rs' -Pattern '工具结果内容字段已截断'
+# 预期：找到 log::info! 调用
 ```
