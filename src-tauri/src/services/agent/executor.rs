@@ -1,4 +1,4 @@
-﻿use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -97,7 +97,7 @@ impl<R: Runtime> AgentExecutor<R> {
             registry,
             emitter,
             confirm_channels,
-            max_iterations: 20,
+            max_iterations: 50,
             should_stop: Arc::new(|_| false),
             persist_fn: None,
             context_usage_persist_fn: None,
