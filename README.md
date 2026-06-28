@@ -39,9 +39,9 @@ All document processing and file operations are completed on your machine. Only 
 
 Flexible integration with mainstream LLM services like OpenAI, Anthropic Claude, Google Gemini, and Ollama. Automatic health checks and failover ensure you won't be locked into a single provider.
 
-### Code Interpreter -- Document Generation Reimagined
+### Code Interpreter
 
-The core highlight of v0.2.1: AI writes and executes Python code to directly manipulate document object models. From "descriptive generation" to "code-level control" -- results are more precise, complex formatting is no longer a struggle.
+AI writes and executes Python code to directly manipulate document object models. From "descriptive generation" to "code-level control" -- results are more precise, complex formatting is no longer a struggle.
 
 - **Read-modify-save workflow**: Read existing document structure, write code for precise modifications, save -- all executed in a local sandbox
 - **Full format coverage**: Word, Excel, PPT, PDF, Markdown -- one engine handles them all
