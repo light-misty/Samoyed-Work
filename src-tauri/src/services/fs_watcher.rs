@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -91,6 +91,13 @@ impl<R: Runtime> FsWatcherService<R> {
 
                     for event_path in &event.paths {
                         let path_str = event_path.to_string_lossy().to_string();
+
+                        // 过滤日志目录下的文件变更，避免日志写入触发 FsWatcher
+                        // 形成"日志写入 -> 文件变更 -> FsWatcher 记录 -> 日志写入"的反馈循环
+                        if is_path_in_log_dir(event_path, crate::utils::logger::current_log_dir()) {
+                            continue;
+                        }
+
                         log::debug!(
                             "FsWatcher: 检测到文件变更 type={}, path={}",
                             change_type,
@@ -269,5 +276,64 @@ impl<R: Runtime> FsWatcherService<R> {
     /// 检查是否已经发射过工作区目录删除事件
     pub fn is_deletion_emitted(&self) -> bool {
         self.deletion_emitted.load(Ordering::SeqCst)
+    }
+}
+
+/// 判断指定路径是否位于日志目录下（应被 FsWatcher 忽略）
+///
+/// 用于过滤日志目录下的文件变更事件，避免出现反馈循环：
+/// 日志写入 -> 文件变更 -> FsWatcher 记录 DEBUG -> 日志写入 -> ...
+///
+/// - `path`: FsWatcher 收到的事件路径
+/// - `log_dir`: 当前日志目录（来自 `logger::current_log_dir()`），None 表示日志系统未初始化
+///
+/// 返回 true 表示该路径位于日志目录下，应忽略；false 表示正常处理
+fn is_path_in_log_dir(path: &Path, log_dir: Option<&Path>) -> bool {
+    match log_dir {
+        Some(dir) => path.starts_with(dir),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_path_in_log_dir_none_returns_false() {
+        // log_dir 为 None（日志系统未初始化或降级模式）时不应过滤任何路径
+        let path = Path::new("/workspace/some_file.txt");
+        assert!(!is_path_in_log_dir(path, None));
+    }
+
+    #[test]
+    fn test_is_path_in_log_dir_path_inside_log_dir() {
+        // 路径位于日志目录下时应被过滤
+        let log_dir = Path::new("/workspace/log");
+        let log_file = Path::new("/workspace/log/docagent_20260629_213909.log");
+        assert!(is_path_in_log_dir(log_file, Some(log_dir)));
+    }
+
+    #[test]
+    fn test_is_path_in_log_dir_path_outside_log_dir() {
+        // 路径不在日志目录下时不应被过滤
+        let log_dir = Path::new("/workspace/log");
+        let other_file = Path::new("/workspace/docs/report.docx");
+        assert!(!is_path_in_log_dir(other_file, Some(log_dir)));
+    }
+
+    #[test]
+    fn test_is_path_in_log_dir_log_dir_itself() {
+        // 日志目录自身路径也应被过滤（防止监听到目录本身的元数据变更）
+        let log_dir = Path::new("/workspace/log");
+        assert!(is_path_in_log_dir(log_dir, Some(log_dir)));
+    }
+
+    #[test]
+    fn test_is_path_in_log_dir_sibling_directory() {
+        // 同名前缀的兄弟目录不应被误过滤（例如 /workspace/logs vs /workspace/log）
+        let log_dir = Path::new("/workspace/log");
+        let sibling_file = Path::new("/workspace/logs/other.log");
+        assert!(!is_path_in_log_dir(sibling_file, Some(log_dir)));
     }
 }
