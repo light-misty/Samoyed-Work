@@ -1,6 +1,6 @@
 [package]
 name = "docagent"
-version = "0.2.3"
+version = "0.2.4"
 description = "AI文档处理Agent桌面应用"
 authors = ["DocAgent Team"]
 edition = "2021"
@@ -29,6 +29,9 @@ async-trait = "0.1"
 futures = "0.3"
 eventsource-stream = "0.2"
 log = { version = "0.4", features = ["std"] }
+# tracing-appender: 提供 non_blocking 异步写入器，避免 I/O 阻塞主线程
+# 仅使用其 non_blocking writer，不引入完整 tracing 生态（保留 log crate 调用）
+tracing-appender = "0.2"
 notify = "7"
 base64 = "0.22"
 dunce = "1"

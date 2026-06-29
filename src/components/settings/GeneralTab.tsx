@@ -12,9 +12,8 @@ export function GeneralTab() {
   const { clearAllSessions } = useSessionStore();
   const addToast = useToastStore((s) => s.addToast);
   const [clearConfirm, setClearConfirm] = useState(false);
-  const [exportingLog, setExportingLog] = useState(false);
   // 日志路径信息
-  const [logPathInfo, setLogPathInfo] = useState<{ logSource: string; downloadDir: string } | null>(null);
+  const [logPathInfo, setLogPathInfo] = useState<{ logSource: string } | null>(null);
   // 更新相关状态
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [currentVersion, setCurrentVersion] = useState<string>("");
@@ -133,37 +132,23 @@ export function GeneralTab() {
             <div className="setting-desc">
               {t('settings.general.exportErrorLogDesc')}
               {logPathInfo && (
-                <>
-                  <span className="log-path-hint">{t('settings.general.logSourcePath', { path: logPathInfo.logSource })}</span>
-                  <span className="log-path-hint">{t('settings.general.logExportPath', { path: logPathInfo.downloadDir })}</span>
-                </>
+                <span className="log-path-hint">{t('settings.general.logSourcePath', { path: logPathInfo.logSource })}</span>
               )}
             </div>
           </div>
           <button
             className="dm-btn"
-            disabled={exportingLog}
             onClick={async () => {
-              setExportingLog(true);
+              if (!logPathInfo?.logSource) return;
               try {
-                const logContent = await tauriCmd.getErrorLog();
-                const blob = new Blob([logContent], { type: "text/plain" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `docagent-error-log-${new Date().toISOString().slice(0, 10)}.txt`;
-                a.click();
-                URL.revokeObjectURL(url);
-                addToast("success", t('settings.general.exportLogSuccess'));
+                await tauriCmd.openDirectory(logPathInfo.logSource);
               } catch (error) {
-                console.error("[GeneralTab] 导出错误日志失败:", error);
-                addToast("error", `${t('settings.general.exportLogFail')}: ${error instanceof Error ? error.message : String(error)}`);
-              } finally {
-                setExportingLog(false);
+                console.error("[GeneralTab] 打开日志目录失败:", error);
+                addToast("error", `${t('settings.general.openDirFail')}: ${error instanceof Error ? error.message : String(error)}`);
               }
             }}
           >
-            {exportingLog ? `${t('settings.general.export')}...` : t('settings.general.export')}
+            {t('settings.general.openLogDir')}
           </button>
         </div>
 

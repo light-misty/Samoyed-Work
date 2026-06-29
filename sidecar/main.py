@@ -7,6 +7,7 @@ import sys
 import os
 import json
 import logging
+import datetime
 import traceback
 from typing import Any
 
@@ -14,17 +15,32 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging():
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    log_dir = os.path.join(project_root, "log")
+    """配置日志系统
+
+    日志目录优先级：
+    1. 环境变量 DOCAGENT_LOG_DIR（由 Rust 端注入，生产环境使用）
+    2. 项目根目录的 log/ 子目录（开发环境回退，基于 __file__ 推导）
+
+    每次启动生成带启动时间戳的独立日志文件（sidecar_YYYYMMDD_HHMMSS.log）
+    不覆盖历史日志，历史日志由 Rust 端统一清理（保留 7 天）
+    """
+    # 日志目录：优先读取 Rust 端注入的环境变量，回退到项目根目录推导
+    log_dir = os.environ.get("DOCAGENT_LOG_DIR") or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "log",
+    )
     os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, "sidecar.log")
+
+    # 生成带启动时间戳的日志文件名，每次运行生成独立文件
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, "sidecar_{}.log".format(timestamp))
 
     formatter = logging.Formatter(
         fmt='%(asctime)s.%(msecs)03d [%(levelname)-5s] %(name)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
-    # mode='w' 覆盖写入，每次启动时清空上一次的日志
+    # mode='w' 新文件每次启动创建（文件名已含时间戳，不会覆盖历史日志）
     # 文件 handler 保留 DEBUG 级别，本地 sidecar.log 仍可详细调试
     file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)

@@ -93,6 +93,13 @@ impl SidecarManager {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        // 传递日志目录给 sidecar，使其日志路径与 Rust 端一致
+        // sidecar 读取 DOCAGENT_LOG_DIR 环境变量决定日志文件位置
+        // 生产环境中 sidecar 被 __file__ 推导路径会与 Rust 端不一致，通过环境变量统一
+        if let Some(log_dir) = crate::utils::logger::current_log_dir() {
+            cmd.env("DOCAGENT_LOG_DIR", log_dir);
+        }
+
         // Windows 平台：设置 CREATE_NO_WINDOW 标志，防止 Python 子进程弹出命令行窗口
         #[cfg(target_os = "windows")]
         {

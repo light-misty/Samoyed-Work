@@ -438,8 +438,8 @@ pub fn run() {
             commands::template::update_template,
             commands::template::delete_template,
             // 日志命令
-            commands::log::get_error_log,
             commands::log::get_log_path,
+            commands::log::open_directory,
             // 更新命令
             #[cfg(desktop)]
             commands::update::check_update,

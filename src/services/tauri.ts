@@ -439,18 +439,17 @@ export async function deleteTemplate(templateId: string): Promise<void> {
 // 日志命令
 // ================================================================
 
-/** 获取错误日志文件内容 */
-export async function getErrorLog(): Promise<string> {
-  const result = await safeInvoke(() => invoke<string>("get_error_log"), { context: "getErrorLog" });
+/** 获取日志目录路径 */
+export async function getLogPath(): Promise<{ logSource: string }> {
+  const result = await safeInvoke(() => invoke<{ logSource: string }>("get_log_path"), { context: "getLogPath" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
 
-/** 获取日志路径信息（日志源文件路径和下载目录路径） */
-export async function getLogPath(): Promise<{ logSource: string; downloadDir: string }> {
-  const result = await safeInvoke(() => invoke<{ logSource: string; downloadDir: string }>("get_log_path"), { context: "getLogPath" });
+/** 在系统文件管理器中打开指定目录 */
+export async function openDirectory(path: string): Promise<void> {
+  const result = await safeInvoke(() => invoke<void>("open_directory", { path }), { context: "openDirectory" });
   if (!result.ok) throw result.error.raw;
-  return result.data;
 }
 
 // ================================================================
