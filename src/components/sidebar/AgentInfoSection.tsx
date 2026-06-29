@@ -259,13 +259,17 @@ export function AgentInfoSection() {
           display: flex;
           flex-direction: column;
           flex-shrink: 0;
+          border-radius: var(--radius-sm);
+          overflow: hidden;
+          background: var(--color-bg-sub);
+          margin: 4px 8px;
         }
         /* 标题栏样式与会话列表标题（session-list-header / session-list-title）保持一致 */
         .agent-info-header {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 10px 16px;
+          padding: 8px 12px;
           cursor: pointer;
           user-select: none;
           transition: background 0.15s;
@@ -301,7 +305,7 @@ export function AgentInfoSection() {
           display: flex;
           flex-direction: column;
           gap: 2px;
-          padding: 0 16px 12px;
+          padding: 4px 12px 10px;
         }
         .ai-field {
           display: flex;

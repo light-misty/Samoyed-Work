@@ -60,6 +60,8 @@ export function SessionListSection({
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState("");
+  const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null);
+  const [deleteWorkspaceName, setDeleteWorkspaceName] = useState("");
 
   // 按工作区分组并排序
   const grouped = useMemo(() => {
@@ -170,8 +172,34 @@ export function SessionListSection({
     setDeleteConfirmTitle("");
   };
 
+  const handleDeleteWorkspaceClick = (e: MouseEvent, workspace: WorkspaceInfo) => {
+    e.stopPropagation();
+    setDeleteWorkspaceId(workspace.id);
+    setDeleteWorkspaceName(workspace.name);
+  };
+
+  const handleConfirmDeleteWorkspace = async () => {
+    if (!deleteWorkspaceId) return;
+    const { removeWorkspace } = useWorkspaceStore.getState();
+    await removeWorkspace(deleteWorkspaceId);
+    setDeleteWorkspaceId(null);
+    setDeleteWorkspaceName("");
+  };
+
   return (
     <>
+      {deleteWorkspaceId && createPortal(
+        <DeleteConfirmDialog
+          name={deleteWorkspaceName}
+          isDir={true}
+          onConfirm={handleConfirmDeleteWorkspace}
+          onCancel={() => {
+            setDeleteWorkspaceId(null);
+            setDeleteWorkspaceName("");
+          }}
+        />,
+        document.body
+      )}
       {deleteConfirmId && createPortal(
         <DeleteConfirmDialog
           name={deleteConfirmTitle}
@@ -242,6 +270,14 @@ export function SessionListSection({
                         onClick={(e) => handleShowFilesClick(e, workspace.id)}
                       >
                         <Icon name="folder" size={13} />
+                      </button>
+                      <button
+                        className="workspace-action-btn workspace-action-btn-danger"
+                        title={t("workspace.removeWorkspace")}
+                        aria-label={t("workspace.removeWorkspace")}
+                        onClick={(e) => handleDeleteWorkspaceClick(e, workspace)}
+                      >
+                        <Icon name="trash" size={13} />
                       </button>
                     </div>
                   </div>
