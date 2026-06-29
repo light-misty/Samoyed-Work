@@ -405,7 +405,7 @@ export function SessionListSection({
         }
         /* 悬停背景与智能体信息标题栏一致 */
         .session-list-header:hover {
-          background: var(--color-accent-bg);
+          background: var(--color-bg-hover);
         }
         .session-list-title {
           display: flex;
@@ -482,7 +482,7 @@ export function SessionListSection({
           transition: background 0.15s;
         }
         .workspace-header:hover {
-          background: var(--color-accent-bg);
+          background: var(--color-bg-hover);
         }
         .workspace-header-left {
           display: flex;
@@ -556,12 +556,12 @@ export function SessionListSection({
           transition: all 0.15s;
         }
         .session-item:hover {
-          background: var(--color-accent-bg);
-          border-color: var(--color-accent-light);
+          background: var(--color-bg-hover);
+          border-color: transparent;
         }
         .session-item.active {
-          background: var(--color-accent-light);
-          border-color: var(--color-accent-light);
+          background: var(--color-bg-hover);
+          border-color: transparent;
         }
         .session-item-title {
           font-size: 13px;
@@ -575,7 +575,7 @@ export function SessionListSection({
           padding-left: 20px;
         }
         .session-item.active .session-item-title {
-          color: var(--color-accent);
+          color: var(--color-text-primary);
         }
         .session-item-actions {
           display: flex;

@@ -199,7 +199,7 @@ export function LeftSidebar({
         }
         .new-session-trigger:hover,
         .new-session-trigger-active {
-          background: var(--color-accent-bg);
+          background: var(--color-bg-hover);
         }
         /* 删除全局 button:active 的 scale 缩小动画反馈 */
         .new-session-trigger:active {
@@ -300,8 +300,7 @@ export function LeftSidebar({
           transition: all 0.15s;
         }
         .file-tree-back-btn:hover {
-          background: var(--color-accent-bg);
-          color: var(--color-accent);
+          background: var(--color-bg-hover);
         }
         .file-tree-workspace-name {
           font-size: 13px;

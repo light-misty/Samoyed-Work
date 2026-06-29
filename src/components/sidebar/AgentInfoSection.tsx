@@ -281,7 +281,7 @@ export function AgentInfoSection() {
           transition: background 0.15s;
         }
         .agent-info-header:hover {
-          background: var(--color-accent-bg);
+          background: var(--color-bg-hover);
         }
         .agent-info-title {
           display: flex;
