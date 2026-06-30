@@ -52,15 +52,6 @@ export function LLMConfigTab() {
     }
   };
 
-  const handleSetDefault = async (providerId: string) => {
-    try {
-      await tauriCmd.setDefaultProvider(providerId);
-      await loadProviders();
-    } catch (err) {
-      console.error("[LLMConfigTab] 设置默认服务商失败:", err);
-    }
-  };
-
   const handleDialogSaved = async () => {
     setDialogMode(null);
     setEditingProvider(null);
@@ -91,17 +82,8 @@ export function LLMConfigTab() {
               <div className="provider-card-left">
                 <span className="provider-name">{p.name}</span>
                 <span className="provider-type-badge">{p.providerType}</span>
-                {p.isDefault && (
-                  <span className="provider-default-badge">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polyline points="20 6 9 17 4 12" /></svg>
-                    {t('settings.llm.default')}
-                  </span>
-                )}
               </div>
               <div className="provider-actions">
-                {!p.isDefault && (
-                  <button className="action-btn" onClick={() => handleSetDefault(p.id)}>{t('settings.llm.setDefault')}</button>
-                )}
                 <button className="action-btn" onClick={() => handleEdit(p)}>{t('settings.llm.edit')}</button>
                 <button 
                   className="action-btn" 
@@ -148,26 +130,6 @@ export function LLMConfigTab() {
           </div>
         ))}
 
-      </div>
-
-      <div>
-        <div className="section-header">
-          <span className="section-title">{t('settings.llm.fallbackOrder')}</span>
-        </div>
-        <div className="fallback-list">
-          {llmProviders.length === 0 && (
-            <div className="empty-state-lg">{t('settings.llm.fallbackHint')}</div>
-          )}
-          {llmProviders.map((p, i) => (
-            <div key={p.id} className="fallback-item">
-              <span className="fallback-index">{i + 1}.</span>
-              <span className="fallback-name">{p.name}</span>
-              {p.isDefault && (
-                <span className="fallback-default-badge">{t('settings.llm.default')}</span>
-              )}
-            </div>
-          ))}
-        </div>
       </div>
 
       {dialogMode && (
@@ -226,14 +188,6 @@ export function LLMConfigTab() {
           background: var(--color-accent-light);
           color: var(--color-accent);
           text-transform: uppercase;
-        }
-        .provider-default-badge {
-          font-size: 11px;
-          color: var(--color-success);
-          display: flex;
-          align-items: center;
-          gap: 3px;
-          font-weight: 500;
         }
         .provider-actions {
           display: flex;
@@ -375,41 +329,6 @@ export function LLMConfigTab() {
         }
         .add-btn:hover {
           background: var(--color-accent-hover);
-        }
-        .fallback-list {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .fallback-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          font-size: 12px;
-          color: var(--color-text-secondary);
-          border-radius: var(--radius-sm);
-          transition: background 0.15s;
-        }
-        .fallback-item:hover {
-          background: var(--color-accent-bg);
-        }
-        .fallback-index {
-          font-weight: 600;
-          color: var(--color-accent);
-          min-width: 20px;
-        }
-        .fallback-name {
-          flex: 1;
-          font-weight: 500;
-        }
-        .fallback-default-badge {
-          font-size: 10px;
-          padding: 1px 6px;
-          border-radius: 3px;
-          background: var(--color-success-light);
-          color: var(--color-success);
-          font-weight: 500;
         }
       `}</style>
     </div>

@@ -74,12 +74,6 @@ export async function deleteProvider(providerId: string): Promise<void> {
   if (!result.ok) throw result.error.raw;
 }
 
-/** 设置默认 LLM Provider */
-export async function setDefaultProvider(providerId: string): Promise<void> {
-  const result = await safeInvoke(() => invoke("set_default_provider", { providerId }), { context: "setDefaultProvider" });
-  if (!result.ok) throw result.error.raw;
-}
-
 /** 对所有 LLM Provider 执行健康检查 */
 export async function healthCheckProviders(): Promise<Record<string, ConnectionResult>> {
   const result = await safeInvoke(() => invoke<Record<string, ConnectionResult>>("health_check_providers"), { context: "healthCheckProviders" });
