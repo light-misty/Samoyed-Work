@@ -8,43 +8,60 @@ interface MainLayoutProps {
 
 export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLayoutProps) {
   return (
-    <div className="flex flex-1 overflow-hidden bg-bg-sub">
-      {/* 左侧栏 */}
-      {sidebarVisible && (
-        <div className="sb-container">
-          <div className="sb-scroll">
-            {sidebar}
-          </div>
+    <div className="flex flex-1 overflow-hidden bg-bg-sub" style={{ position: 'relative' }}>
+      {/* 左侧栏：绝对定位不参与 flex 布局，始终保持在左侧保持内容完整宽度 */}
+      <div className="sb-container">
+        <div className="sb-scroll">
+          {sidebar}
         </div>
-      )}
+      </div>
 
-      {/* 主界面区 - 白色圆角卡片，右侧与下方留出适当间隙 */}
-      <div className="flex-1 flex flex-col min-w-0 pr-3 pb-3">
-        <div className="flex-1 flex flex-col bg-bg rounded-xl border-[0.5px] border-border overflow-hidden">
-          {mainArea}
+      {/* 主界面区：通过 margin-left 留出侧边栏空间，收缩时扩张覆盖侧边栏 */}
+      <div className={`main-area-wrap${sidebarVisible ? '' : ' sb-collapsed'}`}>
+        <div className="flex-1 flex flex-col min-w-0 pr-3 pb-3">
+          <div className="flex-1 flex flex-col bg-bg rounded-xl border-[0.5px] border-border overflow-hidden">
+            {mainArea}
+          </div>
         </div>
       </div>
 
       <style>{`
         .sb-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
           width: 260px;
-          flex-shrink: 0;
+          z-index: 1;
           display: flex;
           flex-direction: column;
           background: var(--color-bg-sub);
           overflow: hidden;
-          position: relative;
-          transition: width 0.2s ease, opacity 0.2s ease;
         }
         .sb-scroll {
           flex: 1;
           overflow-y: auto;
           overflow-x: hidden;
+          width: 260px;
+        }
+        .main-area-wrap {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          margin-left: 260px;
+          position: relative;
+          z-index: 2;
+          transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .main-area-wrap.sb-collapsed {
+          margin-left: 0;
         }
         @media (max-width: 900px) {
-          .sb-container {
-            width: 200px !important;
-          }
+          .sb-container { width: 200px; }
+          .sb-scroll { width: 200px; }
+          .main-area-wrap { margin-left: 200px; }
+          .main-area-wrap.sb-collapsed { margin-left: 0; }
         }
       `}</style>
     </div>

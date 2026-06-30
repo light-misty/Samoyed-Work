@@ -13,7 +13,9 @@
     "history": "History",
     "newSession": "New Session",
     "settings": "Settings",
-    "toolbar": "Action Toolbar"
+    "toolbar": "Action Toolbar",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
   },
   "windowControls": {
     "minimize": "Minimize",

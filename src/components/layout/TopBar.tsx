@@ -2,7 +2,12 @@ import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { WindowControls } from "./WindowControls";
 
-export function TopBar() {
+interface TopBarProps {
+  sidebarVisible: boolean;
+  onToggleSidebar: () => void;
+}
+
+export function TopBar({ sidebarVisible, onToggleSidebar }: TopBarProps) {
   const { t } = useTranslation();
   const { llmProviders, activeProviderId } = useSettingsStore();
   const activeProvider = llmProviders.find((p) => p.id === activeProviderId);
@@ -13,6 +18,29 @@ export function TopBar() {
 
   return (
     <div role="banner" data-tauri-drag-region className="flex items-center h-[52px] pr-4 bg-bg-sub flex-shrink-0 gap-3 z-[100]" style={{ paddingLeft: '24px' }}>
+      {/* 侧边栏收缩/展开按钮 */}
+      <button
+        type="button"
+        className="topbar-btn"
+        onClick={onToggleSidebar}
+        title={sidebarVisible ? t('topBar.collapseSidebar') : t('topBar.expandSidebar')}
+        aria-label={sidebarVisible ? t('topBar.collapseSidebar') : t('topBar.expandSidebar')}
+      >
+        {sidebarVisible ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="15" y1="3" x2="15" y2="21"/>
+            <polyline points="11 10 8 13 11 16"/>
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="9" y1="3" x2="9" y2="21"/>
+            <polyline points="13 10 16 13 13 16"/>
+          </svg>
+        )}
+      </button>
+
       {/* 左侧留白，工作区选择器已移至输入框左下角 */}
       <div className="flex-1" />
 

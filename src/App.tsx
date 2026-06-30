@@ -976,7 +976,10 @@ export default function App() {
   return (
     <div className="app flex flex-col h-screen">
       <NetworkStatusBanner />
-      <TopBar />
+      <TopBar
+        sidebarVisible={sidebarVisible}
+        onToggleSidebar={() => setSidebarVisible((prev) => !prev)}
+      />
 
       <MainLayout
         mainArea={
