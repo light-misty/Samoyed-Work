@@ -66,7 +66,7 @@ export default function App() {
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
   const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs } = useWorkflowStore();
-  const { switchSession, loadSessions, clearCurrentSession, currentSessionId, createSession, sessions } = useSessionStore();
+  const { switchSession, loadSessions, clearCurrentSession, currentSessionId, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
   const settings = useSettingsStore((s) => s.settings);
@@ -755,14 +755,18 @@ export default function App() {
     }
   }, [clearNodes, resetAgent, clearContextUsage, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
 
-  // 为指定工作区新建会话并切换过去
+  // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
+  // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
+  // 随后通过 agentSessionId 变化触发 loadSessions() 刷新会话列表，卡片此时才出现
   const handleCreateSessionForWorkspace = useCallback(async (workspaceId: string) => {
-    const newSessionId = await createSession(undefined, workspaceId);
+    // 切换到目标工作区（如需要），保证后续 sendMessage 创建会话时携带正确的工作区
     if (workspaceId !== currentWorkspaceId) {
       await switchWorkspace(workspaceId);
     }
-    await handleSwitchSession(newSessionId, workspaceId);
-  }, [createSession, switchWorkspace, currentWorkspaceId, handleSwitchSession]);
+    // 复用 handleNewSession：保存当前会话状态到缓存并清空 UI 与 Agent 状态
+    // 此时 currentSessionId 为 null、agentSessionId 为 null，进入"待机"状态
+    handleNewSession();
+  }, [switchWorkspace, currentWorkspaceId, handleNewSession]);
 
   // 查看指定工作区的文件树
   const handleShowFilesForWorkspace = useCallback(async (workspaceId: string) => {

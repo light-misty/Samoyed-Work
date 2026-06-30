@@ -6,6 +6,7 @@ import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { formatSize, matchesShortcut, deriveNewLineShortcut } from "../../utils/format";
 
 interface InputAreaProps {
@@ -40,6 +41,10 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   const quickPromptShortcut = useSettingsStore((s) => s.settings.shortcuts.quickPrompt);
   const toggleSidebarShortcut = useSettingsStore((s) => s.settings.shortcuts.toggleSidebar);
   const newLineShortcut = deriveNewLineShortcut(sendMessageShortcut);
+
+  // 当前工作区：用于在输入区右下角展示状态，让用户在新建会话（未提问）时也能感知当前工作区
+  const { workspaces, currentWorkspaceId } = useWorkspaceStore();
+  const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -328,21 +333,32 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
       </div>
 
       <div className="shortcut-hints" aria-hidden="true">
-        <span>
-          <kbd className="kbd">{sendMessageShortcut}</kbd> {t('inputArea.sendShortcut')}
-        </span>
-        <span>
-          <kbd className="kbd">{newLineShortcut}</kbd> {t('inputArea.newLineShortcut')}
-        </span>
-        <span>
-          <kbd className="kbd">{quickPromptShortcut}</kbd> {t('inputArea.templateShortcut')}
-        </span>
-        <span>
-          <kbd className="kbd">Ctrl + V</kbd> {t('inputArea.pasteImage')}
-        </span>
-        <span>
-          <kbd className="kbd">{toggleSidebarShortcut}</kbd> {t('inputArea.sidebarShortcut')}
-        </span>
+        <div className="shortcut-hints-left">
+          <span>
+            <kbd className="kbd">{sendMessageShortcut}</kbd> {t('inputArea.sendShortcut')}
+          </span>
+          <span>
+            <kbd className="kbd">{newLineShortcut}</kbd> {t('inputArea.newLineShortcut')}
+          </span>
+          <span>
+            <kbd className="kbd">{quickPromptShortcut}</kbd> {t('inputArea.templateShortcut')}
+          </span>
+          <span>
+            <kbd className="kbd">Ctrl + V</kbd> {t('inputArea.pasteImage')}
+          </span>
+          <span>
+            <kbd className="kbd">{toggleSidebarShortcut}</kbd> {t('inputArea.sidebarShortcut')}
+          </span>
+        </div>
+        {currentWorkspace && (
+          <div
+            className="workspace-indicator"
+            title={t('inputArea.currentWorkspace') + ': ' + currentWorkspace.path}
+          >
+            <Icon name="folder" size={11} />
+            <span className="workspace-indicator-name">{currentWorkspace.name}</span>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -566,7 +582,29 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           padding-left: 4px;
           display: flex;
           align-items: center;
+          justify-content: space-between;
           gap: 12px;
+        }
+        .shortcut-hints-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+          flex: 1;
+        }
+        .workspace-indicator {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          color: var(--color-text-tertiary);
+          font-size: 10px;
+          flex-shrink: 0;
+          max-width: 200px;
+        }
+        .workspace-indicator-name {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .kbd {
           font-family: var(--font-mono);
