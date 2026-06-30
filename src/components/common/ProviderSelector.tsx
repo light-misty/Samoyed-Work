@@ -5,7 +5,7 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 
 export function ProviderSelector() {
   const { t } = useTranslation();
-  const { llmProviders, preferredProviderId, setPreferredProviderId } = useSettingsStore();
+  const { llmProviders, preferredProviderId, setPreferredProviderId, openSettings } = useSettingsStore();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +86,19 @@ export function ProviderSelector() {
                 )}
               </div>
             ))}
+          </div>
+          <div className="provider-selector-footer">
+            <div className="provider-selector-divider" />
+            <div
+              className="provider-selector-configure"
+              role="button"
+              tabIndex={0}
+              onClick={() => { setOpen(false); openSettings("llm"); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(false); openSettings("llm"); } }}
+            >
+              <Icon name="settings" size={14} />
+              <span>{t('provider.configureModel')}</span>
+            </div>
           </div>
         </div>
       )}
@@ -186,6 +199,32 @@ export function ProviderSelector() {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+        .provider-selector-footer {
+          padding: 0 4px 4px;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .provider-selector-divider {
+          height: 1px;
+          background: var(--color-border-light);
+          margin: 0;
+        }
+        .provider-selector-configure {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 10px;
+          border-radius: var(--radius-sm);
+          font-size: 13px;
+          color: var(--color-text-tertiary);
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s;
+        }
+        .provider-selector-configure:hover {
+          background: var(--color-bg-hover);
+          color: var(--color-text-primary);
         }
       `}</style>
     </div>

@@ -74,7 +74,8 @@
     "emptySession": "空会话"
   },
   "provider": {
-    "selectModel": "选择模型"
+    "selectModel": "选择模型",
+    "configureModel": "配置模型"
   },
   "confirmNode": {
     "userConfirmed": "✓ 用户已确认执行",

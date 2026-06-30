@@ -74,7 +74,8 @@
     "emptySession": "Empty Session"
   },
   "provider": {
-    "selectModel": "Select Model"
+    "selectModel": "Select Model",
+    "configureModel": "Configure Model"
   },
   "confirmNode": {
     "userConfirmed": "✓ User confirmed execution",

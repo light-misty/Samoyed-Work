@@ -242,7 +242,10 @@ export function WorkspaceSelector() {
           color: var(--color-text-quaternary);
         }
         .ws-selector-item-wrapper {
-          /* 每个工作区条目的包裹层 */
+          margin-bottom: 2px;
+        }
+        .ws-selector-item-wrapper:last-child {
+          margin-bottom: 0;
         }
         .ws-selector-item {
           display: flex;
