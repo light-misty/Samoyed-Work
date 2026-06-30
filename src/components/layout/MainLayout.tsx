@@ -18,7 +18,7 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
 
       {/* 主界面区：通过 margin-left 留出侧边栏空间，收缩时扩张覆盖侧边栏 */}
       <div className={`main-area-wrap${sidebarVisible ? '' : ' sb-collapsed'}`}>
-        <div className="flex-1 flex flex-col min-w-0 pr-3 pb-3">
+        <div className={`flex-1 flex flex-col min-w-0 pr-3 pb-3${!sidebarVisible ? ' pl-3' : ''}`}>
           <div className="flex-1 flex flex-col bg-bg rounded-xl border-[0.5px] border-border overflow-hidden">
             {mainArea}
           </div>
