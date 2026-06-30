@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useRef, useCallback, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Icon } from "../common/Icon";
 import { TemplatePicker } from "../common/TemplatePicker";
 import { ProviderSelector } from "../common/ProviderSelector";
@@ -8,6 +8,7 @@ import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSessionStore } from "../../stores/useSessionStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
 
 interface InputAreaProps {
@@ -40,6 +41,15 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     || llmProviders[0];
   const supportsVision = currentProvider?.supportsVision ?? false;
   const showVisionWarning = hasImageAttachments(attachments) && !supportsVision;
+
+  const currentSessionId = useSessionStore((s) => s.currentSessionId);
+  // 自动聚焦：初始挂载 + 会话切换时
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [currentSessionId]);
 
   // 从设置中读取快捷键配置
   const sendMessageShortcut = useSettingsStore((s) => s.settings.shortcuts.sendMessage);
@@ -435,8 +445,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           box-shadow: var(--shadow-xs);
         }
         .input-container:focus-within {
-          border-color: var(--color-accent);
-          box-shadow: 0 0 0 3px var(--color-accent-lighter), var(--shadow-sm);
+          border-color: color-mix(in srgb, var(--color-border-strong), black 20%);
         }
         .input-container.has-content {
           border-color: var(--color-accent);
