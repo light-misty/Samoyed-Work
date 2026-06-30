@@ -90,6 +90,8 @@ interface SettingsState {
   activeSettingsTab: SettingsTab;
   /** 最近一次 Provider 切换事件 */
   lastProviderSwitch: ProviderSwitchPayload | null;
+  /** 待插入的模板文本（由设置页"使用"按钮设置，InputArea 检测并消费） */
+  pendingInsertTemplate: string | null;
 
   updateSettings: (updates: DeepPartial<AppSettings>) => void;
   openSettings: (tab?: SettingsTab) => void;
@@ -119,6 +121,8 @@ interface SettingsState {
   applyAppearance: () => void;
   /** 初始化系统主题偏好监听（跟随系统模式时自动响应变化） */
   initThemeListener: () => () => void;
+  /** 设置待插入的模板文本（供 InputArea 消费） */
+  setPendingInsertTemplate: (text: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -132,6 +136,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
   activeSettingsTab: "llm",
   lastProviderSwitch: null,
+  pendingInsertTemplate: null,
 
   // 更新设置（深层合并，支持部分更新嵌套对象），并持久化到后端
   updateSettings: (updates) => {
@@ -375,5 +380,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     };
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
+  },
+
+  // 设置待插入的模板文本
+  setPendingInsertTemplate: (text) => {
+    set({ pendingInsertTemplate: text });
   },
 }));

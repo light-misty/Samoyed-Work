@@ -29,7 +29,6 @@
     "visionWarning": "The current model does not support image understanding. Image content cannot be recognized. It is recommended to describe the image content in text.",
     "placeholder": "Enter instructions, let Agent help you process documents...",
     "attachFile": "Attach file",
-    "promptTemplate": "Prompt Template",
     "stopExecution": "Stop execution",
     "stopping": "Stopping...",
     "send": "Send",
@@ -37,13 +36,15 @@
     "dropToAdd": "Drop to add attachment",
     "sendShortcut": "Send",
     "newLineShortcut": "New line",
-    "templateShortcut": "Template",
     "pasteImage": "Paste image",
     "sidebarShortcut": "Sidebar",
     "currentWorkspace": "Current Workspace",
     "attachment": "[Attachment]",
     "messageInput": "Message Input",
-    "messageInputBox": "Message Input Box"
+    "messageInputBox": "Message Input Box",
+    "templateCards": {
+      "moreTemplates": "More Templates"
+    }
   },
   "network": {
     "offline": "Network disconnected, some features may be unavailable",
@@ -354,6 +355,7 @@
       "noBuiltinTemplates": "No built-in templates",
       "variableCount": "{{count}} variables",
       "noMatch": "No matching templates",
+      "use": "Use",
       "categoryDocument": "Document Generation",
       "categoryAnalysis": "Document Analysis",
       "categoryConversion": "Format Conversion",

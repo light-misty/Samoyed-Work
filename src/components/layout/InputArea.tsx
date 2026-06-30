@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Icon } from "../common/Icon";
-import { TemplatePicker } from "../common/TemplatePicker";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 import type { ExecutionStatus } from "../../types/workflow";
@@ -10,6 +9,7 @@ import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPE
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
+import type { PromptTemplate } from "../../types";
 
 interface InputAreaProps {
   onSend: (text: string) => void;
@@ -24,7 +24,6 @@ interface InputAreaProps {
 export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false }: InputAreaProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,7 +52,11 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   // 从设置中读取快捷键配置
   const sendMessageShortcut = useSettingsStore((s) => s.settings.shortcuts.sendMessage);
-  const quickPromptShortcut = useSettingsStore((s) => s.settings.shortcuts.quickPrompt);
+
+  const templates = useSettingsStore((s) => s.templates);
+  const openSettings = useSettingsStore((s) => s.openSettings);
+  const pendingInsertTemplate = useSettingsStore((s) => s.pendingInsertTemplate);
+  const setPendingInsertTemplate = useSettingsStore((s) => s.setPendingInsertTemplate);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -73,18 +76,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         e.preventDefault();
         handleSend();
       }
-      // 快速提示快捷键（从设置中读取）
-      if (matchesShortcut(e, quickPromptShortcut)) {
-        e.preventDefault();
-        setPickerOpen((prev) => !prev);
-      }
-      // Escape 关闭模板选择器
-      if (e.key === "Escape" && pickerOpen) {
-        e.preventDefault();
-        setPickerOpen(false);
-      }
     },
-    [handleSend, pickerOpen, sendMessageShortcut, quickPromptShortcut]
+    [handleSend, sendMessageShortcut]
   );
 
   const handleInput = useCallback(() => {
@@ -97,7 +90,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   // 模板插入回调
   const handleTemplateInsert = useCallback((templateText: string) => {
     setText(templateText);
-    setPickerOpen(false);
     // 聚焦输入框
     setTimeout(() => textareaRef.current?.focus(), 50);
     // 调整高度
@@ -108,6 +100,14 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
       }
     }, 60);
   }, []);
+
+  // 监听来自设置的待插入模板文本（由 TemplatesTab 的"使用"按钮触发）
+  useEffect(() => {
+    if (pendingInsertTemplate !== null) {
+      handleTemplateInsert(pendingInsertTemplate);
+      setPendingInsertTemplate(null);
+    }
+  }, [pendingInsertTemplate, handleTemplateInsert, setPendingInsertTemplate]);
 
   // 处理文件选择
   const handleFileSelect = useCallback(() => {
@@ -290,17 +290,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
                 <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
                   <Icon name="attach" />
                 </button>
-                {centered && (
-                  <button
-                    className={`input-btn ${pickerOpen ? "input-btn-active" : ""}`}
-                    title={`${t('inputArea.promptTemplate')} (${quickPromptShortcut})`}
-                    aria-label={t('inputArea.promptTemplate')}
-                    aria-expanded={pickerOpen}
-                    onClick={() => setPickerOpen(!pickerOpen)}
-                  >
-                    <Icon name="template" />
-                  </button>
-                )}
                 {executionStatus === "running" && onStop ? (
                   <button
                     className="stop-btn"
@@ -343,12 +332,14 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           </div>
         )}
 
-        {/* 模板选择器 */}
-        <TemplatePicker
-          open={pickerOpen}
-          onClose={() => setPickerOpen(false)}
-          onInsert={handleTemplateInsert}
-        />
+        {/* 模板卡片（空会话状态） */}
+        {centered && (
+          <TemplateCards
+            templates={templates}
+            onInsert={handleTemplateInsert}
+            onOpenSettings={() => openSettings("template")}
+          />
+        )}
       </div>
 
       <style>{`
@@ -594,7 +585,84 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           gap: 2px;
           flex-shrink: 0;
         }
+        .template-cards-section {
+          margin-top: 16px;
+        }
+        .template-cards-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          max-width: 520px;
+          margin: 0 auto;
+          gap: 8px;
+        }
+        .template-cards-section .template-card {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 12px;
+          border: 1px solid var(--color-border-light);
+          border-radius: 12px;
+          background: var(--color-bg);
+          cursor: pointer;
+          transition: all 0.15s;
+          text-align: center;
+        }
+        .template-cards-section .template-card:hover {
+          border-color: var(--color-border);
+          background: var(--color-bg-sub);
+          box-shadow: var(--shadow-sm);
+        }
+        .template-cards-section .template-card-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--color-text-primary);
+        }
+        .template-cards-section .template-card-more {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px dashed var(--color-border-light);
+          border-radius: 12px;
+          background: transparent;
+          cursor: pointer;
+          transition: all 0.15s;
+          padding: 12px;
+        }
+        .template-cards-section .template-card-more:hover {
+          color: var(--color-accent);
+          background: var(--color-accent-light);
+        }
+        .template-cards-section .template-card-more-text {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--color-text-primary);
+        }
+        .template-cards-section .template-card-more:hover .template-card-more-text {
+          color: var(--color-accent);
+        }
       `}</style>
+    </div>
+  );
+}
+
+function TemplateCards({ templates, onInsert, onOpenSettings }: {
+  templates: PromptTemplate[];
+  onInsert: (text: string) => void;
+  onOpenSettings: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="template-cards-section">
+      <div className="template-cards-grid">
+        {templates.filter((t) => t.isBuiltin).slice(0, 3).map((tpl) => (
+          <button key={tpl.id} className="template-card" onClick={() => onInsert(tpl.content)}>
+            <span className="template-card-name">{tpl.name}</span>
+          </button>
+        ))}
+        <button className="template-card-more" onClick={onOpenSettings}>
+          <span className="template-card-more-text">{t("inputArea.templateCards.moreTemplates")}</span>
+        </button>
+      </div>
     </div>
   );
 }

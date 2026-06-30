@@ -29,7 +29,6 @@
     "visionWarning": "当前模型不支持图片理解，图片内容将无法被识别。建议用文字描述图片内容。",
     "placeholder": "输入指令，让Agent帮你处理文档...",
     "attachFile": "附加文件",
-    "promptTemplate": "Prompt模板",
     "stopExecution": "停止执行",
     "stopping": "正在停止...",
     "send": "发送",
@@ -37,13 +36,15 @@
     "dropToAdd": "释放以添加附件",
     "sendShortcut": "发送",
     "newLineShortcut": "换行",
-    "templateShortcut": "模板",
     "pasteImage": "粘贴图片",
     "sidebarShortcut": "侧边栏",
     "currentWorkspace": "当前工作区",
     "attachment": "[附件]",
     "messageInput": "消息输入",
-    "messageInputBox": "消息输入框"
+    "messageInputBox": "消息输入框",
+    "templateCards": {
+      "moreTemplates": "更多模板"
+    }
   },
   "network": {
     "offline": "网络已断开，部分功能可能不可用",
@@ -354,6 +355,7 @@
       "noBuiltinTemplates": "暂无内置模板",
       "variableCount": "{{count}} 个变量",
       "noMatch": "无匹配模板",
+      "use": "使用",
       "categoryDocument": "文档生成",
       "categoryAnalysis": "文档分析",
       "categoryConversion": "格式转换",
