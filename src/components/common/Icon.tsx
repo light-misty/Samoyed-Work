@@ -116,8 +116,8 @@ const paths: Record<IconName, React.JSX.Element> = {
   // 发送
   send: (
     <g key="send">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <polyline points="6 10 12 4 18 10" />
     </g>
   ),
   // 附件
