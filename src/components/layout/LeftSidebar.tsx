@@ -86,7 +86,7 @@ export function LeftSidebar({
   return (
     <div className="left-sidebar">
       {view === "files" ? (
-        <>
+        <div className="file-tree-enter">
           <div className="file-tree-header">
             <button
               className="file-tree-back-btn"
@@ -107,7 +107,7 @@ export function LeftSidebar({
               onOpenVersionHistory={onOpenVersionHistory}
             />
           </div>
-        </>
+        </div>
       ) : (
         <>
           {/* 新建会话按钮 + 工作区选择下拉菜单 */}
@@ -315,6 +315,24 @@ export function LeftSidebar({
           flex: 1;
           min-height: 0;
           overflow-y: auto;
+        }
+        .file-tree-enter {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          width: 100%;
+          overflow: hidden;
+          animation: file-tree-slide-in 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes file-tree-slide-in {
+          from {
+            opacity: 0;
+            transform: translateX(-100%);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
         }
       `}</style>
     </div>
