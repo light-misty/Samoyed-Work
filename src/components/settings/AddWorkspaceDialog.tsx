@@ -85,10 +85,10 @@ export function AddWorkspaceDialog({ onClose, onSaved }: AddWorkspaceDialogProps
           </div>
           {error && <div className="form-error">{error}</div>}
           <div className="dialog-actions">
-            <button type="button" className="btn-ghost" onClick={onClose}>{t('settings.addWorkspace.cancel')}</button>
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? t('settings.addWorkspace.adding') : t('settings.addWorkspace.add')}
             </button>
+            <button type="button" className="btn-ghost" onClick={onClose}>{t('settings.addWorkspace.cancel')}</button>
           </div>
         </form>
       </div>

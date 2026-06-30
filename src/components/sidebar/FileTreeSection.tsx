@@ -253,15 +253,15 @@ function NewItemInput({
           {error && <p className="ni-error">{error}</p>}
         </div>
         <div className="ni-footer">
-          <button className="ni-btn ni-btn-cancel" onClick={onCancel}>
-            {t('fileTree.cancel')}
-          </button>
           <button
             className="ni-btn ni-btn-confirm"
             onClick={handleSubmit}
             disabled={!value.trim() || creating}
           >
             {creating ? t('fileTree.creating') : t('fileTree.create')}
+          </button>
+          <button className="ni-btn ni-btn-cancel" onClick={onCancel}>
+            {t('fileTree.cancel')}
           </button>
         </div>
       </div>

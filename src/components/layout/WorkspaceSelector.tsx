@@ -1,16 +1,18 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../common/Icon";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { AddWorkspaceDialog } from "../settings/AddWorkspaceDialog";
+import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 
 export function WorkspaceSelector() {
   const { t } = useTranslation();
   const { currentWorkspaceId, workspaces, removeWorkspace, switchWorkspace } = useWorkspaceStore();
   const [open, setOpen] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null);
+  const [deleteWorkspaceName, setDeleteWorkspaceName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const currentWs = workspaces.find((w) => w.id === currentWorkspaceId);
 
@@ -18,8 +20,6 @@ export function WorkspaceSelector() {
   const handleClickOutside = useCallback((e: MouseEvent) => {
     if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
       setOpen(false);
-      setRemovingId(null);
-      setRemoveError(null);
     }
   }, []);
 
@@ -27,8 +27,6 @@ export function WorkspaceSelector() {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") {
       setOpen(false);
-      setRemovingId(null);
-      setRemoveError(null);
     }
   }, []);
 
@@ -59,18 +57,19 @@ export function WorkspaceSelector() {
       console.error("[WorkspaceSelector] 切换工作区失败:", err);
     }
     setOpen(false);
-    setRemovingId(null);
-    setRemoveError(null);
   };
 
   /* 移除工作区 */
-  const handleRemove = async (id: string) => {
-    setRemoveError(null);
+  const handleRemove = async () => {
+    if (!deleteWorkspaceId) return;
     try {
-      await removeWorkspace(id);
-      setRemovingId(null);
+      await removeWorkspace(deleteWorkspaceId);
+      setDeleteWorkspaceId(null);
+      setDeleteWorkspaceName("");
     } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : String(err));
+      console.error("[WorkspaceSelector] 移除工作区失败:", err);
+      setDeleteWorkspaceId(null);
+      setDeleteWorkspaceName("");
     }
   };
 
@@ -87,7 +86,7 @@ export function WorkspaceSelector() {
         aria-label={t('workspace.selectWorkspace')}
         tabIndex={0}
         className={`ws-selector-trigger ${open ? "ws-selector-trigger-active" : ""}`}
-        onClick={() => { setOpen((prev) => !prev); setRemovingId(null); setRemoveError(null); }}
+        onClick={() => { setOpen((prev) => !prev); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((prev) => !prev); } }}
       >
         <span className="ws-selector-label">{currentWs?.name ?? t('workspace.selectWorkspace')}</span>
@@ -128,42 +127,16 @@ export function WorkspaceSelector() {
                       <span className="ws-selector-item-path">{ws.path}</span>
                     </div>
                   </div>
-                  {removingId !== ws.id && (
-                    <button
-                      className="ws-selector-remove-btn"
-                      title={t('workspace.removeWorkspace')}
-                      onClick={(e) => { e.stopPropagation(); setRemovingId(ws.id); setRemoveError(null); }}
-                    >
-                      <Icon name="close" size={12} />
-                    </button>
-                  )}
+                  <button
+                    className="ws-selector-remove-btn"
+                    title={t('workspace.removeWorkspace')}
+                    onClick={(e) => { e.stopPropagation(); setDeleteWorkspaceId(ws.id); setDeleteWorkspaceName(ws.name); }}
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
                 </div>
 
-                {/* 移除确认条 */}
-                {removingId === ws.id && (
-                  <div className="ws-selector-confirm">
-                    <div className="ws-selector-confirm-text">
-                      {t('workspace.confirmRemove')}
-                    </div>
-                    {removeError && (
-                      <div className="ws-selector-confirm-error">{removeError}</div>
-                    )}
-                    <div className="ws-selector-confirm-actions">
-                      <button
-                        className="ws-selector-confirm-btn ws-selector-confirm-btn-danger"
-                        onClick={(e) => { e.stopPropagation(); handleRemove(ws.id); }}
-                      >
-                        {t('workspace.confirmRemoveBtn')}
-                      </button>
-                      <button
-                        className="ws-selector-confirm-btn ws-selector-confirm-btn-ghost"
-                        onClick={(e) => { e.stopPropagation(); setRemovingId(null); setRemoveError(null); }}
-                      >
-                        {t('workspace.cancel')}
-                      </button>
-                    </div>
-                  </div>
-                )}
+
               </div>
             ))}
           </div>
@@ -179,6 +152,20 @@ export function WorkspaceSelector() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* 移除工作区确认弹窗 */}
+      {deleteWorkspaceId && createPortal(
+        <DeleteConfirmDialog
+          name={deleteWorkspaceName}
+          isDir={true}
+          onConfirm={handleRemove}
+          onCancel={() => {
+            setDeleteWorkspaceId(null);
+            setDeleteWorkspaceName("");
+          }}
+        />,
+        document.body
       )}
 
       {/* 添加工作区弹窗 */}
@@ -340,60 +327,6 @@ export function WorkspaceSelector() {
         .ws-selector-remove-btn:hover {
           background: var(--color-error-bg);
           color: var(--color-error);
-        }
-        .ws-selector-confirm {
-          padding: 8px 10px 10px;
-          margin: 0 4px 4px;
-          border-top: 1px solid var(--color-border-light);
-          animation: ws-confirm-in 0.15s ease-out;
-        }
-        @keyframes ws-confirm-in {
-          from {
-            opacity: 0;
-            max-height: 0;
-          }
-          to {
-            opacity: 1;
-            max-height: 120px;
-          }
-        }
-        .ws-selector-confirm-text {
-          font-size: 11px;
-          color: var(--color-text-secondary);
-          margin-bottom: 6px;
-          line-height: 1.4;
-        }
-        .ws-selector-confirm-error {
-          font-size: 11px;
-          color: var(--color-error);
-          margin-bottom: 6px;
-        }
-        .ws-selector-confirm-actions {
-          display: flex;
-          gap: 6px;
-        }
-        .ws-selector-confirm-btn {
-          padding: 3px 10px;
-          border-radius: var(--radius-xs);
-          font-size: 11px;
-          font-weight: 500;
-          border: none;
-          cursor: pointer;
-          transition: all 0.12s;
-        }
-        .ws-selector-confirm-btn-danger {
-          background: var(--color-error);
-          color: white;
-        }
-        .ws-selector-confirm-btn-danger:hover {
-          filter: brightness(0.9);
-        }
-        .ws-selector-confirm-btn-ghost {
-          background: var(--color-bg-sub);
-          color: var(--color-text-secondary);
-        }
-        .ws-selector-confirm-btn-ghost:hover {
-          background: var(--color-bg-hover);
         }
         .ws-selector-footer {
           border-top: 1px solid var(--color-border-light);

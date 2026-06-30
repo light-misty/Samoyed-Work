@@ -265,7 +265,6 @@ export function TemplateEditDialog({ open, onClose, template }: TemplateEditDial
 
         {/* 底部按钮 */}
         <div className="dialog-footer">
-          <button className="btn-cancel" onClick={onClose}>{t('settings.templateEdit.cancel')}</button>
           <button
             className="btn-save"
             onClick={handleSave}
@@ -273,6 +272,7 @@ export function TemplateEditDialog({ open, onClose, template }: TemplateEditDial
           >
             {saving ? t('settings.templateEdit.saving') : isEdit ? t('settings.templateEdit.saveChanges') : t('settings.templateEdit.createTemplate')}
           </button>
+          <button className="btn-cancel" onClick={onClose}>{t('settings.templateEdit.cancel')}</button>
         </div>
 
         <style>{`

@@ -325,10 +325,10 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
               </span>
             ) : t('settings.providerForm.testConnection')}
           </button>
-          <button className="dialog-btn dialog-btn-ghost" onClick={onClose}>{t('settings.providerForm.cancel')}</button>
           <button className="dialog-btn dialog-btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? t('settings.providerForm.saving') : t('settings.providerForm.save')}
           </button>
+          <button className="dialog-btn dialog-btn-ghost" onClick={onClose}>{t('settings.providerForm.cancel')}</button>
         </div>
       </div>
 
