@@ -480,6 +480,7 @@ pub fn run() {
 /// 最后设置 DWMWCP_ROUND 应用标准圆角。
 #[cfg(target_os = "windows")]
 fn apply_window_rounded_corners(app: &tauri::AppHandle) {
+    use tauri::Manager;
     if let Some(window) = app.get_webview_window("main") {
         if let Ok(hwnd) = window.hwnd() {
             type DWORD = u32;
