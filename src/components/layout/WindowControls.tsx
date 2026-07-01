@@ -86,10 +86,10 @@ export function WindowControls() {
   };
 
   return (
-    <div className="flex items-center gap-0">
+    <div className="absolute right-0 top-0 h-full flex items-stretch">
       {/* 最小化按钮 */}
       <button
-        className="w-11 h-8 flex items-center justify-center hover:bg-bg-sub transition-colors"
+        className="w-12 h-full flex items-center justify-center hover:bg-border transition-colors"
         title={t('windowControls.minimize')}
         onClick={handleMinimize}
       >
@@ -98,7 +98,7 @@ export function WindowControls() {
 
       {/* 最大化/还原按钮 */}
       <button
-        className="w-11 h-8 flex items-center justify-center hover:bg-bg-sub transition-colors"
+        className="w-12 h-full flex items-center justify-center hover:bg-border transition-colors"
         title={isMaximized ? t('windowControls.restore') : t('windowControls.maximize')}
         onClick={handleToggleMaximize}
       >
@@ -111,7 +111,7 @@ export function WindowControls() {
 
       {/* 关闭按钮 */}
       <button
-        className="w-11 h-8 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors group"
+        className="w-12 h-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors group"
         title={t('windowControls.close')}
         onClick={handleClose}
       >
