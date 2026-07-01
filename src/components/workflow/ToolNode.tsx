@@ -88,7 +88,7 @@ export function ToolNode({ node }: ToolNodeProps) {
     : codeLines.slice(0, collapsedMaxLines).join('\n');
 
   return (
-    <div className={`wf-node animate-node-in${isRunning ? " wf-tool-running" : ""}`}>
+    <div className={`wf-node${isRunning ? " wf-tool-running" : ""}`}>
       <div className="wf-tool-content">
         {/* 工具名称和简要描述 */}
         <div className="wf-tool-brief">

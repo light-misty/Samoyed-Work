@@ -22,7 +22,7 @@ export function ThinkingNode({ node }: ThinkingNodeProps) {
   }, [isStreaming, node.status]);
 
   return (
-    <div className="wf-node animate-node-in">
+    <div className="wf-node">
       <div className="wf-thinking-block">
         <div
           className="wf-thinking-toggle"

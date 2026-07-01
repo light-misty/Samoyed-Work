@@ -9,7 +9,7 @@ export function ContentNode({ node }: ContentNodeProps) {
   const data = node.data as ContentNodeData;
 
   return (
-    <div className="wf-node animate-node-in">
+    <div className="wf-node">
       <div className="wf-content-text-wrapper">
         <MarkdownPreview
           content={data.content}

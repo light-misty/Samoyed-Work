@@ -13,7 +13,7 @@ export function ErrorNode({ node, onRetry }: ErrorNodeProps) {
   const data = node.data as ErrorNodeData;
 
   return (
-    <div className="wf-node animate-node-in">
+    <div className="wf-node">
       <div className="wf-error-flat">
         <div className="wf-error-message">{data.message}</div>
         <details className="wf-error-details">
