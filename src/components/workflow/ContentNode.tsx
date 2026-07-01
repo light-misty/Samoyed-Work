@@ -86,6 +86,37 @@ export function ContentNode({ node }: ContentNodeProps) {
           margin-top: 0;
         }
 
+        /* 工作流区域表格：小圆角容器，表头深色背景，body 行无背景 */
+        .wf-content-markdown .md-table-wrap {
+          border-radius: var(--radius-sm);
+          overflow: hidden;
+          border: 1px solid var(--color-border);
+        }
+        .wf-content-markdown .md-table {
+          margin: 0;
+        }
+        /* 单元格只保留右、下边框作为内部分隔线，外边框由容器提供 */
+        .wf-content-markdown .md-table th,
+        .wf-content-markdown .md-table td {
+          border-top: none;
+          border-left: none;
+        }
+        .wf-content-markdown .md-table th:last-child,
+        .wf-content-markdown .md-table td:last-child {
+          border-right: none;
+        }
+        .wf-content-markdown .md-table tbody tr:last-child td {
+          border-bottom: none;
+        }
+        /* 表头深色背景，body 行背景透明（覆盖 tr 和 td 两处斑马纹来源） */
+        .wf-content-markdown .md-table thead th {
+          background: var(--color-bg-hover) !important;
+        }
+        .wf-content-markdown .md-table tbody tr,
+        .wf-content-markdown .md-table tbody tr td {
+          background: transparent !important;
+        }
+
       `}</style>
     </div>
   );
