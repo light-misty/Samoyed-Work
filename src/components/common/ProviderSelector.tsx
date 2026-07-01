@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Icon } from "./Icon";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
-export function ProviderSelector() {
+export function ProviderSelector({ dropdownUp = false }: { dropdownUp?: boolean }) {
   const { t } = useTranslation();
   const { llmProviders, preferredProviderId, setPreferredProviderId, openSettings } = useSettingsStore();
   const [open, setOpen] = useState(false);
@@ -79,7 +79,7 @@ export function ProviderSelector() {
       </div>
 
       {open && !noProvider && (
-        <div className="provider-selector-dropdown">
+        <div className={`provider-selector-dropdown ${dropdownUp ? "provider-selector-dropdown-up" : ""}`}>
           <div className="provider-selector-list">
             {llmProviders.map((provider) => (
               <div
@@ -147,8 +147,8 @@ export function ProviderSelector() {
         }
         .provider-selector-dropdown {
           position: absolute;
-          top: calc(100% + 6px);
           right: 0;
+          top: calc(100% + 6px);
           min-width: 220px;
           max-width: 300px;
           background: var(--color-bg-elevated);
@@ -159,15 +159,18 @@ export function ProviderSelector() {
           animation: provider-dropdown-in 0.15s ease-out;
           overflow: hidden;
         }
+        .provider-selector-dropdown-up {
+          top: auto;
+          bottom: calc(100% + 6px);
+          animation-name: provider-dropdown-in-up;
+        }
         @keyframes provider-dropdown-in {
-          from {
-            opacity: 0;
-            transform: scale(0.96) translateY(4px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
+          from { opacity: 0; transform: scale(0.96) translateY(4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes provider-dropdown-in-up {
+          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .provider-selector-list {
           max-height: 280px;

@@ -299,7 +299,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               {centered && <WorkspaceSelector />}
             </div>
             <div className="input-inner-right">
-              <ProviderSelector />
+              <ProviderSelector dropdownUp={!centered} />
               <div className="input-actions-right">
                 <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
                   <Icon name="attach" />
