@@ -703,7 +703,7 @@
     "newSessionForWorkspace": "为 {{workspace}} 新建会话",
     "showFiles": "查看工作区文件",
     "backToSessions": "返回会话列表",
-    "noSessionsInWorkspace": "该工作区暂无会话",
+    "noSessionsInWorkspace": "暂无工作区和会话",
     "untitledWorkspace": "其他",
     "collapse": "收起会话列表",
     "expand": "展开会话列表"

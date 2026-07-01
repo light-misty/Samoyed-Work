@@ -703,7 +703,7 @@
     "newSessionForWorkspace": "New session for {{workspace}}",
     "showFiles": "View workspace files",
     "backToSessions": "Back to sessions",
-    "noSessionsInWorkspace": "No sessions in this workspace",
+    "noSessionsInWorkspace": "No workspaces and sessions",
     "untitledWorkspace": "Other",
     "collapse": "Collapse session list",
     "expand": "Expand session list"
