@@ -140,7 +140,7 @@ export function ToolNode({ node }: ToolNodeProps) {
             {codeExpanded ? (
               <pre ref={codePreviewRef} className="wf-code-preview-content" onScroll={handleCodeScroll}>
                 {codeContent}
-                {isCodeStreaming && <span className="wf-code-cursor" />}
+
               </pre>
             ) : (
               <div className="wf-code-preview-collapsed-text">

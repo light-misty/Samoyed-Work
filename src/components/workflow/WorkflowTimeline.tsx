@@ -14,11 +14,9 @@ interface WorkflowTimelineProps {
 
 function TypewriterText({ text }: { text: string }) {
   const [displayedText, setDisplayedText] = useState("");
-  const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
     setDisplayedText("");
-    setIsComplete(false);
     let index = 0;
     const interval = setInterval(() => {
       if (index < text.length) {
@@ -26,18 +24,12 @@ function TypewriterText({ text }: { text: string }) {
         index++;
       } else {
         clearInterval(interval);
-        setIsComplete(true);
       }
     }, 15);
     return () => clearInterval(interval);
   }, [text]);
 
-  return (
-    <span>
-      <span>{displayedText}</span>
-      <span className={`typewriter-cursor ${isComplete ? "hidden" : ""}`}>|</span>
-    </span>
-  );
+  return <span>{displayedText}</span>;
 }
 
 /**

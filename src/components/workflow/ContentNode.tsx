@@ -7,15 +7,13 @@ interface ContentNodeProps {
 
 export function ContentNode({ node }: ContentNodeProps) {
   const data = node.data as ContentNodeData;
-  // 判断是否处于流式输出状态
-  const isStreaming = data.isStreaming || node.status === "running";
 
   return (
     <div className="wf-node animate-node-in">
       <div className="wf-content-text-wrapper">
         <MarkdownPreview
           content={data.content}
-          className={`wf-content-markdown${isStreaming ? " streaming" : ""}`}
+          className="wf-content-markdown"
         />
       </div>
       <style>{`
@@ -36,20 +34,7 @@ export function ContentNode({ node }: ContentNodeProps) {
         .wf-content-markdown h3:first-child {
           margin-top: 0;
         }
-        .wf-content-markdown.streaming > :last-child::after {
-          content: "";
-          display: inline-block;
-          width: 2px;
-          height: 16px;
-          background: var(--color-accent);
-          margin-left: 2px;
-          vertical-align: middle;
-          animation: wf-cursor-blink 1s step-end infinite;
-        }
-        @keyframes wf-cursor-blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
-        }
+
       `}</style>
     </div>
   );

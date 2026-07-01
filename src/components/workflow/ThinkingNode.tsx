@@ -42,7 +42,7 @@ export function ThinkingNode({ node }: ThinkingNodeProps) {
                 {paragraph}
               </p>
             ))}
-            {isStreaming && <span className="cursor-blink" />}
+
           </div>
         )}
       </div>

@@ -208,10 +208,6 @@
   }
 }
 
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -338,22 +334,6 @@
 .wf-empty-book-icon {
   color: var(--color-text-primary);
   flex-shrink: 0;
-}
-
-/* 打字机光标 */
-.typewriter-cursor {
-  display: inline-block;
-  font-weight: 700;
-  margin-left: 1px;
-  animation: cursorBlink 0.6s step-end infinite;
-}
-.typewriter-cursor.hidden {
-  visibility: hidden;
-  animation: none;
-}
-@keyframes cursorBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
 }
 
 /* ===== 暗色模式 ===== */
@@ -614,16 +594,6 @@
   margin-bottom: 0;
 }
 
-.wf-thinking-content .cursor-blink {
-  display: inline-block;
-  width: 2px;
-  height: 12px;
-  background: var(--color-purple);
-  margin-left: 2px;
-  vertical-align: middle;
-  animation: blink 1s step-end infinite;
-}
-
 .wf-content-text-wrapper {
   display: flex;
   align-items: baseline;
@@ -654,16 +624,6 @@
 
 .wf-content-text em {
   font-style: italic;
-}
-
-.wf-content-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 16px;
-  background: var(--color-accent);
-  margin-left: 1px;
-  vertical-align: middle;
-  animation: blink 1s step-end infinite;
 }
 
 .wf-tool-brief {
@@ -784,17 +744,6 @@
   word-break: break-all;
   max-height: 56px;
   overflow: hidden;
-}
-
-/* 流式光标 */
-.wf-code-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 14px;
-  background: var(--color-accent);
-  margin-left: 1px;
-  vertical-align: middle;
-  animation: blink 1s step-end infinite;
 }
 
 /* 错误展开按钮 */
