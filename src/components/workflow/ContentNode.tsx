@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { WorkflowNode, ContentNodeData } from "../../types";
 import { MarkdownPreview } from "../preview/MarkdownPreview";
 import { Icon } from "../common/Icon";
+import { useWorkflowStore } from "../../stores/useWorkflowStore";
 
 interface ContentNodeProps {
   node: WorkflowNode<"content">;
@@ -11,6 +12,20 @@ export function ContentNode({ node }: ContentNodeProps) {
   const data = node.data as ContentNodeData;
   const isCompleted = node.status === "completed" && !data.isStreaming;
   const [copied, setCopied] = useState(false);
+
+  // 判断当前 content 节点是否为其所在助手回复片段的最后一个 content 节点
+  // 仅在最后一个 content 节点显示复制按钮，避免在工具调用前的中间内容后错误出现按钮
+  const nodes = useWorkflowStore((state) => state.nodes);
+  const isLastContentInTurn = (() => {
+    const idx = nodes.findIndex((n) => n.id === node.id);
+    if (idx === -1) return false;
+    // 向后扫描到下一个 user 节点（片段边界），期间若遇到 content 节点则非最后一个
+    for (let i = idx + 1; i < nodes.length; i++) {
+      if (nodes[i].type === "user") break;
+      if (nodes[i].type === "content") return false;
+    }
+    return true;
+  })();
 
   // 复制内容到剪贴板：优先使用现代 Clipboard API，失败时降级为 execCommand
   const handleCopy = async () => {
@@ -35,7 +50,7 @@ export function ContentNode({ node }: ContentNodeProps) {
           content={data.content}
           className="wf-content-markdown"
         />
-        {isCompleted && (
+        {isCompleted && isLastContentInTurn && (
           <div className="wf-content-copy-btn">
             <button
               className="wf-copy-button"

@@ -69,60 +69,62 @@ export function MarkdownPreview({
   className = "",
 }: MarkdownPreviewProps) {
   return (
-    <div className={`markdown-preview ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
-        components={{
-          // 代码块：包装为带标题栏的容器
-          pre: CodeBlock,
+    <>
+      <div className={`markdown-preview ${className}`}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypeHighlight]}
+          components={{
+            // 代码块：包装为带标题栏的容器
+            pre: CodeBlock,
 
-          // 表格：添加外层滚动容器和样式类
-          table: ({
-            node: _node,
-            siblingCount: _sc,
-            children,
-            ...rest
-          }: React.TableHTMLAttributes<HTMLTableElement> & MdExtraProps) => (
-            <div className="md-table-wrap">
-              <table className="md-table" {...rest}>
+            // 表格：添加外层滚动容器和样式类
+            table: ({
+              node: _node,
+              siblingCount: _sc,
+              children,
+              ...rest
+            }: React.TableHTMLAttributes<HTMLTableElement> & MdExtraProps) => (
+              <div className="md-table-wrap">
+                <table className="md-table" {...rest}>
+                  {children}
+                </table>
+              </div>
+            ),
+
+            // 链接：在新窗口打开
+            a: ({
+              node: _node,
+              siblingCount: _sc,
+              href,
+              children,
+              ...rest
+            }: React.AnchorHTMLAttributes<HTMLAnchorElement> & MdExtraProps) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                {...rest}
+              >
                 {children}
-              </table>
-            </div>
-          ),
+              </a>
+            ),
 
-          // 链接：在新窗口打开
-          a: ({
-            node: _node,
-            siblingCount: _sc,
-            href,
-            children,
-            ...rest
-          }: React.AnchorHTMLAttributes<HTMLAnchorElement> & MdExtraProps) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              {...rest}
-            >
-              {children}
-            </a>
-          ),
-
-          // 图片：限制最大宽度
-          img: ({
-            node: _node,
-            siblingCount: _sc,
-            ...rest
-          }: React.ImgHTMLAttributes<HTMLImageElement> & MdExtraProps) => (
-            <img className="md-image" {...rest} />
-          ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+            // 图片：限制最大宽度
+            img: ({
+              node: _node,
+              siblingCount: _sc,
+              ...rest
+            }: React.ImgHTMLAttributes<HTMLImageElement> & MdExtraProps) => (
+              <img className="md-image" {...rest} />
+            ),
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
       <style>{markdownStyles}</style>
-    </div>
+    </>
   );
 }
 
