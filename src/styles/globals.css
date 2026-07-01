@@ -540,6 +540,60 @@
   flex-shrink: 0;
 }
 
+.wf-user-msg-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 66.67%;
+}
+
+.wf-user-node .wf-user-msg-wrapper .wf-node-card {
+  width: 100%;
+  flex: none;
+  max-width: 100%;
+  border: none;
+  background: #eeeeee;
+}
+
+/* 消息复制按钮容器共用样式 */
+.wf-msg-copy-btn,
+.wf-content-copy-btn {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+.wf-msg-copy-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wf-user-msg-wrapper:hover .wf-msg-copy-btn,
+.wf-msg-copy-btn.wf-copy-visible {
+  opacity: 1;
+}
+
+.wf-copy-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-copy-button:hover {
+  color: var(--color-text-primary);
+}
+
+.wf-copy-button:active {
+  opacity: 0.5;
+}
+
 .wf-thinking-block {
   display: flex;
   flex-direction: column;
@@ -564,7 +618,6 @@
 
 .wf-thinking-content {
   font-size: 12px;
-  font-style: italic;
   color: var(--color-text-tertiary);
   line-height: 1.7;
   padding-left: 16px;

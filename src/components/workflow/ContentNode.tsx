@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { WorkflowNode, ContentNodeData } from "../../types";
 import { MarkdownPreview } from "../preview/MarkdownPreview";
+import { Icon } from "../common/Icon";
 
 interface ContentNodeProps {
   node: WorkflowNode<"content">;
@@ -7,6 +9,24 @@ interface ContentNodeProps {
 
 export function ContentNode({ node }: ContentNodeProps) {
   const data = node.data as ContentNodeData;
+  const isCompleted = node.status === "completed" && !data.isStreaming;
+  const [copied, setCopied] = useState(false);
+
+  // 复制内容到剪贴板：优先使用现代 Clipboard API，失败时降级为 execCommand
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(data.content);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = data.content;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="wf-node">
@@ -15,11 +35,27 @@ export function ContentNode({ node }: ContentNodeProps) {
           content={data.content}
           className="wf-content-markdown"
         />
+        {isCompleted && (
+          <div className="wf-content-copy-btn">
+            <button
+              className="wf-copy-button"
+              onClick={handleCopy}
+              title={copied ? "已复制" : "复制"}
+            >
+              {copied ? (
+                <Icon name="check" size={12} />
+              ) : (
+                <Icon name="copy" size={12} />
+              )}
+            </button>
+          </div>
+        )}
       </div>
       <style>{`
         .wf-content-text-wrapper {
           min-width: 0;
           flex: 1;
+          flex-direction: column;
         }
         .wf-content-markdown {
           color: var(--color-text-primary);
