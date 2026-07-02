@@ -49,7 +49,7 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [updateNotificationOpen, setUpdateNotificationOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [typewriterVisible, setTypewriterVisible] = useState(false);
+  const [typewriterVisible, setTypewriterVisible] = useState(true);
 
   // 文档预览状态
   const [previewTitle, setPreviewTitle] = useState("");
@@ -698,7 +698,7 @@ export default function App() {
       });
       setTypewriterVisible(true);
     } else {
-      setTypewriterVisible(false);
+      setTypewriterVisible(true);
     }
     clearNodes();
     resetAgent();
