@@ -57,3 +57,5 @@ Env `DOCAGENT_PYTHON` overrides the Python interpreter path for the Sidecar.
 - All file operations go through Rust Tauri commands, not directly from frontend.
 - Provider config includes `contextWindow`, `supportsVision`, `extraParams`.
 - Conventional commits with Chinese titles: `feat(范围): 中文标题`
+
+> 如需详细查看引导文件，请阅读根目录下`CLAUDE.md`文件
