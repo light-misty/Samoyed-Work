@@ -16,17 +16,20 @@ export function ToolNode({ node }: ToolNodeProps) {
   const isCodeInterpreter = data.toolName === "code_interpreter_handler";
   const [errorExpanded, setErrorExpanded] = useState(false);
 
-  // 代码预览展开/收缩状态
-  // 初始展开：代码正在流式输出时展开，完成后收缩
-  const [codeExpanded, setCodeExpanded] = useState(data.isCodeStreaming ?? false);
-  const prevIsCodeStreamingRef = useRef<boolean | undefined>(undefined);
-
   // 代码内容：优先使用流式代码，回退到 input.code
   // 去掉开头多余的换行符（LLM 生成的 JSON 字符串值常以 \n 开头）
   const codeContent = (data.streamingCode
     || (data.input?.code as string | undefined)
     || "").replace(/^[\n\r]+/, '');
   const isCodeStreaming = data.isCodeStreaming ?? false;
+
+  // 代码预览展开/收缩状态
+  // 初始展开：代码正在流式输出时展开，完成后收缩
+  // 对于正在执行中的 code_interpreter_handler，即使无流式也默认展开（如重试场景）
+  const [codeExpanded, setCodeExpanded] = useState(
+    data.isCodeStreaming ?? (isRunning && isCodeInterpreter && codeContent.length > 0)
+  );
+  const prevIsCodeStreamingRef = useRef<boolean | undefined>(undefined);
 
   const [copied, setCopied] = useState(false);
 

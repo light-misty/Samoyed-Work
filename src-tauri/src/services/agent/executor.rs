@@ -812,15 +812,37 @@ impl<R: Runtime> AgentExecutor<R> {
                 }
             }
 
-            // 为所有 code_interpreter_handler 的 tool_call 发射 is_final 事件
+            // 为所有 code_interpreter_handler 的 tool_call 发射流式结束事件
+            // 策略：如果真实 callId 在流式过程中已出现，额外用真实 callId 再发射一次完整代码，
+            // 确保前端 pendingCodeStreamingRef 能在真实 callId 下找到代码内容，从而在新创建的
+            // ToolNode 中显示代码预览。这解决了重试迭代中流式 callId 与真实 callId 不一致的问题。
             for (tc_index, collected) in collected_tool_calls.iter() {
                 if collected.name == "code_interpreter_handler" {
+                    let has_real_id = !collected.id.is_empty();
+                    let streaming_id = format!("streaming_{}", tc_index);
+                    
+                    // 第一步：如果流式期间使用的是 streaming_ ID 且真实 callId 已出现，
+                    // 额外用真实 callId 发射一次完整代码（is_final=false），让前端缓存下来
+                    if has_real_id && collected.id != streaming_id {
+                        if let Ok(params) = serde_json::from_str::<serde_json::Value>(&collected.arguments) {
+                            if let Some(code) = params.get("code").and_then(|v| v.as_str()) {
+                                self.emitter.emit_code_streaming(CodeStreamingPayload {
+                                    session_id: ctx.session_id.clone(),
+                                    call_id: collected.id.clone(),
+                                    code_delta: code.to_string(),
+                                    is_final: false,
+                                }).ok();
+                            }
+                        }
+                    }
+                    
+                    // 第二步：发射 is_final 事件（使用流式期间的 callId）
                     self.emitter.emit_code_streaming(CodeStreamingPayload {
                         session_id: ctx.session_id.clone(),
-                        call_id: if collected.id.is_empty() {
-                            format!("streaming_{}", tc_index)
-                        } else {
+                        call_id: if has_real_id {
                             collected.id.clone()
+                        } else {
+                            streaming_id
                         },
                         code_delta: String::new(),
                         is_final: true,
@@ -1271,6 +1293,11 @@ impl<R: Runtime> AgentExecutor<R> {
                         None
                     };
 
+                    // 检测是否为 patches 模式（executed_code 回传时需要）
+                    let is_patches_mode = tool_call.name == "code_interpreter_handler"
+                        && params.get("code").is_none()
+                        && params.get("patches").is_some();
+
                     // 对需要路径安全校验的 Tool/Handler，注入工作区根目录
                     let mut safe_params = params;
                     let needs_workspace_root = matches!(
@@ -1405,6 +1432,19 @@ impl<R: Runtime> AgentExecutor<R> {
                         None
                     };
                     if let Some(code) = executed_code {
+                        // patches mode: 先将完整代码通过 code_streaming 回传给前端用于代码预览
+                        if is_patches_mode {
+                            self.emitter.emit_code_streaming(CodeStreamingPayload {
+                                session_id: ctx.session_id.clone(),
+                                call_id: tool_call.id.clone(),
+                                code_delta: code.clone(),
+                                is_final: true,
+                            }).ok();
+                            log::debug!(
+                                "patch 模式: 已回传完整代码到前端, session_id={}, code_len={}",
+                                ctx.session_id, code.len()
+                            );
+                        }
                         ctx.set_last_code(code);
                     }
 

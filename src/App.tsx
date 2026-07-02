@@ -145,6 +145,7 @@ export default function App() {
     currentIterationRef.current = undefined;
     lastToolCallIterationRef.current = null;
     lastClosedStreamingNodeIdRef.current = null;
+    pendingCodeStreamingRef.current.clear();
   }
 
   useEffect(() => {
@@ -385,28 +386,54 @@ export default function App() {
           } as ToolNodeData,
         });
       } else {
-        // 首次收到 tool_call：关闭当前 thinking/streaming 节点，创建工具节点
-        closeThinkingNode("completed");
-        if (streamingNodeIdRef.current) {
-          lastClosedStreamingNodeIdRef.current = streamingNodeIdRef.current;
-          closeStreamingNode("completed");
-        }
         const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
-        // 检查是否有暂存的 code_streaming 数据，在创建节点时一并注入
+        // 检查是否有暂存的 code_streaming 数据（可能在真实 callId 下）
         const pendingStreaming = currentToolCall.callId
           ? pendingCodeStreamingRef.current.get(currentToolCall.callId)
           : undefined;
-        addNode("tool", {
-          toolName: currentToolCall.toolName,
-          input: currentToolCall.arguments,
-          briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
-          callId: currentToolCall.callId,
-          streamingCode: pendingStreaming?.code,
-          isCodeStreaming: pendingStreaming?.isStreaming,
-        }, "running", toolIteration);
-        // 清除暂存
-        if (currentToolCall.callId && pendingStreaming) {
-          pendingCodeStreamingRef.current.delete(currentToolCall.callId);
+
+        // 流式阶段提前创建的 streaming_ 节点与真实 callId 匹配：
+        // 后端流式阶段可能用 "streaming_0" 作为临时 callId，流式结束后用真实 callId 重发。
+        // 如果已存在 streaming_ 前缀的 running 节点，复用它而非创建重复节点
+        const streamingNode = currentToolCall.callId && !currentToolCall.callId.startsWith("streaming_")
+          ? useWorkflowStore.getState().nodes.find(
+              (n) => n.type === "tool" && n.status === "running"
+                && (n.data as ToolNodeData).callId?.startsWith("streaming_")
+            )
+          : undefined;
+
+        if (streamingNode) {
+          const existingData = streamingNode.data as ToolNodeData;
+          updateNode(streamingNode.id, {
+            iteration: toolIteration,
+            data: {
+              ...existingData,
+              toolName: currentToolCall.toolName,
+              callId: currentToolCall.callId,
+              input: currentToolCall.arguments,
+              briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
+              streamingCode: pendingStreaming?.code ?? existingData.streamingCode,
+              isCodeStreaming: pendingStreaming?.isStreaming ?? false,
+            } as ToolNodeData,
+          });
+        } else {
+          closeThinkingNode("completed");
+          if (streamingNodeIdRef.current) {
+            lastClosedStreamingNodeIdRef.current = streamingNodeIdRef.current;
+            closeStreamingNode("completed");
+          }
+          addNode("tool", {
+            toolName: currentToolCall.toolName,
+            input: currentToolCall.arguments,
+            briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
+            callId: currentToolCall.callId,
+            streamingCode: pendingStreaming?.code,
+            isCodeStreaming: pendingStreaming?.isStreaming,
+          }, "running", toolIteration);
+        }
+        // 清除暂存（两分支共用）
+        if (pendingStreaming) {
+          pendingCodeStreamingRef.current.delete(currentToolCall.callId!);
         }
       }
     }
@@ -453,18 +480,20 @@ export default function App() {
 
       if (toolNode) {
         const existingData = toolNode.data as ToolNodeData;
-        // is_final 事件仅更新流式状态，不替换代码内容（codeDelta 为空）
         const isFinal = codeStreaming.isFinal;
+        const hasCodeDelta = codeStreaming.codeDelta.length > 0;
         updateNode(toolNode.id, {
           data: {
             ...existingData,
-            streamingCode: isFinal ? existingData.streamingCode : codeStreaming.codeDelta,
+            // is_final 且 codeDelta 为空：纯结束信号，不替换代码内容
+            // is_final 且 codeDelta 非空：最终代码（如 patches 回传），仍需更新内容
+            streamingCode: isFinal && !hasCodeDelta ? existingData.streamingCode : codeStreaming.codeDelta,
             isCodeStreaming: !isFinal,
           },
         });
       } else if (codeStreaming.callId) {
         // ToolNode 尚未创建，暂存最新数据（直接覆盖，非追加）
-        // is_final 时不暂存空代码
+        // is_final 时除非附带代码内容（如后端用真实 callId 重新发射），否则不暂存
         if (!codeStreaming.isFinal) {
           pendingCodeStreamingRef.current.set(codeStreaming.callId, {
             code: codeStreaming.codeDelta,
