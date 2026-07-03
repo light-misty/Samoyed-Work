@@ -70,15 +70,3 @@ Download the latest Windows installer from [Releases](https://github.com/XuMingK
 - File attachment upload (images, documents, text)
 - Automatic update detection and installation
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `DOCAGENT_PYTHON` | Specify Python interpreter path (auto-detected by default) |
-| `TAURI_DEV_HOST` | Dev host address |
-
-## Notes
-
-- `builtin_provider.json` contains API keys and is gitignored
-- Configure API keys in app settings
-- Python document engine timeout defaults to 120 seconds

@@ -70,15 +70,3 @@
 - 支持上传图片、文档等附件
 - 自动检测更新并安装
 
-## 环境变量
-
-| 变量 | 说明 |
-|------|------|
-| `DOCAGENT_PYTHON` | 指定 Python 解释器路径（默认自动检测） |
-| `TAURI_DEV_HOST` | 开发模式主机地址 |
-
-## 注意事项
-
-- 内置 Provider 配置文件（`builtin_provider.json`）包含 API Key，不会提交到 Git
-- AI 服务商的 API Key 在设置中配置
-- Python 文档处理引擎超时默认为 120 秒
