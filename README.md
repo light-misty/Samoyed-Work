@@ -11,6 +11,8 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
+<img src="assets/screenshots/English.png" alt="DocAgent Screenshot" width="800" />
+
 </div>
 
 ## Installation
