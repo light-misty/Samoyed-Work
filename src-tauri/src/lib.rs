@@ -473,20 +473,17 @@ pub fn run() {
 ///
 /// 问题根因（多层叠加）：
 /// 1. tao 在 decorations:false 时保留 WS_SIZEBOX(=WS_THICKFRAME) 样式以支持 resize
-/// 2. 最大化时，tao 的 WM_NCHITTEST 走 DefSubclassProc → 最终到 DefWindowProcW
-/// 3. DefWindowProcW 对 WS_THICKFRAME 窗口在边缘返回 HTTOP/HTRIGHT 等非 HTCLIENT 值
-/// 4. 这些 hit test 值导致 Windows 拦截鼠标事件，WebView2 收不到 click
-/// 5. Tauri 的 TAURI_DRAG_RESIZE_WINDOW 子窗口在 maximized 启动时未正确重置尺寸
-///    （WM_SIZE 在 subclass_parent 安装前触发），子窗口 region 覆盖按钮区域
+/// 2. 最大化时 DefWindowProcW 对 WS_THICKFRAME 窗口在边缘返回 resize hit test 值，
+///    导致 Windows 拦截鼠标事件，WebView2 收不到 click
+/// 3. Windows 11 Snap Layouts 基于 WS_MAXIMIZEBOX + WS_SYSMENU 拦截 mouseup
+/// 4. Tauri 的 TAURI_DRAG_RESIZE_WINDOW 子窗口在 maximized 启动时未正确重置尺寸，
+///    子窗口 region 覆盖按钮区域（WM_SIZE 在 subclass 安装前触发）
 ///
 /// 修复方案：
 /// 1. 最大化时移除 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU 样式
-///    - WS_SIZEBOX: 防止 DefWindowProcW 返回 resize hit test 值
-///    - WS_MAXIMIZEBOX + WS_SYSMENU: 防止 Windows 11 Snap Layouts 拦截 mouseup
 /// 2. 还原时恢复这三个样式，确保 resize 功能正常
-/// 3. 隐藏 TAURI_DRAG_RESIZE_WINDOW 子窗口并设为 0x0
-/// 4. 安装 WM_NCHITTEST subclass，最大化时强制返回 HTCLIENT
-/// 5. 监听 WM_SIZE 事件，在最大化/还原切换时自动调整样式和子窗口
+/// 3. 隐藏 TAURI_DRAG_RESIZE_WINDOW 子窗口并重置尺寸
+/// 4. 监听 WM_SIZE 事件，在最大化/还原切换时自动调整样式和子窗口，并校正窗口尺寸
 #[cfg(target_os = "windows")]
 #[allow(non_camel_case_types)]
 fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
@@ -609,13 +606,7 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
     }
 }
 
-/// 自定义 subclass 过程，修复最大化窗口边缘的 hit test 问题
-///
-/// 核心逻辑：
-/// - WM_NCHITTEST: 最大化时强制返回 HTCLIENT，防止 DefWindowProcW 在窗口边缘
-///   返回 HTTOP/HTRIGHT 等 resize 值（WS_THICKFRAME 导致）
-/// - WM_SIZE: 最大化时移除 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU + 隐藏子窗口；
-///   还原时恢复这三个样式（防止 Windows 11 Snap Layouts 拦截 mouseup）
+/// 自定义 subclass：监听 WM_SIZE 事件，在窗口状态切换时调整样式、子窗口可见性和窗口尺寸
 #[cfg(target_os = "windows")]
 #[allow(non_camel_case_types)]
 unsafe extern "system" fn fix_hit_test_subclass_proc(
