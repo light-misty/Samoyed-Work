@@ -1,6 +1,6 @@
 [package]
 name = "docagent"
-version = "1.0.0"
+version = "1.0.1"
 description = "AI文档处理Agent桌面应用"
 authors = ["DocAgent Team"]
 edition = "2021"
