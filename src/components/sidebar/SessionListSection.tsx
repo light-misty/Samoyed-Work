@@ -481,8 +481,12 @@ export function SessionListSection({
              进而撑大 sb-scroll 导致 overflow-y: auto 失效 */
           min-height: 0;
           overflow-y: auto;
+          scrollbar-width: none;
           padding: 0 8px 12px;
           transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+        }
+        .session-list-body::-webkit-scrollbar {
+          display: none;
         }
         /* 收缩状态: 工作区和会话历史全部隐藏 */
         .session-list-body-collapsed {

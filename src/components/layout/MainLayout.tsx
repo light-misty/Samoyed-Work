@@ -47,6 +47,10 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
           overflow-y: auto;
           overflow-x: hidden;
           width: 260px;
+          scrollbar-width: none;
+        }
+        .sb-scroll::-webkit-scrollbar {
+          display: none;
         }
         .main-area-wrap {
           flex: 1;

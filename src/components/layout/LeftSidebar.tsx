@@ -361,6 +361,10 @@ export function LeftSidebar({
           flex: 1;
           min-height: 0;
           overflow-y: auto;
+          scrollbar-width: none;
+        }
+        .file-tree-wrapper::-webkit-scrollbar {
+          display: none;
         }
         .file-tree-panel {
           position: absolute;
