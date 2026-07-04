@@ -93,6 +93,8 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
         // 节点数减少永远是会话切换（正常流程不会删除节点）
         // 节点数跳跃增加也是会话切换（正常发消息一次只加1个节点）
         const isSessionSwitch = nodes.length < prevLength || Math.abs(nodes.length - prevLength) > 1;
+        // 用户发消息：新增了恰好一个用户节点，即使之前手动上滚也应跟随
+        const isNewUserMessage = !isSessionSwitch && nodes.length > prevLength && nodes[nodes.length - 1]?.type === "user";
         const isStreaming = streamingContentKey > 0;
 
         if (isSessionSwitch) {
@@ -121,8 +123,11 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
             });
           };
           requestAnimationFrame(retryScroll);
-        } else if (autoScrollRef.current) {
-          // 用户在底部时自动跟随
+        } else if (autoScrollRef.current || isNewUserMessage) {
+          // 用户在底部时自动跟随，或用户发新消息时强制跟随
+          if (isNewUserMessage) {
+            autoScrollRef.current = true;
+          }
           if (isStreaming) {
             el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
           } else {
