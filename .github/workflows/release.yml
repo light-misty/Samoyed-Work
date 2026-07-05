@@ -143,12 +143,30 @@ jobs:
               $detail = $_.ErrorDetails.Message
               if ($statusCode -eq 401) {
                 Write-Host "::warning::Gitee Token 认证失败，请检查 GITEE_TOKEN 是否有效"
+                exit 0
               } elseif ($statusCode -eq 404) {
                 Write-Host "::warning::Gitee 仓库不存在或 Token 无权限"
+                exit 0
+              } elseif ($statusCode -eq 400 -and $detail -match "已经存在") {
+                Write-Host "标签已有发行版，尝试获取现有 Release ID"
+                try {
+                  $releases = Invoke-RestMethod -Uri "$apiBase/releases?$tokenParam&per_page=100" -Method Get
+                  $existing = $releases | Where-Object { $_.tag_name -eq $tagName } | Select-Object -First 1
+                  if ($existing) {
+                    $releaseId = $existing.id
+                    Write-Host "找到现有 Release，ID: $releaseId"
+                  } else {
+                    Write-Host "::warning::无法找到现有 Release: $detail"
+                    exit 0
+                  }
+                } catch {
+                  Write-Host "::warning::获取 Release 列表失败: $($_.Exception.Message)"
+                  exit 0
+                }
               } else {
                 Write-Host "::warning::Gitee Release 创建失败 ($statusCode): $detail"
+                exit 0
               }
-              exit 0
             }
           }
 
