@@ -1,15 +1,15 @@
 {
-  "version": "1.0.3",
-  "notes": "",
-  "pub_date": "2026-07-05T12:00:10.821Z",
+  "pub_date": "2026-07-05T18:34:10.266Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1uck5BUXd5RGJYWVhjOFZLZVBIN1JGVWlndzc3QkRvak5mOENqTkQxZnhjeFptdWhtWG1kYm9HdHdJYi9ua1dWZWVzNEVqTVU2bnhNYW5Cc2U0a2k1TUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjUyODA1CWZpbGU6RG9jQWdlbnRfMS4wLjNfeDY0LXNldHVwLmV4ZQpDQU9Zb052MUQyY1d0VDJ4a3Y5SXkzTXZwMFFCQSs5OTFBWWZuWlArVWNLL3V4cnU0UTF4aFR6dWdYcUhnTUFJMTZ6cm9LWjhhSnp1NU5DQ1JnZjREZz09Cg==",
-      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.3/DocAgent_1.0.3_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucktSTVI4OEdNN1pWM1lhVkVEcmFvOFpVT0EwK1pkZ2lTNGRiZzFHRlJDZWFzOEJqRWFLM2FsZWhwN1NQT3A2ZmN1Vi9lUW1zSk9adlJTN2dUMnBzcnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjc2NDM0CWZpbGU6RG9jQWdlbnRfMS4wLjRfeDY0LXNldHVwLmV4ZQphNjJMS3AxcjhpcDRJaTVtWHJaTXB6UmpaeUpIY0hJRHRkQlZua2lHR3FlbGxoclQyMWNVUU8rM1p0MWVpbmk3ZE90bHJGREMwZTM5NXQvM01vUTFBUT09Cg==",
+      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.4/DocAgent_1.0.4_x64-setup.exe"
     },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1uck5BUXd5RGJYWVhjOFZLZVBIN1JGVWlndzc3QkRvak5mOENqTkQxZnhjeFptdWhtWG1kYm9HdHdJYi9ua1dWZWVzNEVqTVU2bnhNYW5Cc2U0a2k1TUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjUyODA1CWZpbGU6RG9jQWdlbnRfMS4wLjNfeDY0LXNldHVwLmV4ZQpDQU9Zb052MUQyY1d0VDJ4a3Y5SXkzTXZwMFFCQSs5OTFBWWZuWlArVWNLL3V4cnU0UTF4aFR6dWdYcUhnTUFJMTZ6cm9LWjhhSnp1NU5DQ1JnZjREZz09Cg==",
-      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.3/DocAgent_1.0.3_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucktSTVI4OEdNN1pWM1lhVkVEcmFvOFpVT0EwK1pkZ2lTNGRiZzFHRlJDZWFzOEJqRWFLM2FsZWhwN1NQT3A2ZmN1Vi9lUW1zSk9adlJTN2dUMnBzcnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjc2NDM0CWZpbGU6RG9jQWdlbnRfMS4wLjRfeDY0LXNldHVwLmV4ZQphNjJMS3AxcjhpcDRJaTVtWHJaTXB6UmpaeUpIY0hJRHRkQlZua2lHR3FlbGxoclQyMWNVUU8rM1p0MWVpbmk3ZE90bHJGREMwZTM5NXQvM01vUTFBUT09Cg==",
+      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.4/DocAgent_1.0.4_x64-setup.exe"
     }
-  }
+  },
+  "notes": "DocAgent v1.0.4",
+  "version": "1.0.4"
 }
