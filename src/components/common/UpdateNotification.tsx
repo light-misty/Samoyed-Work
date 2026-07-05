@@ -13,12 +13,14 @@ import {
 interface UpdateNotificationProps {
   open: boolean;
   onClose: () => void;
+  /** 外部传入的预检查结果，非 null 时跳过组件自身的网络检查 */
+  initialUpdateInfo?: UpdateInfo | null;
 }
 
 // 更新状态机：idle → checking → available → downloading → downloaded → installing
 type UpdateState = "idle" | "checking" | "available" | "downloading" | "downloaded" | "installing" | "error";
 
-export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
+export function UpdateNotification({ open, onClose, initialUpdateInfo }: UpdateNotificationProps) {
   const { t } = useTranslation();
   const [state, setState] = useState<UpdateState>("idle");
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -76,10 +78,17 @@ export function UpdateNotification({ open, onClose }: UpdateNotificationProps) {
     }
   }, [onClose, handleClose]);
 
-  // 当组件打开时自动检查
+  // 当组件打开时自动检查更新
+  // 如果外部提供了预检查结果（initialUpdateInfo），直接进入 available 状态，跳过重复网络请求
   useEffect(() => {
-    if (open && state === "idle") handleCheck();
-  }, [open, state, handleCheck]);
+    if (!open || state !== "idle") return;
+    if (initialUpdateInfo) {
+      setUpdateInfo(initialUpdateInfo);
+      setState("available");
+    } else {
+      handleCheck();
+    }
+  }, [open, state, handleCheck, initialUpdateInfo]);
 
   // 下载更新（保存到临时文件，不安装）
   const handleDownload = useCallback(async () => {

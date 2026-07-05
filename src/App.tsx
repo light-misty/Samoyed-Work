@@ -22,6 +22,7 @@ import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
 import { generateToolBrief } from "./utils/format";
 import type { NodeStatus, ToolNodeData } from "./types";
+import type { UpdateInfo } from "./services/tauri";
 import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
 
@@ -50,6 +51,7 @@ export default function App() {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const updateNotificationOpen = useUpdateStore((s) => s.updateNotificationOpen);
   const setUpdateNotificationOpen = useUpdateStore((s) => s.setUpdateNotificationOpen);
+  const [pendingUpdateInfo, setPendingUpdateInfo] = useState<UpdateInfo | null>(null);
   const [typewriterVisible, setTypewriterVisible] = useState(true);
 
   // 文档预览状态
@@ -277,22 +279,27 @@ export default function App() {
   }, [handleWorkspaceDirectoryDeleted]);
 
   // 应用启动后自动检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
+  // 使用 Toast（右上角小弹窗）提示检查状态，与手动检查更新行为一致
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!settings.update.autoCheck) return;
-      // 开发环境下跳过自动检查更新
       if (import.meta.env.DEV) return;
+      const toastId = useToastStore.getState().addToast("info", t('update.checking'));
       try {
         const result = await tauriCmd.checkUpdate();
+        useToastStore.getState().removeToast(toastId);
         if (result) {
+          setPendingUpdateInfo(result);
+          useToastStore.getState().addToast("success", t('update.newVersionFound', { version: result.version }));
           setUpdateNotificationOpen(true);
         }
       } catch {
+        useToastStore.getState().removeToast(toastId);
         // 静默处理检查失败
       }
     }, 5000);
     return () => clearTimeout(timer);
-  }, [settings.update.autoCheck]);
+  }, [settings.update.autoCheck, t]);
 
   // 当 Agent 创建新会话时，同步刷新 session store 并选中新会话
   // 必须先 await loadSessions() 确保 sessions 列表已包含新会话，
@@ -1098,7 +1105,11 @@ export default function App() {
       <Suspense fallback={<LazyFallback />}>
         <UpdateNotification
           open={updateNotificationOpen}
-          onClose={() => setUpdateNotificationOpen(false)}
+          onClose={() => {
+            setUpdateNotificationOpen(false);
+            setPendingUpdateInfo(null);
+          }}
+          initialUpdateInfo={pendingUpdateInfo}
         />
       </Suspense>
 
