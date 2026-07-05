@@ -26,6 +26,17 @@ $GetPipUrl = "https://bootstrap.pypa.io/get-pip.py"
 # PyPI 镜像源（国内用户加速，清华 TUNA 镜像）
 # 如需使用官方源，改为 "https://pypi.org/simple"
 $PyMirrorUrl = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# 镜像源连通性检测：如果镜像不可达（如 CI 环境被屏蔽），回退到官方 PyPI
+try {
+    $req = [System.Net.HttpWebRequest]::Create("$PyMirrorUrl/pip/")
+    $req.Timeout = 5000
+    $req.Method = "HEAD"
+    $req.GetResponse().Close()
+    Write-Info "镜像源可达: $PyMirrorUrl"
+} catch {
+    Write-Warn "镜像源不可达 ($($_.Exception.Message))，回退到官方 PyPI"
+    $PyMirrorUrl = "https://pypi.org/simple"
+}
 
 # 路径配置（基于脚本所在位置推导项目根目录）
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -242,10 +253,33 @@ if (-not (Test-Path $GetPipPath)) {
     Write-Info "使用缓存的 get-pip.py: $GetPipPath"
 }
 
+# 定义安装函数，支持镜像源不可用时自动回退到官方 PyPI
+function Install-WithFallback {
+    param([ScriptBlock]$ScriptBlock)
+    # 尝试使用镜像源安装
+    $originalUrl = $PyMirrorUrl
+    try {
+        & $ScriptBlock
+        if ($LASTEXITCODE -ne 0) { throw "退出码: $LASTEXITCODE" }
+    } catch {
+        if ($PyMirrorUrl -ne "https://pypi.org/simple") {
+            Write-Warn "镜像源安装失败 ($($_.Exception.Message))，回退到官方 PyPI"
+            $script:PyMirrorUrl = "https://pypi.org/simple"
+            & $ScriptBlock
+            Test-CommandSuccess "安装（官方源）"
+            $script:PyMirrorUrl = $originalUrl
+        } else {
+            throw
+        }
+    }
+}
+
 # 使用嵌入式 Python 执行 get-pip.py 安装 pip
 # 通过 --index-url 指定镜像源加速 pip 自身下载
 Write-Info "安装 pip..."
-& $PythonExe $GetPipPath --no-warn-script-location --index-url $PyMirrorUrl
+Install-WithFallback -ScriptBlock {
+    & $PythonExe $GetPipPath --no-warn-script-location --index-url $PyMirrorUrl
+}
 Test-CommandSuccess "安装 pip"
 
 # 验证 pip 可用
@@ -257,7 +291,9 @@ Test-CommandSuccess "验证 pip"
 # 通过 -i 指定镜像源加速依赖下载
 Write-Info "安装依赖: $RequirementsPath"
 Write-Info "使用镜像源: $PyMirrorUrl"
-& $PythonExe -m pip install -r $RequirementsPath --no-warn-script-location -i $PyMirrorUrl
+Install-WithFallback -ScriptBlock {
+    & $PythonExe -m pip install -r $RequirementsPath --no-warn-script-location -i $PyMirrorUrl
+}
 Test-CommandSuccess "安装 Python 依赖"
 
 # ============================================
