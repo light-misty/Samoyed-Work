@@ -48,6 +48,34 @@ fn is_retryable_error(code: u32) -> bool {
     )
 }
 
+/// 根据错误码生成面向用户友好的错误消息
+fn user_facing_error_message(code: u32) -> String {
+    match code {
+        crate::errors::LLM_INVALID_REQUEST => {
+            "对话历史格式错误，请尝试新建会话".to_string()
+        }
+        crate::errors::LLM_AUTH_FAILED => {
+            "API 认证失败，请检查 API Key 配置".to_string()
+        }
+        crate::errors::LLM_RATE_LIMITED => {
+            "API 请求频率过高，请稍后重试".to_string()
+        }
+        crate::errors::LLM_QUOTA_EXCEEDED => {
+            "API 配额已用尽，请检查账户余额".to_string()
+        }
+        crate::errors::LLM_MODEL_NOT_FOUND => {
+            "模型不存在或已停用，请检查模型配置".to_string()
+        }
+        crate::errors::LLM_TIMEOUT => {
+            "请求超时，请检查网络连接后重试".to_string()
+        }
+        _ => {
+            // 网络类错误统一提示
+            "网络连接已断开，请检查网络后重试".to_string()
+        }
+    }
+}
+
 pub struct ExecutionResult {
     pub summary: String,
     pub total_steps: u32,
@@ -164,6 +192,8 @@ impl<R: Runtime> AgentExecutor<R> {
     ) -> Option<ExecutionResult> {
         if self.check_stopped(&ctx.session_id) {
             log::info!("Agent 被用户停止, session_id={}", ctx.session_id);
+            // 先清理不完整的 tool_calls 消息链，避免将损坏的对话历史持久化
+            ctx.cleanup_incomplete_tool_calls();
             self.persist_new_messages(ctx);
             ctx.mark_persisted();
             self.emitter.emit_stopped(StoppedPayload {
@@ -569,7 +599,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             self.emitter.emit_error(ErrorPayload {
                                 session_id: ctx.session_id.clone(),
                                 code: e.code,
-                                message: "网络连接已断开，请检查网络后重试".to_string(),
+                                message: user_facing_error_message(e.code),
                                 recoverable: is_retryable_error(e.code),
                             }).ok();
                             return Err(e);
@@ -773,7 +803,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     self.emitter.emit_error(ErrorPayload {
                                         session_id: ctx.session_id.clone(),
                                         code: recover_err.code,
-                                        message: "网络连接已断开，请检查网络后重试".to_string(),
+                                        message: user_facing_error_message(recover_err.code),
                                         recoverable: is_retryable_error(recover_err.code),
                                     }).ok();
                                     break;
@@ -801,7 +831,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     self.emitter.emit_error(ErrorPayload {
                                         session_id: ctx.session_id.clone(),
                                         code: recover_err.code,
-                                        message: "网络连接已断开，请检查网络后重试".to_string(),
+                                        message: user_facing_error_message(recover_err.code),
                                         recoverable: is_retryable_error(recover_err.code),
                                     }).ok();
                                     break;

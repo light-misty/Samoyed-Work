@@ -405,6 +405,51 @@ impl AgentContext {
         }
     }
 
+    /// 清理上下文中不完整的 tool_calls 消息链
+    /// 当 Agent 被用户停止时，可能已经添加了带 tool_calls 的 assistant 消息
+    /// 但尚未添加对应的 tool 结果消息。此类不完整的消息链被持久化后，
+    /// 下次发起会话时 LLM API 会返回 400 错误：
+    /// "assistant message with 'tool_calls' must be followed by tool messages..."
+    /// 此方法从未持久化的消息中，扫描并移除所有不完整的 tool_calls 链
+    /// （即 assistant 消息声明了 tool_calls，但缺少部分或全部 tool 回应）
+    pub fn cleanup_incomplete_tool_calls(&mut self) {
+        let persisted = self.persisted_count;
+        let total = self.messages.len();
+        if total <= persisted {
+            return;
+        }
+        // 从未持久化的最后一条向前扫描
+        let mut i = total;
+        while i > persisted {
+            i -= 1;
+            if self.messages[i].role == "assistant" && self.messages[i].tool_calls.is_some() {
+                let tool_call_ids: Vec<String> = self.messages[i].tool_calls.as_ref()
+                    .map(|calls| calls.iter().map(|c| c.id.clone()).collect())
+                    .unwrap_or_default();
+                if tool_call_ids.is_empty() {
+                    continue;
+                }
+                // 检查这个 assistant 之后是否有完整的 tool 回应
+                let missing_ids: Vec<&str> = tool_call_ids.iter()
+                    .filter(|call_id| {
+                        !self.messages[i + 1..].iter()
+                            .any(|m| m.role == "tool" && m.tool_call_id.as_deref() == Some(call_id.as_str()))
+                    })
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing_ids.is_empty() {
+                    log::info!(
+                        "清理未完成的 tool_calls, session_id={}, 缺少 {} 个 tool 回应 (call_ids={:?}), 从索引 {} 处截断",
+                        self.session_id, missing_ids.len(), missing_ids, i
+                    );
+                    // 截断从此 assistant 消息开始的所有未持久化消息
+                    self.messages.truncate(i);
+                    return;
+                }
+            }
+        }
+    }
+
     /// 更新任务类型（基于已调用的工具）
     pub fn update_task_type_from_tool(&mut self, tool_name: &str, _tool_params: Option<&serde_json::Value>) {
         // 如果已经是具体类型，不再覆盖
