@@ -3,7 +3,6 @@
 # DocAgent
 
 [![Windows](https://img.shields.io/badge/platform-Windows-blue?logo=windows)](https://github.com/user-attachments/docagent)
-[![Version](https://img.shields.io/badge/version-0.2.1-4ccd24)](https://github.com/XuMingKe-06/DocAgent/releases)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-orange?logo=tauri)](https://v2.tauri.app/)
 [![React 19](https://img.shields.io/badge/React-19-61dafb?logo=react)](https://react.dev/)
 [![Rust](https://img.shields.io/badge/Rust-1.80+-000000?logo=rust)](https://www.rust-lang.org/)
