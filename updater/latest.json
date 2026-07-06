@@ -1,15 +1,15 @@
 {
-  "pub_date": "2026-07-05T18:34:10.266Z",
+  "version": "1.0.5",
+  "pub_date": "2026-07-06T13:41:23.427Z",
+  "notes": "DocAgent v1.0.5",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucktSTVI4OEdNN1pWM1lhVkVEcmFvOFpVT0EwK1pkZ2lTNGRiZzFHRlJDZWFzOEJqRWFLM2FsZWhwN1NQT3A2ZmN1Vi9lUW1zSk9adlJTN2dUMnBzcnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjc2NDM0CWZpbGU6RG9jQWdlbnRfMS4wLjRfeDY0LXNldHVwLmV4ZQphNjJMS3AxcjhpcDRJaTVtWHJaTXB6UmpaeUpIY0hJRHRkQlZua2lHR3FlbGxoclQyMWNVUU8rM1p0MWVpbmk3ZE90bHJGREMwZTM5NXQvM01vUTFBUT09Cg==",
-      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.4/DocAgent_1.0.4_x64-setup.exe"
+      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.5/DocAgent_1.0.5_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucks0cmNkdWlxSGFYZ3NwZ3c3R3gwdXNCaDNmUTJVVHk2eXp3YUNIbWt0N1VFQUd4NU1yVmdZUUFVM3Y4TlhucWxxM0FWK0pORUYwQTh2MGNMc1JIeHcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMzQ1MjcxCWZpbGU6RG9jQWdlbnRfMS4wLjVfeDY0LXNldHVwLmV4ZQpVQ1laNGZDZXprbStKSW1lczYzdVNmZXg5UE15ZUhoaXBCOVBMR0tlZU1NdW9HWjdjY3JoTGhvaUwvU3I3SS9QT0hOQUVJM080eE1iTjc1S2s5ZCtEdz09Cg=="
     },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucktSTVI4OEdNN1pWM1lhVkVEcmFvOFpVT0EwK1pkZ2lTNGRiZzFHRlJDZWFzOEJqRWFLM2FsZWhwN1NQT3A2ZmN1Vi9lUW1zSk9adlJTN2dUMnBzcnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMjc2NDM0CWZpbGU6RG9jQWdlbnRfMS4wLjRfeDY0LXNldHVwLmV4ZQphNjJMS3AxcjhpcDRJaTVtWHJaTXB6UmpaeUpIY0hJRHRkQlZua2lHR3FlbGxoclQyMWNVUU8rM1p0MWVpbmk3ZE90bHJGREMwZTM5NXQvM01vUTFBUT09Cg==",
-      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.4/DocAgent_1.0.4_x64-setup.exe"
+      "url": "https://gitee.com/xumingke-06/doc-agent/releases/download/v1.0.5/DocAgent_1.0.5_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRaFBaNHZFTE1ucks0cmNkdWlxSGFYZ3NwZ3c3R3gwdXNCaDNmUTJVVHk2eXp3YUNIbWt0N1VFQUd4NU1yVmdZUUFVM3Y4TlhucWxxM0FWK0pORUYwQTh2MGNMc1JIeHcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgzMzQ1MjcxCWZpbGU6RG9jQWdlbnRfMS4wLjVfeDY0LXNldHVwLmV4ZQpVQ1laNGZDZXprbStKSW1lczYzdVNmZXg5UE15ZUhoaXBCOVBMR0tlZU1NdW9HWjdjY3JoTGhvaUwvU3I3SS9QT0hOQUVJM080eE1iTjc1S2s5ZCtEdz09Cg=="
     }
-  },
-  "notes": "DocAgent v1.0.4",
-  "version": "1.0.4"
+  }
 }
