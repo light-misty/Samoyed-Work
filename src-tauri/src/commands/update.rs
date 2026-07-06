@@ -323,17 +323,38 @@ pub async fn download_update(
         };
 
         let mut downloaded: u64 = 0;
-        let mut content_length: Option<u64> = None;
+        // 节流状态: 上次发送进度事件的时间, 以及缓存的 content_length
+        // Tauri Updater 的 on_chunk 每个 chunk(约 8-64KB)都调用一次,
+        // 86MB 文件会产生上万个事件, 导致 Channel 积压, 前端进度条卡在 0%
+        // 通过 100ms 节流, 将事件数量从上万降到几百, 保证进度条实时更新
+        let mut last_send_time: Option<std::time::Instant> = None;
+        let mut cached_content_length: Option<u64> = None;
+        // 节流间隔: 100ms, 平衡实时性与性能
+        const PROGRESS_THROTTLE_MS: u128 = 100;
 
         match update
             .download(
                 |chunk_length, content_len| {
                     downloaded += chunk_length as u64;
-                    content_length = content_len;
+                    // 缓存 content_length(每个 chunk 都是同一个值)
+                    if cached_content_length.is_none() && content_len.is_some() {
+                        cached_content_length = content_len;
+                    }
+
+                    // 节流: 距离上次发送超过 100ms 才发送, 避免高频事件导致 Channel 积压
+                    let now = std::time::Instant::now();
+                    let should_send = match last_send_time {
+                        Some(last) => now.duration_since(last).as_millis() >= PROGRESS_THROTTLE_MS,
+                        None => true, // 第一个 chunk 立即发送, 让前端尽快显示进度
+                    };
+
+                    if should_send {
+                        last_send_time = Some(now);
                     let _ = on_event.send(DownloadEvent::Progress {
                         downloaded,
-                        content_length: content_len,
+                            content_length: cached_content_length,
                     });
+                    }
                 },
                 || {
                     let _ = on_event.send(DownloadEvent::Finished);
