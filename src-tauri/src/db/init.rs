@@ -156,20 +156,9 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
 
 /// 插入内置模板种子数据
 fn seed_builtin_templates(conn: &Connection) -> Result<(), CommandError> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM prompt_templates WHERE is_builtin = 1",
-        [],
-        |row| row.get(0),
-    )?;
-
-    if count > 0 {
-        log::debug!("内置模板已存在 (count={})，跳过种子数据", count);
-        return Ok(());
-    }
-
     let now = chrono::Utc::now().to_rfc3339();
 
-    // 内置模板列表（含 6 个原有模板的优化版本 + 3 个新增模板）
+    // 内置模板列表
     let builtin_templates: Vec<(&str, &str, &str, &str, &str)> = vec![
         (
             "builtin-weekly-report",
@@ -236,6 +225,10 @@ fn seed_builtin_templates(conn: &Connection) -> Result<(), CommandError> {
         ),
     ];
 
+    // 全量重新插入：先删除所有内置模板，再重新写入种子列表
+    // 这样用户从种子列表中移除的模板会自动消失，新增的会自动出现
+    conn.execute("DELETE FROM prompt_templates WHERE is_builtin = 1", [])?;
+
     for (id, name, description, content, category) in &builtin_templates {
         conn.execute(
             "INSERT INTO prompt_templates (id, name, description, content, category, is_builtin, variables, created_at, updated_at)
@@ -244,6 +237,6 @@ fn seed_builtin_templates(conn: &Connection) -> Result<(), CommandError> {
         )?;
     }
 
-    log::info!("已插入 {} 个内置模板", builtin_templates.len());
+    log::info!("已同步 {} 个内置模板", builtin_templates.len());
     Ok(())
 }

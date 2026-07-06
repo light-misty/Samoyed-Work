@@ -163,6 +163,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 打开设置对话框
   openSettings: (tab) => {
     set({ isSettingsOpen: true, activeSettingsTab: tab || "llm" });
+    // 如果打开的是模板标签页，立即刷新模板列表
+    if (tab === "template") {
+      get().loadTemplates();
+    }
   },
 
   // 关闭设置对话框
@@ -173,6 +177,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 切换设置标签页
   setActiveTab: (tab) => {
     set({ activeSettingsTab: tab });
+    // 切换到模板标签页时刷新模板列表
+    if (tab === "template") {
+      get().loadTemplates();
+    }
   },
 
   // 从后端加载设置、Provider 列表和 Handler 列表
