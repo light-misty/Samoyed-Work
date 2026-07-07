@@ -92,3 +92,108 @@ def register_bold_font() -> str:
         except Exception:
             pass
     return ""
+
+
+# ============================================================================
+# PyMuPDF (fitz) 专用字体注册工具
+#
+# 适用场景：使用 fitz 修改现有 PDF 时注册中文字体
+# 注意：与 reportlab 不同，fitz 不能用 fontname 直接引用系统字体名称，
+#       必须通过 fontbuffer 传入 TTF/OTF 字节数据。TTC 需先 fitz.Font 提取子集。
+# ============================================================================
+
+# fitz 专用字体路径列表（按优先级排序）
+_FITZ_FONT_PATHS = [
+    # Windows - 微软雅黑粗体（主粗体字体）
+    ("C:/Windows/Fonts/msyhbd.ttc", 0, True),
+    # Windows - 微软雅黑常规
+    ("C:/Windows/Fonts/msyh.ttc", 0, False),
+    # Windows - 黑体（常规回退）
+    ("C:/Windows/Fonts/simhei.ttf", 0, False),
+    # Windows - 宋体（常规回退）
+    ("C:/Windows/Fonts/simsun.ttc", 0, False),
+    # macOS - 苹方
+    ("/System/Library/Fonts/PingFang.ttc", 0, False),
+    # Linux - Noto Sans CJK
+    ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0, False),
+]
+
+
+def register_fitz_font(page, font_name="MyZhFont", bold=False, idx=0):
+    """为 fitz.Page 注册中文字体（支持 TTC 格式）
+
+    适用场景：使用 fitz 修改现有 PDF 时，给页面注册中文字体以便后续 insert_text 使用。
+    内部通过 fitz.Font 加载 TTC 并提取子集字节数据（font.buffer），
+    再通过 page.insert_font(fontbuffer=...) 注册，规避 TTC 直接传入失败的问题。
+
+    关键约束：必须在 page.apply_redactions() 之后调用。
+    PyMuPDF 的 apply_redactions() 会重置页面字体注册状态，
+    因此注册顺序必须是：apply_redactions() -> register_fitz_font() -> insert_text()
+
+    Args:
+        page: fitz.Page 对象，待注册字体的页面
+        font_name: 自定义字体注册名（不能含空格，否则 insert_text 会报错）
+                   默认 "MyZhFont"，引用时用 page.insert_text(..., fontname=font_name)
+        bold: 是否注册粗体字体，True 时优先使用微软雅黑粗体
+        idx: TTC 字体的子字体索引（通常 0 即可）
+
+    Returns:
+        str: 注册成功时返回 font_name，失败返回空字符串
+
+    Raises:
+        ImportError: fitz (PyMuPDF) 未安装时抛出
+    """
+    import fitz
+
+    # 按优先级尝试加载字体
+    for font_path, subfont_idx, is_bold in _FITZ_FONT_PATHS:
+        # 粗体模式跳过非粗体字体，常规模式跳过粗体字体
+        if bold != is_bold:
+            continue
+        if not os.path.exists(font_path):
+            continue
+        try:
+            # fitz.Font 加载 TTC 字体，提取子字体（idx 指定 TTC 中的字体索引）
+            # font.buffer 是子集字体的 TTF 字节数据，可被 insert_font 接受
+            font = fitz.Font(fontfile=font_path, idx=subfont_idx)
+            # insert_font 注册到页面，fontname 必须无空格
+            page.insert_font(fontname=font_name, fontbuffer=font.buffer)
+            logger.debug("register_fitz_font: 成功注册字体 %s (%s)", font_name, font_path)
+            return font_name
+        except Exception as e:
+            logger.debug("register_fitz_font: 注册字体失败 %s: %s", font_path, e)
+            continue
+
+    logger.warning("register_fitz_font: 所有中文字体注册失败")
+    return ""
+
+
+def create_fitz_font(bold=False):
+    """创建 fitz.Font 对象（支持 TTC 格式）
+
+    适用场景：需要独立使用 fitz.Font 对象时（如 TextWriter 场景）。
+    与 register_fitz_font 不同，此函数返回 fitz.Font 对象而非注册名。
+
+    Args:
+        bold: 是否创建粗体字体
+
+    Returns:
+        fitz.Font: 字体对象，失败返回 None
+    """
+    import fitz
+
+    for font_path, subfont_idx, is_bold in _FITZ_FONT_PATHS:
+        if bold != is_bold:
+            continue
+        if not os.path.exists(font_path):
+            continue
+        try:
+            font = fitz.Font(fontfile=font_path, idx=subfont_idx)
+            logger.debug("create_fitz_font: 成功创建字体 %s", font_path)
+            return font
+        except Exception as e:
+            logger.debug("create_fitz_font: 创建字体失败 %s: %s", font_path, e)
+            continue
+
+    logger.warning("create_fitz_font: 所有中文字体创建失败")
+    return None

@@ -74,6 +74,9 @@ ALLOWED_MODULES = {
     "tempfile",      # 临时文件创建（PyMuPDF 保存策略常用）
     "io",            # StringIO/BytesIO 等流操作
     "inspect",       # 对象检查（PyMuPDF/reportlab 等库内部可能使用）
+    # Python 内置模块（智能体解析 TTC/字体文件结构时使用）
+    "struct",        # 二进制数据打包/解包（解析 TTC 字体文件头）
+    "glob",          # 文件名模式匹配（查找字体文件）
     # 项目内部 helper
     "doc_helpers",
     "handlers.font_utils",  # 中文字体注册工具
@@ -293,6 +296,16 @@ def build_namespace(working_dir: str) -> dict:
         from handlers.font_utils import register_chinese_font, register_bold_font
         namespace['register_chinese_font'] = register_chinese_font
         namespace['register_bold_font'] = register_bold_font
+    except ImportError:
+        pass
+
+    # 预导入 fitz 专用字体注册工具，降低智能体在 fitz 场景下的编码难度
+    # fitz 不能用 fontname 直接引用系统字体，必须通过 fontbuffer 传入 TTF 字节数据
+    # 智能体可直接调用 register_fitz_font(page) 完成注册
+    try:
+        from handlers.font_utils import register_fitz_font, create_fitz_font
+        namespace['register_fitz_font'] = register_fitz_font
+        namespace['create_fitz_font'] = create_fitz_font
     except ImportError:
         pass
 

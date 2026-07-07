@@ -191,33 +191,49 @@ pub fn run() {
             // 1. 环境变量 DOCAGENT_PYTHON（开发模式覆盖，最高优先级）
             // 2. 应用资源目录的嵌入式 Python（生产环境，sidecar_dist/python/python.exe）
             // 3. 系统 PATH 中的 py/python/python3（开发模式兜底）
+            //
+            // 开发模式（debug_assertions）下，跳过嵌入式 Python 检测，
+            // 避免误用过期的 sidecar_dist/python/python.exe，
+            // 强制使用系统 PATH 中的 Python，确保与源码目录的 sidecar 配套
             let python_path = if let Ok(p) = std::env::var("DOCAGENT_PYTHON") {
                 log::info!("使用环境变量 DOCAGENT_PYTHON 指定的 Python: {}", p);
                 p
             } else {
-                // 优先尝试应用资源目录中的嵌入式 Python（生产环境）
-                let embedded_python = app.path()
-                    .resolve("sidecar_dist/python/python.exe", BaseDirectory::Resource)
-                    .ok()
-                    .map(|p| crate::utils::strip_unc_prefix(&p).to_string_lossy().to_string());
+                #[cfg(debug_assertions)]
+                {
+                    // 开发模式：直接使用系统 PATH 中的 Python，避免误用 sidecar_dist 中过期的嵌入式 Python
+                    log::info!("开发模式：使用系统 PATH 中的 Python");
+                    find_system_python()
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    // 生产模式：优先使用应用资源目录中的嵌入式 Python
+                    let embedded_python = app.path()
+                        .resolve("sidecar_dist/python/python.exe", BaseDirectory::Resource)
+                        .ok()
+                        .map(|p| crate::utils::strip_unc_prefix(&p).to_string_lossy().to_string());
 
-                if let Some(path) = embedded_python {
-                    if std::path::Path::new(&path).exists() {
-                        log::info!("使用嵌入式 Python: {}", path);
-                        path
+                    if let Some(path) = embedded_python {
+                        if std::path::Path::new(&path).exists() {
+                            log::info!("使用嵌入式 Python: {}", path);
+                            path
+                        } else {
+                            // 资源路径解析成功但文件不存在，回退到系统 PATH
+                            log::warn!("嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH", path);
+                            find_system_python()
+                        }
                     } else {
-                        // 资源路径解析成功但文件不存在，回退到系统 PATH
-                        log::warn!("嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH", path);
+                        // 资源路径解析失败，使用系统 PATH
+                        log::info!("未找到嵌入式 Python，使用系统 PATH");
                         find_system_python()
                     }
-                } else {
-                    // 资源路径解析失败（开发模式），使用系统 PATH
-                    log::info!("未找到嵌入式 Python（开发模式），使用系统 PATH");
-                    find_system_python()
                 }
             };
 
             // 解析 Sidecar 脚本路径：按优先级尝试多个候选位置
+            // 开发模式（debug_assertions）下优先加载源码目录 sidecar/main.py，
+            // 避免误用 target/debug/sidecar_dist/ 中过期的构建产物
+            // 生产模式（release）下优先加载打包资源 sidecar_dist/sidecar/main.py
             let sidecar_script_str = {
                 // CARGO_MANIFEST_DIR 在编译期指向 src-tauri/ 目录，其上一级即为项目根目录
                 let project_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -233,13 +249,26 @@ pub fn run() {
                     .ok();
 
                 // 按优先级构建候选路径列表
+                // 不同构建模式下候选顺序不同：
+                // - debug 模式：源码目录优先，避免加载过期的 sidecar_dist 构建产物
+                // - release 模式：打包资源优先，加载 .pyc 字节码
                 let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-                // 1. 嵌入式 Python 方案的脚本路径（生产环境，最高优先级）
-                if let Some(path) = embedded_script {
-                    candidates.push(path);
+                #[cfg(debug_assertions)]
+                {
+                    // 开发模式：源码目录优先，确保加载最新代码
+                    candidates.push(project_root);
+                    if let Some(path) = embedded_script {
+                        candidates.push(path);
+                    }
                 }
-                // 2. 项目根目录下的 sidecar（开发模式，基于 CARGO_MANIFEST_DIR 推导）
-                candidates.push(project_root);
+                #[cfg(not(debug_assertions))]
+                {
+                    // 生产模式：打包资源优先
+                    if let Some(path) = embedded_script {
+                        candidates.push(path);
+                    }
+                    candidates.push(project_root);
+                }
 
                 let mut found = None;
                 for candidate in &candidates {

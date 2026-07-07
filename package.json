@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "pretauri:dev": "powershell -ExecutionPolicy Bypass -File scripts/sync_sidecar_dev.ps1",
     "sidecar:build": "powershell -ExecutionPolicy Bypass -File scripts/build_sidecar.ps1",
     "pretauri:build": "npm run sidecar:build",
     "tauri:build": "tauri build"

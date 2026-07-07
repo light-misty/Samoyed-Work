@@ -70,6 +70,9 @@ class CodeHandler:
         "tempfile",      # 临时文件创建（PyMuPDF 保存策略常用）
         "io",            # StringIO/BytesIO 等流操作
         "inspect",       # 对象检查（PyMuPDF/reportlab 等库内部可能使用）
+        # Python 内置模块（智能体解析 TTC/字体文件结构时使用）
+        "struct",        # 二进制数据打包/解包（解析 TTC 字体文件头）
+        "glob",          # 文件名模式匹配（查找字体文件）
         # 项目内部 helper
         "doc_helpers",
         "handlers.font_utils",  # 中文字体注册工具
