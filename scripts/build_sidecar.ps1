@@ -1,4 +1,4 @@
-﻿# DocAgent Python Sidecar 构建脚本
+# DocAgent Python Sidecar 构建脚本
 # 下载 Python Embeddable Distribution + 安装依赖 + 复制 sidecar 源码 + 编译 .pyc 隐藏源码
 # 最终产物 sidecar_dist/ 通过 tauri.conf.json 的 bundle.resources 打包到 NSIS 安装包
 #
@@ -363,8 +363,7 @@ Write-Info "已生成 $pycCount 个 .pyc 文件"
 # main.py：入口文件，python.exe main.py 需要它，只是简单调度逻辑
 # __init__.py：Python 3 识别普通包的必需文件，只有 __init__.pyc 无法被识别为包
 #   - handlers/__init__.py：只有一行注释
-#   - handlers/doc_helpers/__init__.py：只有导入语句和 __all__，不包含核心实现
-# 核心业务逻辑都在 handlers/*.pyc 和 doc_helpers/*.pyc 中（字节码，无法用记事本查看）
+# 核心业务逻辑都在 handlers/*.pyc 中（字节码，无法用记事本查看）
 Write-Info "删除业务 .py 源文件（保留 main.py 和 __init__.py）..."
 $deletedCount = 0
 Get-ChildItem -Path $SidecarTargetDir -Recurse -Filter "*.py" -File | Where-Object { $_.Name -notin @("main.py", "__init__.py") } | ForEach-Object {
