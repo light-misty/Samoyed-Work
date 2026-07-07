@@ -570,6 +570,12 @@
     "cancel": "取消",
     "fileMessage": "确定要删除文件 {{name}} 吗？",
     "folderMessage": "确定要删除文件夹 {{name}} 吗？",
+    "sessionMessage": "确定要删除会话 \"{{name}}\" 吗？",
+    "workspaceMessage": "确定要删除工作区 \"{{name}}\" 吗？",
+    "providerMessage": "确定要删除提供者 \"{{name}}\" 吗？",
+    "templateMessage": "确定要删除模板 \"{{name}}\" 吗？",
+    "versionMessage": "确定要回滚到版本 \"{{name}}\" 吗？",
+    "clearSessionsMessage": "确定要清空工作区 \"{{name}}\" 的所有会话记录吗？",
     "permanentWarning": "此操作将永久删除，无法恢复。"
   },
   "errorBoundary": {
@@ -712,7 +718,11 @@
     "expand": "展开会话列表",
     "renameFailed": "重命名会话失败，请重试",
     "deleteFailed": "删除会话失败，请重试",
-    "deleteWorkspaceFailed": "删除工作区失败，请重试"
+    "deleteWorkspaceFailed": "删除工作区失败，请重试",
+    "moreActions": "更多操作",
+    "clearSessionHistory": "清空会话历史",
+    "clearSessionHistorySuccess": "已清空工作区的所有会话",
+    "clearSessionHistoryFailed": "清空会话历史失败，请重试"
   },
   "inputArea.removeAttachment": "移除 {{name}}",
   "update.checkFailedWithError": "检查更新失败: {{error}}"

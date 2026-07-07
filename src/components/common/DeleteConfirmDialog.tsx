@@ -2,14 +2,27 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "./Icon";
 
+type DeleteType = "file" | "folder" | "session" | "workspace" | "provider" | "template" | "version" | "clear-sessions";
+
+const DELETE_MESSAGE_KEY: Record<DeleteType, string> = {
+  file: "deleteConfirm.fileMessage",
+  folder: "deleteConfirm.folderMessage",
+  session: "deleteConfirm.sessionMessage",
+  workspace: "deleteConfirm.workspaceMessage",
+  provider: "deleteConfirm.providerMessage",
+  template: "deleteConfirm.templateMessage",
+  version: "deleteConfirm.versionMessage",
+  "clear-sessions": "deleteConfirm.clearSessionsMessage",
+};
+
 interface DeleteConfirmDialogProps {
   name: string;
-  isDir: boolean;
+  type: DeleteType;
   onConfirm: () => void;
   onCancel: () => void;
 }
 
-export function DeleteConfirmDialog({ name, isDir, onConfirm, onCancel }: DeleteConfirmDialogProps) {
+export function DeleteConfirmDialog({ name, type, onConfirm, onCancel }: DeleteConfirmDialogProps) {
   const { t } = useTranslation();
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -29,7 +42,7 @@ export function DeleteConfirmDialog({ name, isDir, onConfirm, onCancel }: Delete
         </div>
         <div className="del-body">
           <p className="del-message">
-            {isDir ? t("deleteConfirm.folderMessage", { name }) : t("deleteConfirm.fileMessage", { name })}
+            {t(DELETE_MESSAGE_KEY[type], { name })}
           </p>
           <p className="del-warning">{t("deleteConfirm.permanentWarning")}</p>
         </div>

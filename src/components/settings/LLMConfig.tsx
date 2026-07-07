@@ -124,7 +124,7 @@ export function LLMConfigTab() {
       {deleteTarget && (
         <DeleteConfirmDialog
           name={deleteTarget.name}
-          isDir={false}
+          type="provider"
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
         />

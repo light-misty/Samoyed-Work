@@ -138,6 +138,13 @@ export async function clearAllSessions(): Promise<number> {
   return result.data;
 }
 
+/** 清除指定工作区下的所有会话 */
+export async function clearWorkspaceSessions(workspaceId: string): Promise<number> {
+  const result = await safeInvoke(() => invoke<number>("clear_workspace_sessions", { workspaceId }), { context: "clearWorkspaceSessions" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
 /** 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话） */
 export async function updateSessionWorkspace(sessionId: string, workspaceId: string): Promise<void> {
   const result = await safeInvoke(() => invoke("update_session_workspace", { sessionId, workspaceId }), { context: "updateSessionWorkspace" });

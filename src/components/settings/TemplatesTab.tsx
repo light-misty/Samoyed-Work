@@ -221,7 +221,7 @@ export function TemplatesTab() {
       {deleteTarget && (
         <DeleteConfirmDialog
           name={getTemplateField(deleteTarget, 'name')}
-          isDir={false}
+          type="template"
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
         />

@@ -146,6 +146,32 @@ pub async fn update_session_title(
     Ok(())
 }
 
+/// 清除指定工作区下的所有会话
+#[tauri::command]
+pub async fn clear_workspace_sessions(
+    workspace_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<u64, CommandError> {
+    log::info!("clear_workspace_sessions 请求: workspace_id={}", workspace_id);
+    let conn = state.db.conn()?;
+    let session_ids = session_repo::delete_sessions_by_workspace(&conn, &workspace_id)?;
+    let count = session_ids.len() as u64;
+    log::info!("clear_workspace_sessions 成功: workspace_id={}, 已删除 {} 条会话", workspace_id, count);
+
+    // 发射会话更新事件，通知前端刷新列表
+    let emitter = AgentEmitter::new(app_handle);
+    for sid in &session_ids {
+        let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+            session_id: sid.clone(),
+            change_type: "deleted".to_string(),
+            data: None,
+        });
+    }
+
+    Ok(count)
+}
+
 /// 清除所有会话数据
 #[tauri::command]
 pub async fn clear_all_sessions(

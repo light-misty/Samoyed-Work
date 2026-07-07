@@ -334,7 +334,7 @@ export function VersionHistoryPanel({
       {rollbackTarget && (
         <DeleteConfirmDialog
           name={t('preview.rollbackToVersion') + ' ' + formatTimestamp(rollbackTarget.timestamp)}
-          isDir={false}
+          type="version"
           onConfirm={handleRollbackConfirm}
           onCancel={() => setRollbackTarget(null)}
         />

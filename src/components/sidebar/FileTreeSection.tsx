@@ -653,7 +653,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
       {deleteTarget && createPortal(
         <DeleteConfirmDialog
           name={deleteTarget.name}
-          isDir={deleteTarget.isDir}
+          type={deleteTarget.isDir ? "folder" : "file"}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteTarget(null)}
         />,

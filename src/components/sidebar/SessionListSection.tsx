@@ -77,6 +77,9 @@ export function SessionListSection({
   const [deleteConfirmTitle, setDeleteConfirmTitle] = useState("");
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null);
   const [deleteWorkspaceName, setDeleteWorkspaceName] = useState("");
+  const [activeDropdownWsId, setActiveDropdownWsId] = useState<string | null>(null);
+  const [clearSessionWsId, setClearSessionWsId] = useState<string | null>(null);
+  const [clearSessionWsName, setClearSessionWsName] = useState("");
 
   // 按工作区分组并排序
   const grouped = useMemo(() => {
@@ -115,7 +118,7 @@ export function SessionListSection({
     });
 
     return result;
-  }, [sessions, workspaces, currentWorkspaceId]);
+  }, [sessions, workspaces]);
 
   const toggleWorkspace = (workspaceId: string) => {
     setExpanded((prev) => ({ ...prev, [workspaceId]: !prev[workspaceId] }));
@@ -221,12 +224,73 @@ export function SessionListSection({
     setDeleteWorkspaceName("");
   };
 
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
+
+  const handleMoreClick = (e: MouseEvent, workspaceId: string) => {
+    e.stopPropagation();
+    const nextId = activeDropdownWsId === workspaceId ? null : workspaceId;
+    setActiveDropdownWsId(nextId);
+    if (nextId) {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    } else {
+      setDropdownPos(null);
+    }
+  };
+
+  const handleClearSessionClick = (e: MouseEvent, workspace: WorkspaceInfo) => {
+    e.stopPropagation();
+    setActiveDropdownWsId(null);
+    setClearSessionWsId(workspace.id);
+    setClearSessionWsName(workspace.name);
+  };
+
+  const handleConfirmClearSession = async () => {
+    if (!clearSessionWsId) return;
+    const { clearWorkspaceSessions } = useSessionStore.getState();
+    try {
+      await clearWorkspaceSessions(clearSessionWsId);
+      useToastStore.getState().addToast("success", t("sessionList.clearSessionHistorySuccess"));
+    } catch (err) {
+      console.error("[SessionListSection] 清空会话历史失败:", err);
+      useToastStore.getState().addToast("error", t("sessionList.clearSessionHistoryFailed"));
+      return;
+    }
+    setClearSessionWsId(null);
+    setClearSessionWsName("");
+  };
+
+  // 点击空白处或按 Escape 关闭下拉菜单
+  useEffect(() => {
+    if (!activeDropdownWsId) return;
+    const handleClick = (e: globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      const btn = document.querySelector(`[data-dropdown-btn="${activeDropdownWsId}"]`);
+      if (btn?.contains(target)) return;
+      const menu = document.querySelector(".ws-dropdown-menu");
+      if (menu?.contains(target)) return;
+      setActiveDropdownWsId(null);
+    };
+    const handleEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") setActiveDropdownWsId(null);
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClick);
+      document.addEventListener("keydown", handleEsc);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [activeDropdownWsId]);
+
   return (
     <>
       {deleteWorkspaceId && createPortal(
         <DeleteConfirmDialog
           name={deleteWorkspaceName}
-          isDir={true}
+          type="workspace"
           onConfirm={handleConfirmDeleteWorkspace}
           onCancel={() => {
             setDeleteWorkspaceId(null);
@@ -235,10 +299,22 @@ export function SessionListSection({
         />,
         document.body
       )}
+      {clearSessionWsId && createPortal(
+        <DeleteConfirmDialog
+          name={clearSessionWsName}
+          type="clear-sessions"
+          onConfirm={handleConfirmClearSession}
+          onCancel={() => {
+            setClearSessionWsId(null);
+            setClearSessionWsName("");
+          }}
+        />,
+        document.body
+      )}
       {deleteConfirmId && createPortal(
         <DeleteConfirmDialog
           name={deleteConfirmTitle}
-          isDir={false}
+          type="session"
           onConfirm={handleConfirmDelete}
           onCancel={() => {
             setDeleteConfirmId(null);
@@ -341,13 +417,46 @@ export function SessionListSection({
                         <Icon name="folder" size={13} />
                       </button>
                       <button
-                        className="workspace-action-btn workspace-action-btn-danger"
-                        title={t("workspace.removeWorkspace")}
-                        aria-label={t("workspace.removeWorkspace")}
-                        onClick={(e) => handleDeleteWorkspaceClick(e, workspace)}
+                        className="workspace-action-btn"
+                        title={t("sessionList.moreActions")}
+                        aria-label={t("sessionList.moreActions")}
+                        data-dropdown-btn={workspace.id}
+                        onClick={(e) => handleMoreClick(e, workspace.id)}
                       >
-                        <Icon name="trash" size={13} />
+                        <Icon name="more-vertical" size={13} />
                       </button>
+                      {activeDropdownWsId === workspace.id && dropdownPos && createPortal(
+                        <div className="ws-dropdown-overlay">
+                          <div
+                            className="ws-dropdown-menu"
+                            style={{ top: dropdownPos.top, right: dropdownPos.right }}
+                          >
+                            <button
+                              className="ws-dropdown-item ws-dropdown-item-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdownWsId(null);
+                                handleDeleteWorkspaceClick(e, workspace);
+                              }}
+                            >
+                              <span className="ws-dropdown-item-icon">
+                                <Icon name="trash" size={13} />
+                              </span>
+                              <span>{t("workspace.removeWorkspace")}</span>
+                            </button>
+                            <button
+                              className="ws-dropdown-item ws-dropdown-item-danger"
+                              onClick={(e) => handleClearSessionClick(e, workspace)}
+                            >
+                              <span className="ws-dropdown-item-icon">
+                                <Icon name="history" size={13} />
+                              </span>
+                              <span>{t("sessionList.clearSessionHistory")}</span>
+                            </button>
+                          </div>
+                        </div>,
+                        document.body
+                      )}
                     </div>
                   </div>
 
@@ -659,6 +768,66 @@ export function SessionListSection({
           border-radius: var(--radius-sm);
           background: var(--color-bg);
           outline: none;
+        }
+        .ws-dropdown-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+        }
+        .ws-dropdown-menu {
+          position: fixed;
+          min-width: 160px;
+          background: var(--color-bg-elevated, #fff);
+          border: 1px solid var(--color-border-light);
+          border-radius: var(--radius-md, 8px);
+          box-shadow: var(--shadow-md);
+          padding: 4px;
+          animation: ws-dropdown-in 0.12s ease-out;
+          z-index: 10000;
+        }
+        @keyframes ws-dropdown-in {
+          from {
+            opacity: 0;
+            transform: scale(0.95) translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        .ws-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 6px 10px;
+          border: none;
+          background: none;
+          border-radius: var(--radius-sm, 4px);
+          cursor: pointer;
+          font-size: 12px;
+          color: var(--color-text-primary);
+          transition: background 0.12s;
+          text-align: left;
+          white-space: nowrap;
+        }
+        .ws-dropdown-item:hover {
+          background: var(--color-bg-hover);
+        }
+        .ws-dropdown-item-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          border-radius: var(--radius-sm, 4px);
+          flex-shrink: 0;
+          color: var(--color-text-tertiary);
+          transition: all 0.12s;
+        }
+        .ws-dropdown-item-danger:hover .ws-dropdown-item-icon {
+          background: var(--color-error-bg);
+          color: var(--color-error);
         }
       `}</style>
     </>

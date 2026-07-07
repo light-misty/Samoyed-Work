@@ -159,7 +159,7 @@ export function WorkspaceSelector() {
       {deleteWorkspaceId && createPortal(
         <DeleteConfirmDialog
           name={deleteWorkspaceName}
-          isDir={true}
+          type="workspace"
           onConfirm={handleRemove}
           onCancel={() => {
             setDeleteWorkspaceId(null);

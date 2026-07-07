@@ -594,6 +594,12 @@
     "cancel": "Cancel",
     "fileMessage": "Are you sure you want to delete file {{name}}?",
     "folderMessage": "Are you sure you want to delete folder {{name}}?",
+    "sessionMessage": "Are you sure you want to delete session \"{{name}}\"?",
+    "workspaceMessage": "Are you sure you want to delete workspace \"{{name}}\"?",
+    "providerMessage": "Are you sure you want to delete provider \"{{name}}\"?",
+    "templateMessage": "Are you sure you want to delete template \"{{name}}\"?",
+    "versionMessage": "Are you sure you want to roll back to version \"{{name}}\"?",
+    "clearSessionsMessage": "Are you sure you want to clear all sessions in workspace \"{{name}}\"?",
     "permanentWarning": "This action is permanent and cannot be undone."
   },
   "errorBoundary": {
@@ -736,7 +742,11 @@
     "expand": "Expand session list",
     "renameFailed": "Failed to rename session, please retry",
     "deleteFailed": "Failed to delete session, please retry",
-    "deleteWorkspaceFailed": "Failed to delete workspace, please retry"
+    "deleteWorkspaceFailed": "Failed to delete workspace, please retry",
+    "moreActions": "More actions",
+    "clearSessionHistory": "Clear session history",
+    "clearSessionHistorySuccess": "All sessions in this workspace have been cleared",
+    "clearSessionHistoryFailed": "Failed to clear session history, please retry"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
   "update.checkFailedWithError": "Update check failed: {{error}}"

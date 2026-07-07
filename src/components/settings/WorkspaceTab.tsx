@@ -80,7 +80,7 @@ export function WorkspaceTab() {
       {removeTarget && (
         <DeleteConfirmDialog
           name={removeTarget.name}
-          isDir={true}
+          type="workspace"
           onConfirm={handleRemove}
           onCancel={() => setRemoveTarget(null)}
         />

@@ -11,7 +11,7 @@ export type IconName =
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "undo"
-  | "theme" | "moon" | "keyboard" | "info" | "image" | "book";
+  | "theme" | "moon" | "keyboard" | "info" | "image" | "book" | "more-vertical";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -411,6 +411,14 @@ const paths: Record<IconName, React.JSX.Element> = {
     <g key="book">
       <path d="M3 19C5 18 7 17.5 9 17.5C11 17.5 12 18 12 19V6C12 5 11 4.5 9 4.5C7 4.5 5 5 3 6V19Z" />
       <path d="M21 19C19 18 17 17.5 15 17.5C13 17.5 12 18 12 19V6C12 5 13 4.5 15 4.5C17 4.5 19 5 21 6V19Z" />
+    </g>
+  ),
+  // 更多（垂直三点）
+  "more-vertical": (
+    <g key="more-vertical">
+      <circle cx="12" cy="5" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="2" fill="currentColor" stroke="none" />
     </g>
   ),
 };

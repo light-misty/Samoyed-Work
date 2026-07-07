@@ -16,6 +16,7 @@ interface SessionState {
   updateSessionTitleLocal: (sessionId: string, title: string) => void;
   loadSessions: (workspaceId?: string) => Promise<void>;
   clearAllSessions: () => Promise<number>;
+  clearWorkspaceSessions: (workspaceId: string) => Promise<number>;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -125,6 +126,24 @@ export const useSessionStore = create<SessionState>((set) => ({
       return count;
     } catch (error) {
       console.error("[SessionStore] 清除所有会话失败:", error);
+      throw error;
+    }
+  },
+
+  // 清除指定工作区下的所有会话
+  clearWorkspaceSessions: async (workspaceId) => {
+    try {
+      const count = await tauriCmd.clearWorkspaceSessions(workspaceId);
+      set((state) => ({
+        sessions: state.sessions.filter((s) => s.workspaceId !== workspaceId),
+        currentSessionId:
+          state.currentSessionId && state.sessions.find((s) => s.id === state.currentSessionId)?.workspaceId === workspaceId
+            ? null
+            : state.currentSessionId,
+      }));
+      return count;
+    } catch (error) {
+      console.error("[SessionStore] 清除工作区会话失败:", error);
       throw error;
     }
   },
