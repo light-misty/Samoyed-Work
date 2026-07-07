@@ -58,8 +58,6 @@ export interface AppSettings {
   preferredProviderId?: string | null;
   /** Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测） */
   gitBashPath?: string;
-  /** 命令执行默认超时时间（秒），0 表示使用默认值 60 秒 */
-  commandTimeoutSecs?: number;
 }
 
 // ----- LLM 相关类型 -----

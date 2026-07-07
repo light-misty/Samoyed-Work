@@ -76,7 +76,6 @@ const defaultSettings: AppSettings = {
     autoCheck: true,
   },
   gitBashPath: "",
-  commandTimeoutSecs: 60,
 };
 
 interface SettingsState {

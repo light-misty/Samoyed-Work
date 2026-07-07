@@ -321,16 +321,15 @@ pub fn run() {
             );
 
             // 初始化 Tool 注册表并注册内置工具
-            // 读取命令执行配置（Git Bash 路径、命令超时）
-            let (git_bash_path, command_timeout_secs) = config_manager
+            // 读取 Git Bash 路径配置（命令超时由 LLM 自主决定）
+            let git_bash_path = config_manager
                 .load_app_settings()
-                .map(|s| (s.git_bash_path, s.command_timeout_secs))
-                .unwrap_or((String::new(), 0));
+                .map(|s| s.git_bash_path)
+                .unwrap_or_default();
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
             let scratchpad_states = crate::services::tool::builtin::register_builtin_tools(
                 &mut tool_registry,
                 git_bash_path,
-                command_timeout_secs,
             );
 
             log::info!("DocAgent 应用初始化完成");

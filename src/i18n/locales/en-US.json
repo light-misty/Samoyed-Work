@@ -174,8 +174,6 @@
       "gitBashPath": "Git Bash Path",
       "gitBashPathDesc": "Path to Git Bash executable for running shell commands. Leave empty to auto-detect from PATH",
       "gitBashPathPlaceholder": "e.g. C:\\Program Files\\Git\\bin\\bash.exe (empty for auto-detect)",
-      "commandTimeout": "Command Timeout (seconds)",
-      "commandTimeoutDesc": "Maximum wait time for shell command execution, auto-terminate on timeout (10-300 seconds)",
       "versionSnapshot": "Version Snapshots",
       "retentionPolicy": "Retention Policy",
       "byCount": "By count (latest {{count}})",

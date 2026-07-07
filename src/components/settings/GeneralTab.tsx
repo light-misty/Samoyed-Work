@@ -113,21 +113,6 @@ export function GeneralTab() {
             onChange={(e) => updateSettings({ gitBashPath: e.target.value })}
           />
         </div>
-
-        <div className="setting-row">
-          <div className="setting-info">
-            <div className="setting-label">{t('settings.general.commandTimeout')}</div>
-            <div className="setting-desc">{t('settings.general.commandTimeoutDesc')}</div>
-          </div>
-          <input
-            type="number"
-            className="setting-input setting-input-narrow"
-            min={10}
-            max={300}
-            value={settings.commandTimeoutSecs ?? 60}
-            onChange={(e) => updateSettings({ commandTimeoutSecs: Number(e.target.value) || 60 })}
-          />
-        </div>
       </div>
 
       <div className="settings-section">

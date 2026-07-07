@@ -174,8 +174,6 @@
       "gitBashPath": "Git Bash 路径",
       "gitBashPathDesc": "用于执行 Shell 命令的 Git Bash 可执行文件路径。留空则从 PATH 环境变量自动检测",
       "gitBashPathPlaceholder": "例如：C:\\Program Files\\Git\\bin\\bash.exe（留空自动检测）",
-      "commandTimeout": "命令执行超时（秒）",
-      "commandTimeoutDesc": "执行 Shell 命令的最大等待时间，超时后自动终止（10-300秒）",
       "versionSnapshot": "版本快照",
       "retentionPolicy": "保留策略",
       "byCount": "按数量（最近{{count}}个）",

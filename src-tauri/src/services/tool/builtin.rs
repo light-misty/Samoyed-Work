@@ -36,11 +36,9 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
 /// 注册所有内置工具
 /// 返回 Scratchpad 共享状态 Arc，供 AgentContext 在每轮迭代时读取笔记摘要
 /// git_bash_path: Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测）
-/// command_timeout_secs: 命令执行默认超时时间（秒，0 表示使用默认值 60）
 pub fn register_builtin_tools(
     registry: &mut ToolRegistry,
     git_bash_path: String,
-    command_timeout_secs: u64,
 ) -> SharedScratchpadStates {
     log::info!("开始注册内置工具");
     registry.register(Box::new(ListDirectoryTool));
@@ -68,10 +66,10 @@ pub fn register_builtin_tools(
 
     // 代码执行工具：write_script + run_command
     // 让智能体通过编写脚本文件并执行命令解决用户问题
+    // 命令超时由 LLM 通过 timeout 参数自主决定，最大 300 秒
     registry.register(Box::new(WriteScriptTool));
     registry.register(Box::new(RunCommandTool {
         git_bash_path,
-        default_timeout_secs: command_timeout_secs,
     }));
 
     log::info!("内置工具注册完成, 共注册 16 个工具");
@@ -760,7 +758,7 @@ mod tests {
     #[test]
     fn test_register_builtin_tools() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _scratchpad_states = register_builtin_tools(&mut registry, String::new());
 
         // 验证 16 个工具都已注册（8 个原有 + 5 个阶段三新增 + 1 个 scratchpad + 2 个代码执行工具）
         let tools = registry.list_tools();
@@ -792,7 +790,7 @@ mod tests {
     #[test]
     fn test_tool_definitions_count() {
         let mut registry = ToolRegistry::new();
-        let _scratchpad_states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _scratchpad_states = register_builtin_tools(&mut registry, String::new());
 
         let defs = registry.tool_definitions();
         assert_eq!(defs.len(), 16);
@@ -809,7 +807,7 @@ mod tests {
     #[test]
     fn test_tool_info_properties() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tools = registry.list_tools();
         for tool in &tools {
@@ -826,7 +824,7 @@ mod tests {
     #[tokio::test]
     async fn test_file_exists_nonexistent() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("file_exists").unwrap();
         let result = tool.execute(json!({
@@ -843,7 +841,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("read_file").unwrap();
         let result = tool.execute(json!({
@@ -859,7 +857,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_directory_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("create_directory").unwrap();
         let result = tool.execute(json!({
@@ -875,7 +873,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_text_file_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("write_text_file").unwrap();
         let result = tool.execute(json!({
@@ -892,7 +890,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_file_missing_workspace() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("delete_file").unwrap();
         let result = tool.execute(json!({
@@ -908,7 +906,7 @@ mod tests {
     #[tokio::test]
     async fn test_search_files_empty_query_and_extensions() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("search_files").unwrap();
         let result = tool.execute(json!({
@@ -923,7 +921,7 @@ mod tests {
     #[tokio::test]
     async fn test_file_info_missing_path() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("file_info").unwrap();
         let result = tool.execute(json!({
@@ -941,7 +939,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_and_read_file_with_gbk_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_encoding_test");
@@ -987,7 +985,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_default_utf8_encoding() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_utf8_test");
@@ -1022,7 +1020,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_unsupported_encoding_fallback() {
         let mut registry = ToolRegistry::new();
-        let _ = register_builtin_tools(&mut registry, String::new(), 0);
+        let _ = register_builtin_tools(&mut registry, String::new());
 
         // 创建临时工作区目录
         let temp_dir = std::env::temp_dir().join("docagent_fallback_test");
@@ -1057,7 +1055,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
 
         let tool = registry.get_arc("update_notes").unwrap();
 
@@ -1090,7 +1088,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_read_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 先添加两条笔记
@@ -1125,7 +1123,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_clear_notes() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 添加笔记
@@ -1158,7 +1156,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_session_isolation() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         // session-A 添加笔记
@@ -1199,7 +1197,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_missing_session_id() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1216,7 +1214,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_add_empty_content() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1233,7 +1231,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_unknown_action() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         let result = tool.execute(json!({
@@ -1249,7 +1247,7 @@ mod tests {
     #[tokio::test]
     async fn test_scratchpad_content_length_limit() {
         let mut registry = ToolRegistry::new();
-        let _states = register_builtin_tools(&mut registry, String::new(), 0);
+        let _states = register_builtin_tools(&mut registry, String::new());
         let tool = registry.get_arc("update_notes").unwrap();
 
         // 构造 1000 字符的长内容
@@ -3354,11 +3352,9 @@ fn infer_script_language(filename: &str, language: &str) -> (String, &'static st
 pub struct RunCommandTool {
     /// Git Bash 可执行文件路径（空字符串表示自动检测）
     pub git_bash_path: String,
-    /// 默认超时时间（秒）
-    pub default_timeout_secs: u64,
 }
 
-/// 命令执行默认超时时间（秒），配置值为 0 时使用
+/// 命令执行默认超时时间（秒），LLM 未传 timeout 参数时使用
 const FALLBACK_COMMAND_TIMEOUT_SECS: u64 = 60;
 
 #[async_trait]
@@ -3403,12 +3399,11 @@ impl Tool for RunCommandTool {
         let command = params["command"].as_str().unwrap_or("").trim().to_string();
         let working_dir = params["working_dir"].as_str().unwrap_or("");
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
+
+        // 命令超时由 LLM 通过 timeout 参数决定，最大 300 秒
+        // LLM 未传 timeout 时使用默认值 60 秒
         let timeout = params["timeout"].as_u64()
-            .unwrap_or(if self.default_timeout_secs > 0 {
-                self.default_timeout_secs
-            } else {
-                FALLBACK_COMMAND_TIMEOUT_SECS
-            })
+            .unwrap_or(FALLBACK_COMMAND_TIMEOUT_SECS)
             .min(300);
 
         // 参数校验
