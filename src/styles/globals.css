@@ -857,39 +857,36 @@
 
 /* ===== run_command 命令执行详情样式 ===== */
 
-/* 命令详情容器 */
+/* 合并后的卡片容器 */
 .wf-run-command-detail {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-top: 2px;
+  padding: 6px 8px;
+  background: var(--color-bg-sub);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+  max-height: 200px;
+  overflow-y: auto;
 }
 
-/* 命令展示行 */
-.wf-run-command-row {
+/* 卡片头部：Bash 标签 + 工作区 */
+.wf-run-command-header {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-/* 命令代码块 */
-.wf-run-command-code {
+/* Bash 标签 */
+.wf-run-command-bash-label {
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-sub);
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--color-border-light);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-/* 命令提示符 $ */
-.wf-run-command-prompt {
-  color: var(--color-accent);
+  font-size: 11px;
   font-weight: 600;
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* 工作目录标签 */
@@ -902,19 +899,31 @@
   max-width: 240px;
 }
 
-/* 执行结果区域 */
-.wf-run-command-output {
+/* 命令代码块（无边框卡片样式，纯文本） */
+.wf-run-command-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  padding: 2px 6px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 命令提示符 $ */
+.wf-run-command-prompt {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* 执行结果区域（无边框，纯内容） */
+.wf-run-command-output-area {
   display: flex;
   flex-direction: column;
   gap: 3px;
   margin-top: 2px;
-  padding: 6px 8px;
-  background: var(--color-bg-sub);
-  border-radius: 4px;
-  border: 1px solid var(--color-border-light);
 }
 
-/* 退出码标签 */
+/* 退出码标签（无背景色） */
 .wf-run-command-exit {
   display: inline-block;
   font-size: 11px;
@@ -926,12 +935,12 @@
 
 .wf-exit-ok {
   color: #16a34a;
-  background: rgba(22, 163, 74, 0.1);
+  background: transparent;
 }
 
 .wf-exit-err {
   color: #dc2626;
-  background: rgba(220, 38, 38, 0.1);
+  background: transparent;
 }
 
 /* 输出标签 */

@@ -73,15 +73,12 @@ export function ToolNode({ node }: ToolNodeProps) {
           )}
         </div>
 
-        {/* run_command 工具：展示完整命令、工作目录和执行结果 */}
+        {/* run_command 工具：合并卡片展示 Bash 标签、命令和执行结果 */}
         {isRunCommand && command && (
           <div className="wf-run-command-detail">
-            {/* 命令展示行 */}
-            <div className="wf-run-command-row">
-              <code className="wf-run-command-code">
-                <span className="wf-run-command-prompt">$ </span>
-                {command}
-              </code>
+            {/* 卡片头部：Bash 标签 + 工作区 */}
+            <div className="wf-run-command-header">
+              <span className="wf-run-command-bash-label">Bash</span>
               {/* 工作目录（非默认时展示） */}
               {workingDir && (
                 <span className="wf-run-command-cwd" title={workingDir}>
@@ -89,10 +86,14 @@ export function ToolNode({ node }: ToolNodeProps) {
                 </span>
               )}
             </div>
-
+            {/* 命令展示行 */}
+            <code className="wf-run-command-code">
+              <span className="wf-run-command-prompt">$ </span>
+              {command}
+            </code>
             {/* 执行结果（完成后展示） */}
             {!isRunning && hasOutput && (
-              <div className="wf-run-command-output">
+              <div className="wf-run-command-output-area">
                 {/* 退出码标签 */}
                 {exitCode !== undefined && (
                   <span
@@ -131,10 +132,9 @@ export function ToolNode({ node }: ToolNodeProps) {
                 )}
               </div>
             )}
-
             {/* 执行成功但无输出 */}
             {!isRunning && !hasOutput && data.success && (
-              <div className="wf-run-command-output">
+              <div className="wf-run-command-output-area">
                 <span className="wf-run-command-exit wf-exit-ok">
                   {t('toolBrief.exitCode')}: {exitCode ?? 0}
                 </span>
