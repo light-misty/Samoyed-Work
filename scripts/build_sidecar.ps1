@@ -1,4 +1,4 @@
-# DocAgent Python Sidecar 构建脚本
+﻿# DocAgent Python Sidecar 构建脚本
 # 下载 Python Embeddable Distribution + 安装依赖 + 复制 sidecar 源码 + 编译 .pyc 隐藏源码
 # 最终产物 sidecar_dist/ 通过 tauri.conf.json 的 bundle.resources 打包到 NSIS 安装包
 #
@@ -218,17 +218,14 @@ Write-Host $pthContent
 # Python Embeddable 默认禁用 site，导致 pip 安装的第三方库无法 import
 # 启用方式：取消注释 "import site" 行（去掉行首的 "# "）
 $newPthContent = $pthContent -replace '(?m)^#\s*import\s+site\s*$', 'import site'
-
-if ($newPthContent -eq $pthContent) {
-    # 内容未变化，可能是已启用或格式异常
-    if ($pthContent -match '(?m)^import\s+site\s*$') {
-        Write-Info "site 已启用（无需修改）"
-    } else {
-        Write-Warn "未找到 '#import site' 行，尝试追加 'import site'"
-        $newPthContent = $pthContent.TrimEnd() + "`nimport site`n"
-    }
-} else {
+$pthChanged = ($newPthContent -ne $pthContent)
+if ($pthChanged) {
     Write-Info "已取消注释 'import site'"
+} elseif ($pthContent -match '(?m)^import\s+site\s*$') {
+    Write-Info "site 已启用（无需修改）"
+} else {
+    Write-Warn "未找到 '#import site' 行，尝试追加 'import site'"
+    $newPthContent = $pthContent.TrimEnd() + "`r`nimport site`r`n"
 }
 
 Set-Content -Path $PthFile -Value $newPthContent -NoNewline:$false
