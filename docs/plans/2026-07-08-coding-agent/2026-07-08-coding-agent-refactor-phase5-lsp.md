@@ -234,6 +234,47 @@ pub struct LspSymbol {
     pub documentation: Option<String>,
 }
 
+/// LSP 调用层级项(prepareCallHierarchy 返回的单个项)
+/// 参照 LSP 规范 CallHierarchyItem 定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallHierarchyItem {
+    /// 符号名称
+    pub name: String,
+    /// 符号类型(复用 symbol_kind_name 的类型枚举)
+    pub kind: u8,
+    /// 文件 URI
+    pub uri: String,
+    /// 文件路径(从 URI 解析)
+    pub file_path: String,
+    /// 符号的完整范围
+    pub range: LspLocation,
+    /// 符号被选中时的范围(通常包含在 range 内)
+    pub selection_range: LspLocation,
+    /// 详细信息(可选)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// 标签(可选,LSP 1=Deprecated)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<u8>>,
+}
+
+/// LSP 调用层级调用项(incomingCalls/outgoingCalls 返回的单个项)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallHierarchyCall {
+    /// 调用方向("incoming" 或 "outgoing")
+    pub direction: String,
+    /// 调用方(incoming 时为此项,即谁调用了目标符号)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<CallHierarchyItem>,
+    /// 被调用方(outgoing 时为此项,即目标符号调用了谁)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<CallHierarchyItem>,
+    /// 调用发生的位置范围列表(incoming: from 中调用目标的位置;outgoing: 目标中调用 to 的位置)
+    pub from_ranges: Vec<LspLocation>,
+}
+
 /// 严重级别名称
 pub fn severity_name(severity: u8) -> &'static str {
     match severity {
@@ -719,7 +760,7 @@ impl LspClient {
     }
 
     /// 请求 textDocument/documentSymbol(获取文档符号列表)
-    /// TODO: 补充完整实现,解析 DocumentSymbol 数组为 LspSymbol
+    /// 解析 DocumentSymbol[] 响应(含递归 children)为扁平的 LspSymbol 列表
     pub async fn document_symbol(
         &self,
         file_path: &Path,
@@ -729,14 +770,13 @@ impl LspClient {
             "textDocument": { "uri": uri }
         })).await?;
 
-        // TODO: 解析 DocumentSymbol[] 响应为 LspSymbol 列表
         // DocumentSymbol 包含: name, kind, range, selectionRange, detail?, children?
-        let _ = result; // 暂时忽略,待实现
-        Ok(vec![])
+        // 递归解析(含 children),展平为 LspSymbol 列表
+        Ok(parse_document_symbols(&result, file_path))
     }
 
     /// 请求 workspace/symbol(搜索工作区符号)
-    /// TODO: 补充完整实现,解析 SymbolInformation 数组为 LspSymbol
+    /// 解析 SymbolInformation[] 响应为 LspSymbol 列表
     pub async fn workspace_symbol(
         &self,
         query: &str,
@@ -745,14 +785,12 @@ impl LspClient {
             "query": query
         })).await?;
 
-        // TODO: 解析 SymbolInformation[] 响应为 LspSymbol 列表
         // SymbolInformation 包含: name, kind, location, containerName?
-        let _ = result; // 暂时忽略,待实现
-        Ok(vec![])
+        Ok(parse_symbol_informations(&result))
     }
 
     /// 请求 textDocument/implementation(跳转到实现)
-    /// TODO: 补充完整实现,解析响应为 LspLocation 列表
+    /// 复用 parse_locations 解析响应为 LspLocation 列表
     pub async fn goto_implementation(
         &self,
         file_path: &Path,
@@ -765,27 +803,73 @@ impl LspClient {
             "position": { "line": line, "character": character }
         })).await?;
 
-        // TODO: 复用 parse_locations 解析响应
         Ok(parse_locations(&result))
     }
 
     /// 请求 textDocument/prepareCallHierarchy(准备调用层级)
-    /// TODO: 补充完整实现,定义 CallHierarchyItem 类型并解析响应
+    /// 返回 CallHierarchyItem 列表,供后续 incoming_calls/outgoing_calls 使用
     pub async fn prepare_call_hierarchy(
         &self,
         file_path: &Path,
         line: u32,
         character: u32,
-    ) -> Result<serde_json::Value, CommandError> {
+    ) -> Result<Vec<CallHierarchyItem>, CommandError> {
         let uri = path_to_uri(file_path);
         let result = self.request("textDocument/prepareCallHierarchy", json!({
             "textDocument": { "uri": uri },
             "position": { "line": line, "character": character }
         })).await?;
 
-        // TODO: 定义 CallHierarchyItem 结构并解析响应
-        // 后续 incomingCalls/outgoingCalls 请求需要使用 prepareCallHierarchy 返回的 item
-        Ok(result)
+        // CallHierarchyItem 包含: name, kind, uri, range, selectionRange, detail?, tags?
+        Ok(parse_call_hierarchy_items(&result))
+    }
+
+    /// 请求 callHierarchy/incomingCalls(查找谁调用了目标符号)
+    /// items 为 prepareCallHierarchy 返回的 CallHierarchyItem 列表
+    pub async fn incoming_calls(
+        &self,
+        items: &[CallHierarchyItem],
+    ) -> Result<Vec<CallHierarchyCall>, CommandError> {
+        let items_json: Vec<Value> = items.iter().map(|item| {
+            json!({
+                "name": item.name,
+                "kind": item.kind,
+                "uri": item.uri,
+                "range": range_to_json(&item.range),
+                "selectionRange": range_to_json(&item.selection_range),
+            })
+        }).collect();
+
+        let result = self.request("callHierarchy/incomingCalls", json!({
+            "items": items_json
+        })).await?;
+
+        // CallHierarchyIncomingCall 包含: from (CallHierarchyItem), fromRanges (Range[])
+        Ok(parse_call_hierarchy_calls(&result, "incoming"))
+    }
+
+    /// 请求 callHierarchy/outgoingCalls(查找目标符号调用了谁)
+    /// items 为 prepareCallHierarchy 返回的 CallHierarchyItem 列表
+    pub async fn outgoing_calls(
+        &self,
+        items: &[CallHierarchyItem],
+    ) -> Result<Vec<CallHierarchyCall>, CommandError> {
+        let items_json: Vec<Value> = items.iter().map(|item| {
+            json!({
+                "name": item.name,
+                "kind": item.kind,
+                "uri": item.uri,
+                "range": range_to_json(&item.range),
+                "selectionRange": range_to_json(&item.selection_range),
+            })
+        }).collect();
+
+        let result = self.request("callHierarchy/outgoingCalls", json!({
+            "items": items_json
+        })).await?;
+
+        // CallHierarchyOutgoingCall 包含: to (CallHierarchyItem), fromRanges (Range[])
+        Ok(parse_call_hierarchy_calls(&result, "outgoing"))
     }
 
     /// 停止 LSP 服务器
@@ -813,6 +897,22 @@ impl LspClient {
         info.as_ref()
             .map(|i| i.status.clone())
             .unwrap_or(LspServerStatus::Stopped)
+    }
+
+    /// 获取完整的 LSP 服务器信息(供 LspServerManager.get_all_status 使用)
+    pub async fn get_server_info(&self) -> Option<LspServerInfo> {
+        let info = self.server_info.lock().await;
+        info.as_ref().map(|i| {
+            let mut cloned = i.clone();
+            // 更新最后活动时间
+            cloned.last_activity_at = current_timestamp_ms();
+            cloned
+        })
+    }
+
+    /// 获取语言名称
+    pub fn language(&self) -> &str {
+        &self.language
     }
 }
 
@@ -862,6 +962,201 @@ fn current_timestamp_ms() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+// ============ 符号与调用层级解析辅助函数 ============
+
+/// 从 LSP Range JSON 解析位置(不含 uri/file_path,需从外部传入)
+fn parse_range_only(range: &Value, uri: &str, file_path: &str) -> Option<LspLocation> {
+    let start = range.get("start")?;
+    let end = range.get("end")?;
+    Some(LspLocation {
+        uri: uri.to_string(),
+        file_path: file_path.to_string(),
+        start_line: start.get("line").and_then(|l| l.as_u64()).unwrap_or(0) as u32,
+        start_character: start.get("character").and_then(|c| c.as_u64()).unwrap_or(0) as u32,
+        end_line: end.get("line").and_then(|l| l.as_u64()).unwrap_or(0) as u32,
+        end_character: end.get("character").and_then(|c| c.as_u64()).unwrap_or(0) as u32,
+    })
+}
+
+/// 将 LspLocation 转为 LSP Range JSON(用于构建请求参数)
+fn range_to_json(loc: &LspLocation) -> Value {
+    json!({
+        "start": { "line": loc.start_line, "character": loc.start_character },
+        "end": { "line": loc.end_line, "character": loc.end_character }
+    })
+}
+
+/// 解析 DocumentSymbol[] 响应为扁平的 LspSymbol 列表(递归处理 children)
+fn parse_document_symbols(result: &Value, file_path: &Path) -> Vec<LspSymbol> {
+    let uri = path_to_uri(file_path);
+    let file_path_str = file_path.to_string_lossy().to_string();
+    let mut symbols = Vec::new();
+
+    if let Some(arr) = result.as_array() {
+        for doc_symbol in arr {
+            collect_document_symbols(doc_symbol, &uri, &file_path_str, &mut symbols);
+        }
+    }
+    symbols
+}
+
+/// 递归收集 DocumentSymbol(含 children 展平)
+fn collect_document_symbols(
+    doc_symbol: &Value,
+    uri: &str,
+    file_path: &str,
+    out: &mut Vec<LspSymbol>,
+) {
+    let name = match doc_symbol.get("name").and_then(|n| n.as_str()) {
+        Some(n) => n.to_string(),
+        None => return,
+    };
+    let kind = doc_symbol.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) as u8;
+    let location = doc_symbol
+        .get("range")
+        .and_then(|r| parse_range_only(r, uri, file_path))
+        .unwrap_or(LspLocation {
+            uri: uri.to_string(),
+            file_path: file_path.to_string(),
+            start_line: 0,
+            start_character: 0,
+            end_line: 0,
+            end_character: 0,
+        });
+    let detail = doc_symbol
+        .get("detail")
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+
+    out.push(LspSymbol {
+        name,
+        kind,
+        location,
+        detail,
+        documentation: None, // DocumentSymbol 通常不含 documentation 字段
+    });
+
+    // 递归处理 children
+    if let Some(children) = doc_symbol.get("children").and_then(|c| c.as_array()) {
+        for child in children {
+            collect_document_symbols(child, uri, file_path, out);
+        }
+    }
+}
+
+/// 解析 SymbolInformation[] 响应为 LspSymbol 列表
+fn parse_symbol_informations(result: &Value) -> Vec<LspSymbol> {
+    let arr = match result.as_array() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+
+    arr.iter()
+        .filter_map(|sym_info| {
+            let name = sym_info.get("name")?.as_str()?.to_string();
+            let kind = sym_info.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) as u8;
+            let location = parse_single_location(sym_info.get("location")?)?;
+            // containerName 作为 detail 展示
+            let detail = sym_info
+                .get("containerName")
+                .and_then(|d| d.as_str())
+                .map(|s| s.to_string());
+
+            Some(LspSymbol {
+                name,
+                kind,
+                location,
+                detail,
+                documentation: None,
+            })
+        })
+        .collect()
+}
+
+/// 解析 CallHierarchyItem[] 响应为 CallHierarchyItem 列表
+fn parse_call_hierarchy_items(result: &Value) -> Vec<CallHierarchyItem> {
+    let arr = match result.as_array() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+
+    arr.iter().filter_map(parse_single_call_hierarchy_item).collect()
+}
+
+/// 解析单个 CallHierarchyItem(辅助函数,供 items 和 calls 复用)
+fn parse_single_call_hierarchy_item(item: &Value) -> Option<CallHierarchyItem> {
+    let name = item.get("name")?.as_str()?.to_string();
+    let kind = item.get("kind").and_then(|k| k.as_u64()).unwrap_or(0) as u8;
+    let uri = item.get("uri")?.as_str()?.to_string();
+    let file_path = uri.strip_prefix("file:///").unwrap_or(&uri).to_string();
+
+    let range = parse_range_only(item.get("range")?, &uri, &file_path)?;
+    let selection_range = parse_range_only(item.get("selectionRange")?, &uri, &file_path)?;
+
+    let detail = item
+        .get("detail")
+        .and_then(|d| d.as_str())
+        .map(|s| s.to_string());
+    let tags = item
+        .get("tags")
+        .and_then(|t| t.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|n| n as u8)).collect());
+
+    Some(CallHierarchyItem {
+        name,
+        kind,
+        uri,
+        file_path,
+        range,
+        selection_range,
+        detail,
+        tags,
+    })
+}
+
+/// 解析 callHierarchy/incomingCalls 或 outgoingCalls 响应为 CallHierarchyCall 列表
+/// direction: "incoming" 或 "outgoing"
+fn parse_call_hierarchy_calls(result: &Value, direction: &str) -> Vec<CallHierarchyCall> {
+    let arr = match result.as_array() {
+        Some(a) => a,
+        None => return Vec::new(),
+    };
+
+    // incoming: { from: CallHierarchyItem, fromRanges: Range[] }
+    // outgoing: { to: CallHierarchyItem, fromRanges: Range[] }
+    let item_key = if direction == "incoming" { "from" } else { "to" };
+
+    arr.iter()
+        .filter_map(|call| {
+            let item = parse_single_call_hierarchy_item(call.get(item_key)?)?;
+
+            let from_ranges: Vec<LspLocation> = call
+                .get("fromRanges")
+                .and_then(|r| r.as_array())
+                .map(|ranges| {
+                    ranges
+                        .iter()
+                        .filter_map(|range| parse_range_only(range, &item.uri, &item.file_path))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let (from, to) = if direction == "incoming" {
+                (Some(item), None)
+            } else {
+                (None, Some(item))
+            };
+
+            Some(CallHierarchyCall {
+                direction: direction.to_string(),
+                from,
+                to,
+                from_ranges,
+            })
+        })
+        .collect()
 }
 ```
 
@@ -971,26 +1266,59 @@ impl LspServerManager {
         Ok(())
     }
 
-    /// 获取所有 LSP 服务器状态
+    /// 获取所有 LSP 服务器状态(从各 LspClient 获取真实字段)
     pub async fn get_all_status(&self) -> Vec<LspServerInfo> {
         let clients = self.clients.read().await;
+        let workspace_root = self.workspace_root.read().await;
+
         let mut statuses = Vec::new();
         for (_, client) in clients.iter() {
-            // 简化:返回基本信息
-            let status = client.get_status().await;
-            statuses.push(LspServerInfo {
-                language: String::new(), // 实际应从 client 获取
-                server_name: None,
-                server_version: None,
-                workspace_root: PathBuf::new(),
-                status,
-                capabilities: None,
-                started_at: 0,
-                last_activity_at: 0,
-                error: None,
-            });
+            if let Some(info) = client.get_server_info().await {
+                statuses.push(info);
+            } else {
+                // server_info 为 None(尚未初始化完成),返回基本占位信息
+                statuses.push(LspServerInfo {
+                    language: client.language().to_string(),
+                    server_name: None,
+                    server_version: None,
+                    workspace_root: workspace_root.clone(),
+                    status: client.get_status().await,
+                    capabilities: None,
+                    started_at: 0,
+                    last_activity_at: 0,
+                    error: Some("服务器信息尚未初始化".to_string()),
+                });
+            }
         }
         statuses
+    }
+
+    /// 搜索工作区符号(遍历所有已启动的 LSP 服务器,聚合结果)
+    /// workspace_symbol 不绑定特定文件,需向所有已就绪的服务器查询
+    pub async fn workspace_symbol(&self, query: &str) -> Result<Vec<LspSymbol>, CommandError> {
+        let clients = self.clients.read().await;
+        let mut all_symbols = Vec::new();
+
+        for (_, client) in clients.iter() {
+            // 仅向已就绪的服务器查询
+            if client.get_status().await != LspServerStatus::Ready {
+                continue;
+            }
+
+            match client.workspace_symbol(query).await {
+                Ok(symbols) => all_symbols.extend(symbols),
+                Err(e) => {
+                    // 单个服务器查询失败不中断整体流程,记录警告后继续
+                    log::warn!(
+                        "workspace_symbol 查询失败(language={}): {}",
+                        client.language(),
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok(all_symbols)
     }
 
     /// 更新工作区根目录(切换工作区时调用)
@@ -1781,7 +2109,7 @@ impl LspTool {
     }
 
     /// workspace_symbol 操作:搜索工作区符号
-    /// TODO: 实现 LSP workspace/symbol 请求(需遍历所有已启动的语言服务器)
+    /// 实现 LSP workspace/symbol 请求(遍历所有已启动的语言服务器,聚合结果)
     async fn try_lsp_workspace_symbol(
         &self,
         params: &Value,
@@ -1873,7 +2201,7 @@ impl LspTool {
 
     /// call_hierarchy 操作:获取调用层级
     /// direction=incoming 查找谁调用了该符号,outgoing 查找该符号调用了谁
-    /// TODO: 实现 LSP textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + callHierarchy/outgoingCalls
+    /// 实现 LSP textDocument/prepareCallHierarchy + callHierarchy/incomingCalls + callHierarchy/outgoingCalls
     async fn try_lsp_call_hierarchy(
         &self,
         params: &Value,
@@ -2931,12 +3259,12 @@ async fn acceptance_lsp_server_lifecycle() {
 
 | 阶段 | 主题 | 任务数 | 状态 |
 |------|------|--------|------|
-| 阶段 1 | 核心架构与工具链 | 15 | 完成 |
+| 阶段 1 | 核心架构与工具链 | 16 | 完成 |
 | 阶段 2 | 权限系统与 Agent 模式 | 19 | 完成 |
 | 阶段 3 | Skill 系统与上下文管理 | 22 | 完成 |
-| 阶段 4 | 子 Agent 与高级工具 | 18 | 完成 |
-| 阶段 5 | LSP 集成 | 20 | 完成 |
-| **总计** | | **94** | **全部完成** |
+| 阶段 4 | 子 Agent 与高级工具 | 19 | 完成 |
+| 阶段 5 | LSP 集成 | 17 | 完成 |
+| **总计** | | **93** | **全部完成** |
 
 DocAgent 已从文档处理 Agent 成功改造为编程 Agent,具备:
 - 完整的代码生成与执行能力(阶段 1)

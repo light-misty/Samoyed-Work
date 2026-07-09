@@ -16,6 +16,8 @@ DocAgent 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust + Re
 
 随着产品定位调整,需将其改造为通用编程 Agent 应用(类似 Claude Code、OpenCode、Codex),让智能体通过编写代码处理任何事情。**但文档处理能力并不废弃**:通过新增 `Document` Agent 模式(与 Plan/Build 同级),用户切换到 Document 模式后,4 个文档 Handler 才被动态启用(出现在 LLM 可见的工具列表中);在 Plan/Build 模式下,这些 Handler 不会出现在工具列表中,LLM 完全感知不到它们的存在。
 
+> **重要说明**:`Document` 模式为 DocAgent 原创设计,OpenCode 实际只有 `build`/`plan` 两个 primary 模式(外加 `general`/`explore` 等 subagent)。DocAgent 新增 Document 模式的目的是保留原有的文档处理能力,使应用在获得编程 Agent 能力的同时不丢失文档处理特色。
+
 ### 1.2 改造目标
 
 参照开源编程 Agent [OpenCode](https://github.com/sst/opencode) (sst/opencode, branch 2.0) 的功能实现,对 DocAgent 进行大型改造:
@@ -58,13 +60,18 @@ DocAgent 起初定位为 AI 文档处理桌面应用,基于 Tauri 2.x (Rust + Re
 
 ### 2.2 系统提示词架构对比
 
-OpenCode 系统提示词架构(3 段,已删除 Provider 特定 prompt):
+OpenCode 系统提示词架构(多段式):
+
+> **说明**:经源码分析,OpenCode 实际采用多段式架构(非严格的 3 段),组装顺序为:基础 prompt + 环境信息 + AGENTS.md + Agent 特定 prompt + Skill 清单 + MCP 指令。
 
 ```
 System Prompt
-├── 环境信息 (工作目录、Git 仓库状态、平台信息、当前日期)
-├── 自定义规则 (AGENTS.md: 项目级 + 全局级 ~/.agent/AGENTS.md)
-└── Agent 特定 prompt (build/plan/document,含身份、规则、工具策略、方法论等)
+├── 基础 prompt (系统内置核心提示词,OpenCode 原实现按 Provider 分类为 default.txt / anthropic / gpt / gemini 等,DocAgent 改造为统一基础 prompt,不按 Provider 区分)
+├── 环境信息 (工作目录、workspace root、Git 状态、平台、日期、模型 ID)
+├── 自定义规则 (AGENTS.md: 全局 ~/.config/opencode/AGENTS.md + 项目级向上查找)
+├── Agent 特定 prompt (build/plan/compaction/title/summary 等)
+├── Skill 清单 (XML 格式 <available_skills>)
+└── MCP 指令 (XML 格式 <mcp_instructions>)
 ```
 
 **DocAgent 现有系统提示词(分层架构)**:
@@ -83,7 +90,7 @@ System Prompt
 └── Layer 7: 示例层 (按需注入)
 ```
 
-**改造方向**:采用 OpenCode 的 3 段系统提示词架构(环境信息 + 自定义规则 + Agent 特定 prompt),删除分层架构和 Provider 特定提示,内容彻底重写为编程 Agent。
+**改造方向**:采用 OpenCode 的多段式系统提示词架构(基础 prompt + 环境信息 + AGENTS.md + Agent 特定 prompt + Skill 清单),删除现有分层架构,内容彻底重写为编程 Agent。基础 prompt 保留为系统内置的统一核心提示词,不再按 Provider 区分加载。
 
 ### 2.3 工具链对比
 

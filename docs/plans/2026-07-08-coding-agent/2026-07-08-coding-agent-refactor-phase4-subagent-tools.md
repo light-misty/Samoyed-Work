@@ -4,7 +4,7 @@
 > **创建日期**:2026-07-08
 > **阶段目标**:实现 Task 工具(子 Agent 委托)、WebFetch 工具(URL 内容获取)、WebSearch 工具(网络搜索),扩展 Agent 的任务分解与信息获取能力
 > **依赖阶段**:[阶段 1:核心架构与工具链](./2026-07-08-coding-agent-refactor-phase1-core.md)、[阶段 2:权限系统与 Agent 模式](./2026-07-08-coding-agent-refactor-phase2-permission.md)、[阶段 3:Skill 系统与上下文管理](./2026-07-08-coding-agent-refactor-phase3-skill-context.md)
-> **预计任务数**:18 个(T4.01-T4.18)
+> **预计任务数**:19 个(T4.01-T4.19,含 question 工具)
 > **v1.1 修订**:子 Agent 继承父 Agent 的 AgentMode(含 Document),工具列表需按模式过滤(非 Document 模式下文档 Handler 不对子 Agent 可见)
 
 ---
@@ -1898,7 +1898,9 @@ impl Tool for WebSearchTool {
 
 **实施内容**:
 
-当前 CSP 仅允许 `http://localhost:*` 和 `http://127.0.0.1:*`,需要调整为允许 WebFetch/WebSearch 访问外部 URL:
+> **注意**:当前 CSP 实际已允许 `https:`(用于 LLM API 调用),文档中"仅允许 localhost"的描述不准确。本任务主要是为 WebFetch/WebSearch 添加 `http://*` 支持(如需访问非 HTTPS URL),并保留现有的 `https:` 支持。
+
+当前 CSP 为 `connect-src 'self' https: http://localhost:* http://127.0.0.1:*`,需要调整为允许 WebFetch/WebSearch 访问外部 URL:
 
 ```json
 {

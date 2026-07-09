@@ -1227,8 +1227,8 @@ cargo test permission_registry -- --nocapture
 PermissionEvaluator 负责评估单次工具调用的权限,返回 allow/deny/ask 决策。评估流程参照 OpenCode:
 1. 加载生效规则
 2. 过滤匹配规则(权限类型匹配 + 模式匹配)
-3. 按特异性排序(具体路径优先于通配符)
-4. 返回最具体的匹配规则的动作
+3. 按定义顺序遍历(最后匹配优先,与 OpenCode 一致)
+4. 返回最后匹配的规则的动作(无匹配时默认 allow)
 
 **实施步骤**:
 
@@ -1351,17 +1351,18 @@ pub struct PermissionEvaluator;
 
 impl PermissionEvaluator {
     /// 评估权限请求
-    /// 规则优先级:最后匹配优先(自上而下解析,最后命中的规则生效)
-    /// 同时支持特异性优先:具体路径优先于通配符
+    /// 规则优先级:最后匹配优先(与 OpenCode 一致)
+    /// 按规则定义顺序遍历,最后命中的规则生效;无匹配时默认 allow
     pub fn evaluate(request: &PermissionRequest, rules: &[PermissionRule]) -> PermissionDecision {
-        // 收集所有匹配的规则
+        // 按定义顺序遍历,收集所有匹配的规则(保持定义顺序)
         let matching_rules: Vec<&PermissionRule> = rules.iter()
             .filter(|r| r.enabled)
             .filter(|r| Self::rule_matches(r, request))
             .collect();
 
         if matching_rules.is_empty() {
-            // 无匹配规则,默认允许
+            // 无匹配规则,默认允许(与 OpenCode 一致:OpenCode 默认为 ask,
+            // DocAgent 选择默认 allow 以减少对用户操作的干扰,可通过配置调整为 ask)
             return PermissionDecision {
                 action: PermissionAction::Allow,
                 matched_rule_id: None,
@@ -1370,18 +1371,9 @@ impl PermissionEvaluator {
             };
         }
 
-        // 按特异性排序:最具体的规则优先
-        // OpenCode 使用"最后匹配优先",但实践中"最具体优先"更安全
-        // 这里采用混合策略:先按特异性降序,特异性相同则按定义顺序(后者覆盖前者)
-        let mut sorted_rules: Vec<&PermissionRule> = matching_rules.clone();
-        sorted_rules.sort_by(|a, b| {
-            let sa = WildcardMatcher::new(&a.pattern).specificity();
-            let sb = WildcardMatcher::new(&b.pattern).specificity();
-            sb.cmp(&sa) // 降序:具体的在前
-        });
-
-        // 返回最具体的规则动作
-        let matched = sorted_rules[0];
+        // 最后匹配优先(与 OpenCode 一致):取匹配规则中的最后一条
+        // 规则定义顺序决定了优先级:后定义的规则覆盖先定义的规则
+        let matched = matching_rules.last().unwrap();
         PermissionDecision {
             action: matched.action,
             matched_rule_id: Some(matched.id.clone()),
@@ -1449,23 +1441,34 @@ mod tests {
 
     #[test]
     fn test_evaluate_specific_overrides_wildcard() {
+        // 最后匹配优先:后定义的规则覆盖先定义的规则
+        // 这里 "src/secret/*" 定义在 "*" 之后,因此 src/secret/* 的规则覆盖 * 的规则
         let rules = vec![
             make_rule(RuleScope::Global, PermissionType::Edit, "*", PermissionAction::Allow),
             make_rule(RuleScope::Global, PermissionType::Edit, "src/secret/*", PermissionAction::Ask),
         ];
-        // 通配路径 → allow
+        // 仅匹配通配规则 → allow(最后且唯一匹配)
         let req1 = PermissionRequest {
             permission_type: PermissionType::Edit,
             target: "docs/readme.md".to_string(),
         };
         assert_eq!(PermissionEvaluator::evaluate(&req1, &rules).action, PermissionAction::Allow);
 
-        // 具体路径 → ask
+        // 匹配两条规则,最后一条为 ask → ask
         let req2 = PermissionRequest {
             permission_type: PermissionType::Edit,
             target: "src/secret/key.pem".to_string(),
         };
         assert_eq!(PermissionEvaluator::evaluate(&req2, &rules).action, PermissionAction::Ask);
+
+        // 验证:当具体规则定义在通配规则之前时,通配规则(后定义)会覆盖具体规则
+        // 这是"最后匹配优先"的核心特征,与"最具体优先"不同
+        let rules_reversed = vec![
+            make_rule(RuleScope::Global, PermissionType::Edit, "src/secret/*", PermissionAction::Ask),
+            make_rule(RuleScope::Global, PermissionType::Edit, "*", PermissionAction::Allow),
+        ];
+        // 匹配两条规则,最后一条为 allow → allow(通配规则覆盖了具体规则)
+        assert_eq!(PermissionEvaluator::evaluate(&req2, &rules_reversed).action, PermissionAction::Allow);
     }
 
     #[test]
