@@ -168,7 +168,10 @@ pub fn load_llm_config(data_dir: &Path) -> Result<LlmConfig, CommandError> {
     }
     let content = std::fs::read_to_string(&path)?;
     let config: LlmConfig = serde_json::from_str(&content)?;
-    log::info!("已加载 LLM 配置 (providers数量: {})", config.providers.len());
+    log::info!(
+        "已加载 LLM 配置 (providers数量: {})",
+        config.providers.len()
+    );
     Ok(config)
 }
 
@@ -180,7 +183,10 @@ pub fn save_llm_config(data_dir: &Path, config: &LlmConfig) -> Result<(), Comman
     }
     let content = serde_json::to_string_pretty(config)?;
     std::fs::write(&path, content)?;
-    log::info!("已保存 LLM 配置 (providers数量: {})", config.providers.len());
+    log::info!(
+        "已保存 LLM 配置 (providers数量: {})",
+        config.providers.len()
+    );
     Ok(())
 }
 
@@ -242,7 +248,11 @@ pub fn delete_provider(config: &mut LlmConfig, id: &str) -> Result<(), CommandEr
     // 从回退顺序中移除
     config.fallback_order.retain(|fid| fid != id);
 
-    log::info!("已删除 Provider: {}，剩余数量: {}", id, config.providers.len());
+    log::info!(
+        "已删除 Provider: {}，剩余数量: {}",
+        id,
+        config.providers.len()
+    );
     Ok(())
 }
 
@@ -308,7 +318,9 @@ pub fn inject_builtin_provider(config: &mut LlmConfig, project_root: &Path) {
 
     log::info!(
         "注入内置 Provider: id={}, name={}, model={}",
-        provider.id, provider.name, provider.model
+        provider.id,
+        provider.name,
+        provider.model
     );
     config.providers.push(provider);
 }

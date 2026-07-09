@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -7,10 +7,10 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
+use super::provider::LlmProvider;
 use crate::config::llm_config::AdvancedConfig;
 use crate::errors::CommandError;
 use crate::models::llm::*;
-use super::provider::LlmProvider;
 
 /// Google Gemini API 适配器
 /// 支持 Gemini 系列模型的原生 API 格式
@@ -94,7 +94,9 @@ impl GeminiAdapter {
                             // 多模态 system 消息：将 ContentPart 映射为 Gemini API 格式
                             for cp in content_parts {
                                 match cp {
-                                    ContentPart::Text { text } => system_parts.push(json!({"text": text})),
+                                    ContentPart::Text { text } => {
+                                        system_parts.push(json!({"text": text}))
+                                    }
                                     ContentPart::Image { mime_type, data } => {
                                         system_parts.push(json!({
                                             "inline_data": {
@@ -286,8 +288,7 @@ impl GeminiAdapter {
         url: &str,
         body: &Value,
     ) -> Result<reqwest::Response, CommandError> {
-        self.send_with_retry_internal(url, body, &self.client)
-            .await
+        self.send_with_retry_internal(url, body, &self.client).await
     }
 
     /// 发送流式请求，带重试逻辑（使用流式客户端，禁用压缩）
@@ -489,8 +490,8 @@ impl GeminiAdapter {
                                 let name = fc["name"].as_str().unwrap_or("").to_string();
                                 // Gemini 使用 args (JSON 对象)，转换为 arguments (字符串)
                                 let args = fc["args"].clone();
-                                let arguments =
-                                    serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                                let arguments = serde_json::to_string(&args)
+                                    .unwrap_or_else(|_| "{}".to_string());
                                 // Gemini 没有 call ID，生成唯一标识用于内部追踪
                                 let call_id = format!("gemini_{}_{}", name, tc_index);
                                 tool_calls.push(LlmToolCall {
@@ -544,7 +545,9 @@ impl GeminiAdapter {
             completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0),
             total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0),
             prompt_cache_hit_tokens: u["cachedContentTokenCount"].as_u64().unwrap_or(0),
-            prompt_cache_miss_tokens: u["promptTokenCount"].as_u64().unwrap_or(0)
+            prompt_cache_miss_tokens: u["promptTokenCount"]
+                .as_u64()
+                .unwrap_or(0)
                 .saturating_sub(u["cachedContentTokenCount"].as_u64().unwrap_or(0)),
             cache_creation_input_tokens: 0,
             cache_read_input_tokens: 0,
@@ -583,8 +586,8 @@ impl GeminiAdapter {
                             if let Some(fc) = part.get("functionCall") {
                                 let name = fc["name"].as_str().unwrap_or("").to_string();
                                 let args = fc["args"].clone();
-                                let arguments =
-                                    serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
+                                let arguments = serde_json::to_string(&args)
+                                    .unwrap_or_else(|_| "{}".to_string());
                                 let call_id = format!("gemini_{}_{}", name, tc_index);
                                 tool_calls.push(LlmToolCall {
                                     index: tc_index,
@@ -597,12 +600,10 @@ impl GeminiAdapter {
                         }
 
                         // 流式响应中 role 只在第一个块中出现
-                        let role = content_obj["role"]
-                            .as_str()
-                            .map(|r| match r {
-                                "model" => "assistant".to_string(),
-                                other => other.to_string(),
-                            });
+                        let role = content_obj["role"].as_str().map(|r| match r {
+                            "model" => "assistant".to_string(),
+                            other => other.to_string(),
+                        });
 
                         let finish_reason = c["finishReason"].as_str().map(|r| match r {
                             "STOP" => "stop".to_string(),
@@ -637,7 +638,9 @@ impl GeminiAdapter {
             completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0),
             total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0),
             prompt_cache_hit_tokens: u["cachedContentTokenCount"].as_u64().unwrap_or(0),
-            prompt_cache_miss_tokens: u["promptTokenCount"].as_u64().unwrap_or(0)
+            prompt_cache_miss_tokens: u["promptTokenCount"]
+                .as_u64()
+                .unwrap_or(0)
                 .saturating_sub(u["cachedContentTokenCount"].as_u64().unwrap_or(0)),
             cache_creation_input_tokens: 0,
             cache_read_input_tokens: 0,
@@ -717,9 +720,8 @@ impl LlmProvider for GeminiAdapter {
                                         Ok(value) => {
                                             // 检查是否为错误响应
                                             if let Some(error) = value.get("error") {
-                                                let error_msg = error["message"]
-                                                    .as_str()
-                                                    .unwrap_or("未知错误");
+                                                let error_msg =
+                                                    error["message"].as_str().unwrap_or("未知错误");
                                                 log::error!(
                                                     "Gemini 流式响应错误, model={}, 错误: {}",
                                                     model_name,
@@ -771,10 +773,7 @@ impl LlmProvider for GeminiAdapter {
                     Err(e) => {
                         log::error!("流读取错误 (Gemini), model={}, 错误: {}", model_name, e);
                         let _ = tx
-                            .send(Err(CommandError::llm(
-                                1000,
-                                format!("流读取错误: {}", e),
-                            )))
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
                             .await;
                         return;
                     }
@@ -795,7 +794,11 @@ impl LlmProvider for GeminiAdapter {
         tools: &[ToolDefinition],
         max_tokens_override: u32,
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
-        log::info!("发送流式请求 (Gemini, max_tokens={}), model={}", max_tokens_override, self.model);
+        log::info!(
+            "发送流式请求 (Gemini, max_tokens={}), model={}",
+            max_tokens_override,
+            self.model
+        );
         let url = self.build_streaming_url();
         let body = self.build_request_body(messages, tools, Some(max_tokens_override));
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
@@ -831,9 +834,8 @@ impl LlmProvider for GeminiAdapter {
                                         Ok(value) => {
                                             // 检查是否为错误响应
                                             if let Some(error) = value.get("error") {
-                                                let error_msg = error["message"]
-                                                    .as_str()
-                                                    .unwrap_or("未知错误");
+                                                let error_msg =
+                                                    error["message"].as_str().unwrap_or("未知错误");
                                                 log::error!(
                                                     "Gemini 流式响应错误, model={}, 错误: {}",
                                                     model_name,
@@ -855,52 +857,100 @@ impl LlmProvider for GeminiAdapter {
                                                     arr.iter()
                                                         .filter_map(|c| {
                                                             let content = c.get("content")?;
-                                                            let parts = content.get("parts")?.as_array()?;
-                                                            let role = content["role"].as_str().unwrap_or("");
+                                                            let parts =
+                                                                content.get("parts")?.as_array()?;
+                                                            let role = content["role"]
+                                                                .as_str()
+                                                                .unwrap_or("");
 
                                                             let mut text_content = String::new();
                                                             let mut thought_content = String::new();
                                                             let mut tool_calls = Vec::new();
 
                                                             for part in parts {
-                                                                if let Some(text) = part.get("text") {
-                                                                    let t = text.as_str().unwrap_or("");
+                                                                if let Some(text) = part.get("text")
+                                                                {
+                                                                    let t =
+                                                                        text.as_str().unwrap_or("");
                                                                     // 检查是否为思考内容
-                                                                    if part.get("thought").and_then(|v| v.as_bool()).unwrap_or(false) {
+                                                                    if part
+                                                                        .get("thought")
+                                                                        .and_then(|v| v.as_bool())
+                                                                        .unwrap_or(false)
+                                                                    {
                                                                         thought_content.push_str(t);
                                                                     } else {
                                                                         text_content.push_str(t);
                                                                     }
                                                                 }
-                                                                if let Some(fc) = part.get("functionCall") {
-                                                                    let name = fc["name"].as_str().unwrap_or("").to_string();
+                                                                if let Some(fc) =
+                                                                    part.get("functionCall")
+                                                                {
+                                                                    let name = fc["name"]
+                                                                        .as_str()
+                                                                        .unwrap_or("")
+                                                                        .to_string();
                                                                     let args = fc["args"].clone();
                                                                     tool_calls.push(LlmToolCall {
-                                                                        index: tool_calls.len() as u32,
+                                                                        index: tool_calls.len()
+                                                                            as u32,
                                                                         id: String::new(),
                                                                         name,
-                                                                        arguments: serde_json::to_string(&args).unwrap_or_default(),
+                                                                        arguments:
+                                                                            serde_json::to_string(
+                                                                                &args,
+                                                                            )
+                                                                            .unwrap_or_default(),
                                                                     });
                                                                 }
                                                             }
 
-                                                            let finish_reason = c.get("finishReason").and_then(|r| r.as_str()).map(|r| match r {
-                                                                "STOP" => "stop",
-                                                                "MAX_TOKENS" => "length",
-                                                                "SAFETY" => "content_filter",
-                                                                "RECITATION" => "content_filter",
-                                                                other => other,
-                                                            });
+                                                            let finish_reason = c
+                                                                .get("finishReason")
+                                                                .and_then(|r| r.as_str())
+                                                                .map(|r| match r {
+                                                                    "STOP" => "stop",
+                                                                    "MAX_TOKENS" => "length",
+                                                                    "SAFETY" => "content_filter",
+                                                                    "RECITATION" => {
+                                                                        "content_filter"
+                                                                    }
+                                                                    other => other,
+                                                                });
 
                                                             Some(StreamChoice {
                                                                 index: 0,
                                                                 delta: StreamDelta {
-                                                                    role: if role == "model" { None } else { Some(role.to_string()) },
-                                                                    content: if text_content.is_empty() { None } else { Some(text_content) },
-                                                                    reasoning_content: if thought_content.is_empty() { None } else { Some(thought_content) },
-                                                                    tool_calls: if tool_calls.is_empty() { None } else { Some(tool_calls) },
+                                                                    role: if role == "model" {
+                                                                        None
+                                                                    } else {
+                                                                        Some(role.to_string())
+                                                                    },
+                                                                    content: if text_content
+                                                                        .is_empty()
+                                                                    {
+                                                                        None
+                                                                    } else {
+                                                                        Some(text_content)
+                                                                    },
+                                                                    reasoning_content:
+                                                                        if thought_content
+                                                                            .is_empty()
+                                                                        {
+                                                                            None
+                                                                        } else {
+                                                                            Some(thought_content)
+                                                                        },
+                                                                    tool_calls: if tool_calls
+                                                                        .is_empty()
+                                                                    {
+                                                                        None
+                                                                    } else {
+                                                                        Some(tool_calls)
+                                                                    },
                                                                 },
-                                                                finish_reason: finish_reason.map(String::from),
+                                                                finish_reason: finish_reason
+                                                                    .map(String::from),
                                                             })
                                                         })
                                                         .collect::<Vec<_>>()
@@ -908,17 +958,38 @@ impl LlmProvider for GeminiAdapter {
                                                 .unwrap_or_default();
 
                                             // 提取 usageMetadata（含缓存字段，仅在最后一个 chunk 中存在）
-                                            let usage = value.get("usageMetadata").and_then(|u| u.as_object()).map(|u| ChatUsage {
-                                                prompt_tokens: u["promptTokenCount"].as_u64().unwrap_or(0),
-                                                completion_tokens: u["candidatesTokenCount"].as_u64().unwrap_or(0),
-                                                total_tokens: u["totalTokenCount"].as_u64().unwrap_or(0),
-                                                prompt_cache_hit_tokens: u["cachedContentTokenCount"].as_u64().unwrap_or(0),
-                                                prompt_cache_miss_tokens: u["promptTokenCount"].as_u64().unwrap_or(0)
-                                                    .saturating_sub(u["cachedContentTokenCount"].as_u64().unwrap_or(0)),
-                                                cache_creation_input_tokens: 0,
-                                                cache_read_input_tokens: 0,
-                                                cached_content_token_count: u["cachedContentTokenCount"].as_u64().unwrap_or(0),
-                                            });
+                                            let usage = value
+                                                .get("usageMetadata")
+                                                .and_then(|u| u.as_object())
+                                                .map(|u| ChatUsage {
+                                                    prompt_tokens: u["promptTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0),
+                                                    completion_tokens: u["candidatesTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0),
+                                                    total_tokens: u["totalTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0),
+                                                    prompt_cache_hit_tokens: u
+                                                        ["cachedContentTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0),
+                                                    prompt_cache_miss_tokens: u["promptTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0)
+                                                        .saturating_sub(
+                                                            u["cachedContentTokenCount"]
+                                                                .as_u64()
+                                                                .unwrap_or(0),
+                                                        ),
+                                                    cache_creation_input_tokens: 0,
+                                                    cache_read_input_tokens: 0,
+                                                    cached_content_token_count: u
+                                                        ["cachedContentTokenCount"]
+                                                        .as_u64()
+                                                        .unwrap_or(0),
+                                                });
 
                                             let chunk = StreamChunk { id, choices, usage };
                                             if tx.send(Ok(chunk)).await.is_err() {
@@ -946,10 +1017,7 @@ impl LlmProvider for GeminiAdapter {
                     Err(e) => {
                         log::error!("流读取错误 (Gemini), model={}, 错误: {}", model_name, e);
                         let _ = tx
-                            .send(Err(CommandError::llm(
-                                1000,
-                                format!("流读取错误: {}", e),
-                            )))
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
                             .await;
                         return;
                     }
@@ -1050,7 +1118,8 @@ impl LlmProvider for GeminiAdapter {
         let base = self.api_base_url.trim_end_matches('/');
         let url = format!("{}?key={}", base, self.api_key);
 
-        let result = self.client
+        let result = self
+            .client
             .head(&url)
             .timeout(Duration::from_secs(10))
             .send()
@@ -1064,7 +1133,10 @@ impl LlmProvider for GeminiAdapter {
                 let reachable = status < 500;
                 log::info!(
                     "轻量级健康检查, model={}, status={}, 可达={}, 延迟={}ms",
-                    self.model, status, reachable, latency_ms
+                    self.model,
+                    status,
+                    reachable,
+                    latency_ms
                 );
                 Ok(ConnectionResult {
                     success: reachable,
@@ -1072,7 +1144,11 @@ impl LlmProvider for GeminiAdapter {
                     latency_ms,
                     model_info: None,
                     model: None,
-                    error_message: if reachable { None } else { Some(format!("服务端错误 ({})", status)) },
+                    error_message: if reachable {
+                        None
+                    } else {
+                        Some(format!("服务端错误 ({})", status))
+                    },
                     error: None,
                 })
             }

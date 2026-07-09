@@ -2,12 +2,14 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::errors::CommandError;
-use crate::models::{PromptTemplate, CreateTemplateParams, UpdateTemplateParams};
+use crate::models::{CreateTemplateParams, PromptTemplate, UpdateTemplateParams};
 use crate::AppState;
 
 /// 列出所有 Prompt 模板
 #[tauri::command]
-pub async fn list_templates(state: State<'_, AppState>) -> Result<Vec<PromptTemplate>, CommandError> {
+pub async fn list_templates(
+    state: State<'_, AppState>,
+) -> Result<Vec<PromptTemplate>, CommandError> {
     log::info!("list_templates: 查询所有模板");
     let conn = state.db.conn()?;
     let templates = crate::db::template_repo::list_templates(&conn)?;

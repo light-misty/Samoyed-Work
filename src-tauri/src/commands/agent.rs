@@ -4,13 +4,15 @@ use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::db::session_repo;
-use crate::errors::{CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_SESSION_NOT_FOUND};
-use crate::events::AgentEmitter;
+use crate::errors::{
+    CommandError, AGENT_ALREADY_RUNNING, AGENT_NOT_RUNNING, AGENT_SESSION_NOT_FOUND,
+};
 use crate::events::types;
+use crate::events::AgentEmitter;
 use crate::models::llm::{ChatMessage, ContentPart, ToolDefinition};
 use crate::models::message::AttachmentMeta;
-use crate::services::agent::context::AgentContext;
-use crate::services::agent::executor::AgentExecutor;
+use crate::services::agent::context::{AgentContext, AgentMode};
+use crate::services::agent::executor::{AgentExecutor, ContextUsagePersistFn};
 use crate::services::attachment::AttachmentService;
 use crate::services::llm::router::LlmRouter;
 use crate::AppState;
@@ -63,13 +65,20 @@ pub async fn start_agent(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("start_agent 请求: session_id={}, prompt长度={}", session_id, prompt.len());
+    log::info!(
+        "start_agent 请求: session_id={}, prompt长度={}",
+        session_id,
+        prompt.len()
+    );
 
     // 检查是否已有 Agent 在该会话中运行，并注册为活跃 Agent（单次加锁避免 TOCTOU 竞态）
     {
         let mut active = state.active_agents.lock().await;
         if active.contains_key(&session_id) {
-            log::error!("start_agent 失败: 会话 '{}' 已有 Agent 正在运行", session_id);
+            log::error!(
+                "start_agent 失败: 会话 '{}' 已有 Agent 正在运行",
+                session_id
+            );
             return Err(CommandError::agent(
                 AGENT_ALREADY_RUNNING,
                 format!("会话 '{}' 已有 Agent 正在运行", session_id),
@@ -131,7 +140,10 @@ pub async fn start_agent(
             }
             return Err(CommandError::fs(
                 crate::errors::FS_PATH_NOT_FOUND,
-                format!("工作区目录已被删除: {}，请移除该工作区后重新选择", workspace_path),
+                format!(
+                    "工作区目录已被删除: {}，请移除该工作区后重新选择",
+                    workspace_path
+                ),
             ));
         }
     }
@@ -152,12 +164,12 @@ pub async fn start_agent(
 
         let active_agents_for_check = Arc::clone(&active_agents);
 
-        let should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync> = Arc::new(move |session_id: &str| {
-            match active_agents_for_check.try_lock() {
+        let should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync> = Arc::new(
+            move |session_id: &str| match active_agents_for_check.try_lock() {
                 Ok(guard) => !guard.get(session_id).copied().unwrap_or(false),
                 Err(_) => false,
-            }
-        });
+            },
+        );
 
         // 读取当前 LlmRouter 快照
         let router_snapshot = {
@@ -183,7 +195,8 @@ pub async fn start_agent(
             &config,
             &doc_service,
             &scratchpad_states,
-        ).await;
+        )
+        .await;
 
         if let Err(e) = &result {
             log::error!("Agent 执行失败: session_id={}, 错误: {}", sid, e.message);
@@ -217,12 +230,10 @@ pub async fn start_agent(
 
             // 检查当前会话标题是否为默认标题，仅对默认标题的会话生成新标题
             let should_generate = match title_db.conn() {
-                Ok(conn) => {
-                    match session_repo::get_session(&conn, &title_sid) {
-                        Ok(session) => session.title.starts_with("新会话"),
-                        Err(_) => false,
-                    }
-                }
+                Ok(conn) => match session_repo::get_session(&conn, &title_sid) {
+                    Ok(session) => session.title.starts_with("新会话"),
+                    Err(_) => false,
+                },
                 Err(_) => false,
             };
 
@@ -250,7 +261,11 @@ pub async fn start_agent(
             match title_db.conn() {
                 Ok(conn) => {
                     if let Err(e) = session_repo::update_session_title(&conn, &title_sid, &title) {
-                        log::warn!("更新会话标题失败: session_id={}, 错误: {}", title_sid, e.message);
+                        log::warn!(
+                            "更新会话标题失败: session_id={}, 错误: {}",
+                            title_sid,
+                            e.message
+                        );
                         return;
                     }
                 }
@@ -267,7 +282,11 @@ pub async fn start_agent(
                 data: Some(serde_json::json!({ "title": title })),
             });
 
-            log::info!("会话标题已自动生成: session_id={}, title={}", title_sid, title);
+            log::info!(
+                "会话标题已自动生成: session_id={}, title={}",
+                title_sid,
+                title
+            );
         });
     }
 
@@ -292,8 +311,8 @@ pub async fn get_context_usage(
 
     // 回退：数据库中无持久化数据时，重新计算（首次加载或旧版本数据库）
     use crate::services::agent::context::AgentContext;
-    use crate::services::agent::prompts::token_budget::TokenBudgetManager;
     use crate::services::agent::prompts::task_type::TaskType;
+    use crate::services::agent::prompts::token_budget::TokenBudgetManager;
 
     // 获取当前活跃 Provider 的上下文窗口大小、模型名称和缓存类型
     // 通过 Router 的主 Provider ID 精确查找（避免 list_providers 顺序不确定）
@@ -318,7 +337,13 @@ pub async fn get_context_usage(
         let ws_config = cfg_manager.load_workspaces().ok();
         settings
             .as_ref()
-            .and_then(|s| ws_config.as_ref()?.workspaces.iter().find(|w| w.id == s.workspace.default_workspace_id))
+            .and_then(|s| {
+                ws_config
+                    .as_ref()?
+                    .workspaces
+                    .iter()
+                    .find(|w| w.id == s.workspace.default_workspace_id)
+            })
             .map(|ws| ws.path.clone())
             .unwrap_or_else(|| ".".to_string())
     };
@@ -331,9 +356,14 @@ pub async fn get_context_usage(
     };
     let budget = TokenBudgetManager::new(context_window);
     // 检测执行环境信息，注入系统提示词避免智能体浪费迭代搜索环境
-    let git_bash_path = state.config.lock().await
-        .load_app_settings().ok()
-        .map(|s| s.git_bash_path).unwrap_or_default();
+    let git_bash_path = state
+        .config
+        .lock()
+        .await
+        .load_app_settings()
+        .ok()
+        .map(|s| s.git_bash_path)
+        .unwrap_or_default();
     let env_info = crate::services::agent::context::EnvironmentInfo::detect(&git_bash_path);
     let system_prompt = AgentContext::build_system_prompt_with_task(
         &workspace_path,
@@ -343,6 +373,8 @@ pub async fn get_context_usage(
         &budget,
         None,
         &env_info,
+        None,              // agents_md_content（T1.07 会更新）
+        &AgentMode::Build, // agent_mode
     );
     let system_prompt_tokens = TokenBudgetManager::estimate_tokens(&system_prompt);
 
@@ -354,7 +386,11 @@ pub async fn get_context_usage(
             reg.tool_definitions()
         };
         let all_defs = [tool_defs, handler_defs].concat();
-        let defs_str = all_defs.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" ");
+        let defs_str = all_defs
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
         TokenBudgetManager::estimate_tokens(&defs_str)
     };
 
@@ -365,15 +401,19 @@ pub async fn get_context_usage(
                 let messages = crate::db::message_repo::list_messages(&conn, &session_id);
                 let count = messages.len();
                 let conv_tokens = TokenBudgetManager::estimate_tokens(
-                    &messages.iter().map(|m| m.content.as_str()).collect::<String>()
+                    &messages
+                        .iter()
+                        .map(|m| m.content.as_str())
+                        .collect::<String>(),
                 );
                 (conv_tokens, count)
             }
-            Err(_) => (0, 0)
+            Err(_) => (0, 0),
         }
     };
 
-    let total_used_tokens = system_prompt_tokens + function_definitions_tokens + conversation_tokens;
+    let total_used_tokens =
+        system_prompt_tokens + function_definitions_tokens + conversation_tokens;
 
     Ok(crate::models::llm::ContextUsageInfo {
         context_window,
@@ -428,7 +468,8 @@ async fn generate_session_title(
     let response = llm_router.chat(&messages, &tools).await?;
 
     // 从响应中提取标题
-    let title = response.choices
+    let title = response
+        .choices
         .first()
         .map(|c| c.message.content.trim().to_string())
         .unwrap_or_default();
@@ -488,7 +529,10 @@ fn persist_session_summary(
 
     // 如果用户目标为空，说明没有有效对话，跳过摘要
     if user_goal.is_empty() {
-        log::debug!("用户目标为空，跳过会话摘要持久化: session_id={}", ctx.session_id);
+        log::debug!(
+            "用户目标为空，跳过会话摘要持久化: session_id={}",
+            ctx.session_id
+        );
         return Ok(());
     }
 
@@ -508,7 +552,9 @@ fn persist_session_summary(
 
     log::info!(
         "会话摘要已持久化: session_id={}, summary_id={}, user_goal长度={}",
-        ctx.session_id, summary_id, user_goal.len()
+        ctx.session_id,
+        summary_id,
+        user_goal.len()
     );
     Ok(())
 }
@@ -526,8 +572,10 @@ fn extract_and_persist_preferences(
             for tc in tool_calls {
                 if let Ok(params) = serde_json::from_str::<serde_json::Value>(&tc.arguments) {
                     // 从文档 Handler 的参数提取文档格式偏好
-                    if tc.name == "docx_handler" || tc.name == "xlsx_handler"
-                        || tc.name == "pptx_handler" || tc.name == "pdf_handler"
+                    if tc.name == "docx_handler"
+                        || tc.name == "xlsx_handler"
+                        || tc.name == "pptx_handler"
+                        || tc.name == "pdf_handler"
                     {
                         if let Some(action) = params["action"].as_str() {
                             let pref_id = format!("pref_{}", uuid::Uuid::new_v4());
@@ -603,7 +651,12 @@ pub async fn confirm_operation(
     feedback: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("confirm_operation 请求: session_id={}, operation_id={}, approved={}", session_id, operation_id, approved);
+    log::info!(
+        "confirm_operation 请求: session_id={}, operation_id={}, approved={}",
+        session_id,
+        operation_id,
+        approved
+    );
 
     let sender = {
         let mut channels = state.confirm_channels.lock().await;
@@ -612,22 +665,29 @@ pub async fn confirm_operation(
 
     match sender {
         Some(tx) => {
-            let decision = crate::ConfirmDecision {
-                approved,
-                feedback,
-            };
+            let decision = crate::ConfirmDecision { approved, feedback };
             if tx.send(decision).is_err() {
-                log::warn!("confirm_operation: 接收端已关闭, operation_id={}", operation_id);
+                log::warn!(
+                    "confirm_operation: 接收端已关闭, operation_id={}",
+                    operation_id
+                );
                 return Err(CommandError::agent(
                     AGENT_SESSION_NOT_FOUND,
                     "Agent 执行已结束，无法确认操作".to_string(),
                 ));
             }
-            log::info!("confirm_operation: 确认结果已发送, operation_id={}, approved={}", operation_id, approved);
+            log::info!(
+                "confirm_operation: 确认结果已发送, operation_id={}, approved={}",
+                operation_id,
+                approved
+            );
             Ok(())
         }
         None => {
-            log::error!("confirm_operation 失败: 未找到操作确认通道, operation_id={}", operation_id);
+            log::error!(
+                "confirm_operation 失败: 未找到操作确认通道, operation_id={}",
+                operation_id
+            );
             Err(CommandError::agent(
                 AGENT_SESSION_NOT_FOUND,
                 format!("未找到操作确认通道: {}", operation_id),
@@ -650,7 +710,9 @@ fn persist_messages_to_db(
         let msg_id = format!("msg_{}", uuid::Uuid::new_v4());
 
         // 对于包含 tool_calls 的消息，将所有 tool_calls 序列化为 JSON 存储
-        let (tool_name, tool_args, tool_result, tool_call_id) = if let Some(tool_calls) = &msg.tool_calls {
+        let (tool_name, tool_args, tool_result, tool_call_id) = if let Some(tool_calls) =
+            &msg.tool_calls
+        {
             if tool_calls.is_empty() {
                 (None, None, None as Option<String>, None as Option<String>)
             } else if tool_calls.len() == 1 {
@@ -676,7 +738,12 @@ fn persist_messages_to_db(
             }
         } else if msg.role == "tool" {
             // tool 消息：保存 tool_call_id 以确保历史消息加载时能正确匹配
-            (None, None, Some(msg.content.clone()), msg.tool_call_id.clone())
+            (
+                None,
+                None,
+                Some(msg.content.clone()),
+                msg.tool_call_id.clone(),
+            )
         } else {
             (None, None, None, None)
         };
@@ -721,22 +788,32 @@ async fn run_agent(
     provider_id: &str,
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     db: &Arc<crate::db::Database>,
-    confirm_channels: &Arc<tokio::sync::Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<crate::ConfirmDecision>>>>,
+    confirm_channels: &Arc<
+        tokio::sync::Mutex<
+            std::collections::HashMap<String, tokio::sync::oneshot::Sender<crate::ConfirmDecision>>,
+        >,
+    >,
     config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     doc_service: &Arc<crate::services::document::DocumentService>,
     scratchpad_states: &crate::services::tool::builtin::SharedScratchpadStates,
 ) -> Result<(), CommandError> {
-    log::info!("run_agent 开始: session_id={}, workspace={}", session_id, workspace_path);
+    log::info!(
+        "run_agent 开始: session_id={}, workspace={}",
+        session_id,
+        workspace_path
+    );
 
     if llm_router.is_empty().await {
         let error_msg = "未配置 LLM Provider，请在设置中添加至少一个 Provider";
         log::error!("run_agent 失败: {}", error_msg);
-        emitter.emit_error(crate::events::types::ErrorPayload {
-            session_id: session_id.to_string(),
-            code: 1002,
-            message: error_msg.to_string(),
-            recoverable: true,
-        }).ok();
+        emitter
+            .emit_error(crate::events::types::ErrorPayload {
+                session_id: session_id.to_string(),
+                code: 1002,
+                message: error_msg.to_string(),
+                recoverable: true,
+            })
+            .ok();
         return Err(CommandError::llm(1002, error_msg.to_string()));
     }
 
@@ -751,7 +828,12 @@ async fn run_agent(
                 .and_then(|wc| wc.workspaces.iter().find(|w| w.id == workspace_id));
             let info = crate::services::agent::context::AuthorInfo::resolve(&settings, ws_entry);
             if info.has_any() {
-                log::info!("已解析作者信息: name={}, email={}, company={}", info.name, info.email, info.company);
+                log::info!(
+                    "已解析作者信息: name={}, email={}, company={}",
+                    info.name,
+                    info.email,
+                    info.company
+                );
                 Some(info)
             } else {
                 None
@@ -772,19 +854,21 @@ async fn run_agent(
     let context_window = {
         let cfg = tokio::task::block_in_place(|| config.blocking_lock());
         match cfg.load_llm_config() {
-            Ok(llm_config) => {
-                match llm_config.providers.first() {
-                    Some(provider) => {
-                        let cw = provider.resolve_context_window();
-                        log::info!("从主 Provider 解析上下文窗口: {} tokens (模型: {})", cw, provider.model);
-                        cw
-                    }
-                    None => {
-                        log::warn!("无可用 Provider，使用默认上下文窗口 128K");
-                        128_000
-                    }
+            Ok(llm_config) => match llm_config.providers.first() {
+                Some(provider) => {
+                    let cw = provider.resolve_context_window();
+                    log::info!(
+                        "从主 Provider 解析上下文窗口: {} tokens (模型: {})",
+                        cw,
+                        provider.model
+                    );
+                    cw
                 }
-            }
+                None => {
+                    log::warn!("无可用 Provider，使用默认上下文窗口 128K");
+                    128_000
+                }
+            },
             Err(e) => {
                 log::warn!("加载 LLM 配置失败: {}, 使用默认上下文窗口 128K", e.message);
                 128_000
@@ -792,7 +876,11 @@ async fn run_agent(
         }
     };
 
-    let mut ctx = AgentContext::new(session_id.to_string(), crate::services::agent::context::AgentContext::build_system_prompt(workspace_path), context_window);
+    let mut ctx = AgentContext::new(
+        session_id.to_string(),
+        crate::services::agent::context::AgentContext::build_system_prompt(workspace_path),
+        context_window,
+    );
     ctx.max_iterations = max_iterations;
     ctx.workspace_path = workspace_path.to_string();
     ctx.workspace_id = workspace_id.to_string();
@@ -817,6 +905,29 @@ async fn run_agent(
             .unwrap_or_default()
     };
     let env_info = crate::services::agent::context::EnvironmentInfo::detect(&git_bash_path);
+
+    // 加载 AGENTS.md 自定义规则
+    let agents_md_content = {
+        let config_dir = {
+            let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+            cfg.data_dir().to_path_buf()
+        };
+        let agents_md = crate::services::agent::prompts::agents_md_loader::load_agents_md(
+            workspace_path,
+            Some(&config_dir),
+        );
+        if !agents_md.is_empty() {
+            log::info!(
+                "已加载 AGENTS.md 规则,项目级 {} 个,全局 {} 个",
+                agents_md.project_rules.len(),
+                agents_md.global_rules.is_some() as usize
+            );
+            Some(agents_md.merge())
+        } else {
+            None
+        }
+    };
+
     let dynamic_prompt = AgentContext::build_system_prompt_with_task(
         workspace_path,
         &task_type,
@@ -825,6 +936,8 @@ async fn run_agent(
         ctx.token_budget(),
         author_info.as_ref(),
         &env_info,
+        agents_md_content.as_deref(), // AGENTS.md 自定义规则
+        &AgentMode::Build,            // agent_mode
     );
     ctx.system_prompt = dynamic_prompt;
     log::info!("任务类型: {:?}, 系统提示词已动态构建", task_type);
@@ -834,12 +947,16 @@ async fn run_agent(
         match db.conn() {
             Ok(conn) => {
                 let db_messages = crate::db::message_repo::list_messages(&conn, session_id);
-                db_messages.into_iter()
+                db_messages
+                    .into_iter()
                     .filter_map(|m| m.to_chat_message())
                     .collect::<Vec<ChatMessage>>()
             }
             Err(e) => {
-                log::warn!("获取数据库连接失败，无法加载历史消息: {}, 将以空上下文启动", e.message);
+                log::warn!(
+                    "获取数据库连接失败，无法加载历史消息: {}, 将以空上下文启动",
+                    e.message
+                );
                 Vec::new()
             }
         }
@@ -850,7 +967,11 @@ async fn run_agent(
 
     // 注入历史消息到上下文（在添加当前用户消息之前）
     if !is_new_session {
-        log::info!("加载历史消息: session_id={}, 历史消息数={}", session_id, history_messages.len());
+        log::info!(
+            "加载历史消息: session_id={}, 历史消息数={}",
+            session_id,
+            history_messages.len()
+        );
         ctx.load_history_messages(history_messages);
     }
 
@@ -862,17 +983,20 @@ async fn run_agent(
     let user_preferences_text = {
         match db.conn() {
             Ok(conn) => {
-                let prefs = crate::db::user_preference_repo::list_high_confidence_preferences(
-                    &conn, 0.7,
-                );
+                let prefs =
+                    crate::db::user_preference_repo::list_high_confidence_preferences(&conn, 0.7);
                 if prefs.is_empty() {
                     String::new()
                 } else {
-                    let text = prefs.iter()
+                    let text = prefs
+                        .iter()
                         .map(|p| format!("- {}: {}", p.key, p.value))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    format!("\n<user_preferences>\n## 用户偏好\n{}\n</user_preferences>", text)
+                    format!(
+                        "\n<user_preferences>\n## 用户偏好\n{}\n</user_preferences>",
+                        text
+                    )
                 }
             }
             Err(_) => String::new(),
@@ -887,7 +1011,8 @@ async fn run_agent(
 
     // 解析附件为 ContentPart 列表
     let content_parts = if !attachments.is_empty() {
-        match AttachmentService::resolve_attachments(attachments, workspace_path, doc_service).await {
+        match AttachmentService::resolve_attachments(attachments, workspace_path, doc_service).await
+        {
             Ok(parts) if !parts.is_empty() => Some(parts),
             Ok(_) => None,
             Err(e) => {
@@ -910,9 +1035,7 @@ async fn run_agent(
         let main_provider = main_provider_id
             .and_then(|id| providers.iter().find(|p| p.id == id))
             .or_else(|| providers.first());
-        main_provider
-            .map(|p| p.supports_vision)
-            .unwrap_or(false)
+        main_provider.map(|p| p.supports_vision).unwrap_or(false)
     } else {
         true
     };
@@ -938,7 +1061,8 @@ async fn run_agent(
         if image_count > 0 {
             log::warn!(
                 "当前 Provider 不支持视觉，已剥离 {} 张图片 ContentPart: session_id={}",
-                image_count, session_id
+                image_count,
+                session_id
             );
 
             // 剥离图片后，如果剩余的只有文本 ContentPart，将它们合并回 content 字段，
@@ -958,7 +1082,12 @@ async fn run_agent(
         content_parts.clone()
     };
 
-    ctx.add_user_message_with_attachments(prompt, filtered_content_parts, attachments, supports_vision);
+    ctx.add_user_message_with_attachments(
+        prompt,
+        filtered_content_parts,
+        attachments,
+        supports_vision,
+    );
 
     // 如果有图片附件，注入视觉相关提示词
     if has_image_attachments {
@@ -968,7 +1097,10 @@ async fn run_agent(
                 "{}\n\n<vision_constraint>\n当前模型不支持图片理解功能。用户发送了图片附件，但图片数据已被系统移除，你无法看到图片内容。\n\n你必须遵守以下规则：\n1. 绝对不要假装能够看到或分析图片内容\n2. 绝对不要基于图片附件猜测用户意图或编造图片内容\n3. 绝对不要因为无法查看图片而自行执行与用户请求无关的操作（如生成文档、调用工具等）\n4. 如果用户的问题依赖图片内容，直接告知你无法查看图片，并建议用户用文字描述图片内容\n5. 如果用户只是发送了图片但没有文字说明，询问用户希望你对图片做什么\n</vision_constraint>",
                 ctx.system_prompt
             );
-            log::warn!("当前 Provider 不支持视觉，已注入增强版幻觉防护提示: session_id={}", session_id);
+            log::warn!(
+                "当前 Provider 不支持视觉，已注入增强版幻觉防护提示: session_id={}",
+                session_id
+            );
         } else {
             // 支持视觉时注入图片可见性提示
             ctx.system_prompt = format!(
@@ -981,18 +1113,21 @@ async fn run_agent(
     // 创建增量持久化回调，每轮迭代后自动持久化新增消息
     let db_for_persist = Arc::clone(db);
     #[allow(clippy::type_complexity)]
-    let persist_fn: Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync> =
-        Arc::new(move |sid: &str, messages: &[ChatMessage]| {
-            persist_messages_to_db(&db_for_persist, sid, messages)
-        });
+    let persist_fn: Arc<
+        dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + Send + Sync,
+    > = Arc::new(move |sid: &str, messages: &[ChatMessage]| {
+        persist_messages_to_db(&db_for_persist, sid, messages)
+    });
 
     // 创建版本快照回调，在文件修改/删除前自动创建快照
     let db_for_snapshot = Arc::clone(db);
     let config_for_snapshot = Arc::clone(config);
     let workspace_path_for_snapshot = workspace_path.to_string();
     #[allow(clippy::type_complexity)]
-    let snapshot_fn: Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync> =
-        Arc::new(move |wid: &str, sid: &str, file_path: &str, operation: &str| {
+    let snapshot_fn: Arc<
+        dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync,
+    > = Arc::new(
+        move |wid: &str, sid: &str, file_path: &str, operation: &str| {
             create_version_snapshot(
                 &db_for_snapshot,
                 &config_for_snapshot,
@@ -1002,20 +1137,26 @@ async fn run_agent(
                 file_path,
                 operation,
             )
-        });
+        },
+    );
 
     // 创建上下文窗口使用信息持久化回调，每次发射事件时持久化到数据库
     let db_for_context_usage = Arc::clone(db);
-    let context_usage_persist_fn: Arc<dyn Fn(&str, &crate::models::llm::ContextUsageInfo) + Send + Sync> =
-        Arc::new(move |sid: &str, usage_info: &crate::models::llm::ContextUsageInfo| {
+    let context_usage_persist_fn: ContextUsagePersistFn = Arc::new(
+        move |sid: &str, usage_info: &crate::models::llm::ContextUsageInfo| {
             if let Ok(json) = serde_json::to_string(usage_info) {
                 if let Ok(conn) = db_for_context_usage.conn() {
                     if let Err(e) = crate::db::session_repo::save_context_usage(&conn, sid, &json) {
-                        log::warn!("持久化上下文窗口使用信息失败: session_id={}, 错误: {}", sid, e.message);
+                        log::warn!(
+                            "持久化上下文窗口使用信息失败: session_id={}, 错误: {}",
+                            sid,
+                            e.message
+                        );
                     }
                 }
             }
-        });
+        },
+    );
 
     let executor = AgentExecutor::new(
         Arc::clone(llm_router),
@@ -1033,39 +1174,71 @@ async fn run_agent(
 
     match executor.execute(&mut ctx).await {
         Ok(result) => {
-            log::info!("Agent 执行成功: session_id={}, 摘要长度={}", session_id, result.summary.len());
+            log::info!(
+                "Agent 执行成功: session_id={}, 摘要长度={}",
+                session_id,
+                result.summary.len()
+            );
 
             // 持久化可能残留的未持久化消息（兜底保护）
             let unpersisted = ctx.get_unpersisted_messages();
             if !unpersisted.is_empty() {
-                log::info!("持久化残留消息: session_id={}, 数量={}", session_id, unpersisted.len());
+                log::info!(
+                    "持久化残留消息: session_id={}, 数量={}",
+                    session_id,
+                    unpersisted.len()
+                );
                 if let Err(e) = persist_messages_to_db(db, session_id, unpersisted) {
-                    log::warn!("残留消息持久化失败: session_id={}, 错误: {}", session_id, e.message);
+                    log::warn!(
+                        "残留消息持久化失败: session_id={}, 错误: {}",
+                        session_id,
+                        e.message
+                    );
                 }
                 ctx.mark_persisted();
             }
 
             // 生成会话摘要并持久化（情景记忆）
             if let Err(e) = persist_session_summary(db, &ctx) {
-                log::warn!("会话摘要持久化失败: session_id={}, 错误: {}", session_id, e.message);
+                log::warn!(
+                    "会话摘要持久化失败: session_id={}, 错误: {}",
+                    session_id,
+                    e.message
+                );
             }
 
             // 从工具调用参数中提取用户偏好并持久化（语义记忆）
             if let Err(e) = extract_and_persist_preferences(db, &ctx) {
-                log::warn!("用户偏好提取失败: session_id={}, 错误: {}", session_id, e.message);
+                log::warn!(
+                    "用户偏好提取失败: session_id={}, 错误: {}",
+                    session_id,
+                    e.message
+                );
             }
 
             Ok(())
         }
         Err(e) => {
-            log::error!("Agent 执行失败: session_id={}, 错误: {}", session_id, e.message);
+            log::error!(
+                "Agent 执行失败: session_id={}, 错误: {}",
+                session_id,
+                e.message
+            );
 
             // 执行失败时也尝试持久化已有消息
             let unpersisted = ctx.get_unpersisted_messages();
             if !unpersisted.is_empty() {
-                log::info!("执行失败后持久化已有消息: session_id={}, 数量={}", session_id, unpersisted.len());
+                log::info!(
+                    "执行失败后持久化已有消息: session_id={}, 数量={}",
+                    session_id,
+                    unpersisted.len()
+                );
                 if let Err(persist_err) = persist_messages_to_db(db, session_id, unpersisted) {
-                    log::warn!("失败后消息持久化失败: session_id={}, 错误: {}", session_id, persist_err.message);
+                    log::warn!(
+                        "失败后消息持久化失败: session_id={}, 错误: {}",
+                        session_id,
+                        persist_err.message
+                    );
                 }
             }
 
@@ -1116,9 +1289,7 @@ fn create_version_snapshot(
 
     // 生成快照文件名：使用 UUID + 原始扩展名
     let snapshot_id = uuid::Uuid::new_v4().to_string();
-    let extension = path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("bin");
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
     let snapshot_file_name = format!("{}.{}", snapshot_id, extension);
     let snapshot_path = snapshot_dir.join(&snapshot_file_name);
 
@@ -1127,7 +1298,9 @@ fn create_version_snapshot(
 
     log::info!(
         "版本快照文件已创建: file={}, snapshot={}, operation={}",
-        file_path, snapshot_file_name, operation
+        file_path,
+        snapshot_file_name,
+        operation
     );
 
     // 在数据库中创建快照记录
@@ -1152,9 +1325,13 @@ fn create_version_snapshot(
                     crate::config::app_settings::RetentionPolicy::ByDays => "byDays",
                     crate::config::app_settings::RetentionPolicy::Both => "both",
                 };
-                (policy_str.to_string(), settings.version_snapshot.max_count, settings.version_snapshot.max_days)
+                (
+                    policy_str.to_string(),
+                    settings.version_snapshot.max_count,
+                    settings.version_snapshot.max_days,
+                )
             }
-            Err(_) => ("byCount".to_string(), 50, 30)
+            Err(_) => ("byCount".to_string(), 50, 30),
         }
     };
 

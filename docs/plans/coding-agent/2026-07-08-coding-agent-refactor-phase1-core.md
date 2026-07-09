@@ -485,13 +485,13 @@ When making changes to files, first understand the file's code conventions. Mimi
 /// workspace_path: 工作区路径
 /// tool_count: 可用工具数量
 /// handler_count: 文档 Handler 数量(保留,Document 模式下使用)
-/// author_info: 作者信息(编程 Agent 不再需要,保留参数避免破坏接口)
+/// author_info: 作者信息(仅 Document 模式下注入,其他模式传 None)
 /// env_info: 执行环境信息
 fn layer_context(
     workspace_path: &str,
     tool_count: usize,
     handler_count: usize,
-    _author_info: Option<&AuthorInfo>,
+    author_info: Option<&AuthorInfo>,
     env_info: &EnvironmentInfo,
 ) -> String {
     let now = chrono::Utc::now();
@@ -697,7 +697,7 @@ pub fn build_system_prompt_with_task(
     tool_count: usize,
     _handler_count: usize,
     token_budget: &TokenBudgetManager,
-    _author_info: Option<&AuthorInfo>,
+    author_info: Option<&AuthorInfo>,
     env_info: &EnvironmentInfo,
     // AGENTS.md 内容(由 T1.07 实现)
     agents_md_content: Option<&str>,
@@ -1421,7 +1421,7 @@ pub fn register_builtin_tools(
     registry.register(Box::new(GlobTool));
     registry.register(Box::new(GrepTool));
 
-    log::info!("内置工具注册完成, 共注册 19 个工具");  // 16 + 3
+    log::info!("内置工具注册完成, 共注册 18 个工具");  // 15 + 3
     scratchpad_states
 }
 ```
@@ -2984,9 +2984,9 @@ fn test_all_core_tools_registered() {
     assert!(tool_names.contains(&"write"), "缺少 write 工具");
     assert!(tool_names.contains(&"write_script"), "缺少 write_script 工具");
 
-    // 验证工具总数(16 原有 Tool + 3 新增 = 19,不含 Handler)
-    // 注意:文档 Handler 在 handler_registry 中,不在 tool_registry 中
-    assert_eq!(tools.len(), 19, "工具数量不正确,实际: {}", tools.len());
+    // 验证工具总数(15 原有 Tool + 3 新增 edit/glob/grep = 18,不含 Handler)
+    // 注意:4 个文档 Handler 在 handler_registry 中,不在 tool_registry 中
+    assert_eq!(tools.len(), 18, "工具数量不正确,实际: {}", tools.len());
 }
 
 #[test]
@@ -3168,7 +3168,7 @@ cargo test test_read_with_line_numbers
 ### 4.3 功能验证(手动)
 
 1. **应用启动**:`npm run tauri:dev`,应用正常启动,无 sidecar 相关错误日志
-2. **工具列表**:在设置中查看工具列表,确认 19 个工具,无文档 Handler
+2. **工具列表**:在设置中查看工具列表,确认 18 个工具,无文档 Handler
 3. **编程流程测试**:
    - 发起对话:"帮我创建一个 hello.rs 文件,内容为 Hello World 程序"
    - 验证:Agent 调用 edit 工具创建文件

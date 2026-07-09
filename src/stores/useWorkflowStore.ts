@@ -599,7 +599,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
                     ...n.data,
                     success: event.success,
                     error: event.success ? undefined : (event.error || i18n.t("toolNode.executionFailed")),
-                    // 保存工具执行结果（如 run_command 的 stdout/stderr/exit_code）
+                    // 保存工具执行结果（如 bash 的 stdout/stderr/exit_code）
                     result: event.success && event.result
                       ? (event.result as Record<string, unknown>)
                       : (n.data as { result?: Record<string, unknown> }).result,

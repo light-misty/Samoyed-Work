@@ -7,14 +7,9 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     /// 文本部分
-    Text {
-        text: String,
-    },
+    Text { text: String },
     /// 图片部分 (base64)
-    Image {
-        mime_type: String,
-        data: String,
-    },
+    Image { mime_type: String, data: String },
 }
 
 /// supports_vision 默认值：true（默认支持视觉）
@@ -87,7 +82,6 @@ pub struct ContextUsageInfo {
     pub total_message_count: usize,
 
     // --- 新增缓存统计字段 ---
-
     /// 本轮请求的缓存命中 tokens（来自 API 响应）
     #[serde(default)]
     pub cache_hit_tokens: u64,
@@ -202,7 +196,6 @@ pub struct ChatUsage {
     pub total_tokens: u64,
 
     // --- 新增缓存字段 ---
-
     /// DeepSeek: 命中缓存的输入 tokens
     #[serde(default)]
     pub prompt_cache_hit_tokens: u64,

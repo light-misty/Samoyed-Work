@@ -87,22 +87,27 @@ impl Message {
             MessageRole::Assistant => {
                 // 将数据库 ToolCall 转换为 LlmToolCall
                 let llm_tool_calls = self.tool_calls.as_ref().map(|calls| {
-                    calls.iter().map(|tc| {
-                        crate::models::llm::LlmToolCall {
-                            index: 0,
-                            id: tc.id.clone(),
-                            name: tc.name.clone(),
-                            // 数据库中 arguments 是 serde_json::Value，需要转为 JSON 字符串
-                            arguments: serde_json::to_string(&tc.arguments)
-                                .unwrap_or_default(),
-                        }
-                    }).collect::<Vec<_>>()
+                    calls
+                        .iter()
+                        .map(|tc| {
+                            crate::models::llm::LlmToolCall {
+                                index: 0,
+                                id: tc.id.clone(),
+                                name: tc.name.clone(),
+                                // 数据库中 arguments 是 serde_json::Value，需要转为 JSON 字符串
+                                arguments: serde_json::to_string(&tc.arguments).unwrap_or_default(),
+                            }
+                        })
+                        .collect::<Vec<_>>()
                 });
 
                 // 如果有 tool_calls 但全部转换失败，则跳过此消息
                 if let Some(ref calls) = llm_tool_calls {
                     if calls.is_empty() {
-                        log::warn!("助手消息的 tool_calls 转换结果为空，跳过: msg_id={}", self.id);
+                        log::warn!(
+                            "助手消息的 tool_calls 转换结果为空，跳过: msg_id={}",
+                            self.id
+                        );
                         return None;
                     }
                 }
@@ -120,7 +125,9 @@ impl Message {
             MessageRole::Tool => {
                 // tool 消息需要从 ToolCall 中提取 call_id
                 // 数据库中 tool 消息的 tool_calls 字段存储了对应的 ToolCall 信息
-                let call_id = self.tool_calls.as_ref()
+                let call_id = self
+                    .tool_calls
+                    .as_ref()
                     .and_then(|calls| calls.first())
                     .map(|tc| tc.id.clone())
                     .unwrap_or_default();
@@ -199,14 +206,12 @@ mod tests {
             id: "msg_3".to_string(),
             role: MessageRole::Assistant,
             content: "".to_string(),
-            tool_calls: Some(vec![
-                ToolCall {
-                    id: "call_1".to_string(),
-                    name: "write_text_file".to_string(),
-                    arguments: serde_json::json!({"path": "周报.md", "content": "# 项目周报"}),
-                    result: None,
-                },
-            ]),
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "write_text_file".to_string(),
+                arguments: serde_json::json!({"path": "周报.md", "content": "# 项目周报"}),
+                result: None,
+            }]),
             reasoning_content: None,
             attachments: None,
             created_at: "2026-01-01T00:00:02Z".to_string(),
@@ -230,14 +235,12 @@ mod tests {
             id: "msg_4".to_string(),
             role: MessageRole::Tool,
             content: "文档已生成".to_string(),
-            tool_calls: Some(vec![
-                ToolCall {
-                    id: "call_1".to_string(),
-                    name: "docx_handler".to_string(),
-                    arguments: serde_json::json!({}),
-                    result: Some(serde_json::json!({"success": true})),
-                },
-            ]),
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "docx_handler".to_string(),
+                arguments: serde_json::json!({}),
+                result: Some(serde_json::json!({"success": true})),
+            }]),
             reasoning_content: None,
             attachments: None,
             created_at: "2026-01-01T00:00:03Z".to_string(),

@@ -855,7 +855,7 @@
   text-decoration: underline;
 }
 
-/* ===== run_command 命令执行详情样式 ===== */
+/* ===== bash 命令执行详情样式 ===== */
 
 /* 合并后的卡片容器 */
 .wf-run-command-detail {

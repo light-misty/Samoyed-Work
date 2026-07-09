@@ -40,3 +40,12 @@ dunce = "1"
 encoding_rs = "0.8"
 # SHA-256 哈希计算：用于 get_file_hash 工具计算文件哈希，支持去重和完整性校验
 sha2 = "0.10"
+# 阶段 1 新增:编程 Agent 核心工具依赖
+# edit 工具:差异计算和补丁生成
+similar = "2"
+# glob/grep 工具:基于 ignore crate(ripgrep 封装,支持 .gitignore)
+ignore = "0.4"
+# glob 模式编译
+globset = "0.4"
+# grep 工具:正则表达式引擎
+regex = "1"

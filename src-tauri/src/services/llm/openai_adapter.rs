@@ -1,14 +1,14 @@
-use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::time::Duration;
 use tokio::sync::mpsc;
 
+use super::provider::LlmProvider;
 use crate::config::llm_config::AdvancedConfig;
 use crate::errors::CommandError;
 use crate::models::llm::*;
-use super::provider::LlmProvider;
 
 /// OpenAI 兼容 API 适配器
 /// 支持 OpenAI、Azure OpenAI、以及所有兼容 OpenAI API 格式的服务
@@ -40,7 +40,7 @@ impl OpenAiAdapter {
             .timeout(timeout)
             .build()
             .unwrap_or_default();
-        
+
         let streaming_client = Client::builder()
             .timeout(Duration::from_secs(300))
             .no_gzip()
@@ -49,7 +49,7 @@ impl OpenAiAdapter {
             .tcp_keepalive(Some(Duration::from_secs(60)))
             .build()
             .unwrap_or_default();
-        
+
         Self {
             api_base_url,
             api_key,
@@ -142,16 +142,19 @@ impl OpenAiAdapter {
         });
 
         if !tools.is_empty() {
-            body["tools"] = json!(tools.iter().map(|t| {
-                json!({
-                    "type": "function",
-                    "function": {
-                        "name": t.name,
-                        "description": t.description,
-                        "parameters": t.parameters,
-                    }
+            body["tools"] = json!(tools
+                .iter()
+                .map(|t| {
+                    json!({
+                        "type": "function",
+                        "function": {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": t.parameters,
+                        }
+                    })
                 })
-            }).collect::<Vec<_>>());
+                .collect::<Vec<_>>());
         }
 
         body["temperature"] = json!(self.advanced.temperature);
@@ -187,7 +190,8 @@ impl OpenAiAdapter {
         url: &str,
         body: &Value,
     ) -> Result<reqwest::Response, CommandError> {
-        self.send_with_retry_internal(url, body, &self.streaming_client).await
+        self.send_with_retry_internal(url, body, &self.streaming_client)
+            .await
     }
 
     /// 内部发送请求实现，带重试逻辑
@@ -215,7 +219,12 @@ impl OpenAiAdapter {
                 } else {
                     Duration::from_millis(500 * 2u64.pow(total_attempt.saturating_sub(2)))
                 };
-                log::warn!("请求重试, model={}, 第{}次重试, 延迟{}ms", self.model, total_attempt - 1, delay.as_millis());
+                log::warn!(
+                    "请求重试, model={}, 第{}次重试, 延迟{}ms",
+                    self.model,
+                    total_attempt - 1,
+                    delay.as_millis()
+                );
                 tokio::time::sleep(delay).await;
             }
 
@@ -245,31 +254,47 @@ impl OpenAiAdapter {
                     if status.as_u16() == 429 {
                         if total_attempt <= max_retries {
                             log::warn!("请求频率受限(429), model={}, 准备重试", self.model);
-                            _last_error = Some(CommandError::llm(1003, "请求频率受限，正在重试".to_string()));
+                            _last_error = Some(CommandError::llm(
+                                1003,
+                                "请求频率受限，正在重试".to_string(),
+                            ));
                             is_dns_failure = false;
                             continue;
                         }
-                        return Err(CommandError::llm(1003, format!("请求频率受限: {}", error_body)));
+                        return Err(CommandError::llm(
+                            1003,
+                            format!("请求频率受限: {}", error_body),
+                        ));
                     }
                     if status.as_u16() == 404 {
                         log::error!("模型不存在(404), model={}", self.model);
-                        return Err(CommandError::llm(1005, format!("模型不存在: {}", error_body)));
+                        return Err(CommandError::llm(
+                            1005,
+                            format!("模型不存在: {}", error_body),
+                        ));
                     }
                     // 5xx 服务端错误，可重试
                     if status.as_u16() >= 500 && total_attempt <= max_retries {
                         log::warn!("服务端错误({}), model={}, 准备重试", status, self.model);
-                        _last_error = Some(CommandError::llm(1001, format!("服务端错误 ({}), 正在重试", status)));
+                        _last_error = Some(CommandError::llm(
+                            1001,
+                            format!("服务端错误 ({}), 正在重试", status),
+                        ));
                         is_dns_failure = false;
                         continue;
                     }
 
-                    _last_error = Some(CommandError::llm(1000, format!("API 请求失败 ({}): {}", status, error_body)));
+                    _last_error = Some(CommandError::llm(
+                        1000,
+                        format!("API 请求失败 ({}): {}", status, error_body),
+                    ));
                 }
                 Err(e) => {
                     if e.is_timeout() {
                         if total_attempt <= max_retries {
                             log::warn!("请求超时, model={}, 准备重试", self.model);
-                            _last_error = Some(CommandError::llm(1006, "请求超时，正在重试".to_string()));
+                            _last_error =
+                                Some(CommandError::llm(1006, "请求超时，正在重试".to_string()));
                             is_dns_failure = false;
                             continue;
                         }
@@ -303,7 +328,11 @@ impl OpenAiAdapter {
         }
 
         let err = _last_error.unwrap_or_else(|| CommandError::llm(1000, "未知错误".to_string()));
-        log::error!("请求最终失败, model={}, 重试耗尽, 错误: {}", self.model, err.message);
+        log::error!(
+            "请求最终失败, model={}, 重试耗尽, 错误: {}",
+            self.model,
+            err.message
+        );
         Err(err)
     }
 
@@ -321,14 +350,21 @@ impl OpenAiAdapter {
                         let content = message["content"].as_str().unwrap_or("").to_string();
 
                         let tool_calls = message["tool_calls"].as_array().map(|tc_arr| {
-                            tc_arr.iter()
+                            tc_arr
+                                .iter()
                                 .map(|tc| {
                                     let index = tc["index"].as_u64().unwrap_or(0) as u32;
                                     let id = tc["id"].as_str().unwrap_or("").to_string();
                                     let func = &tc["function"];
                                     let name = func["name"].as_str().unwrap_or("").to_string();
-                                    let arguments = func["arguments"].as_str().unwrap_or("{}").to_string();
-                                    LlmToolCall { index, id, name, arguments }
+                                    let arguments =
+                                        func["arguments"].as_str().unwrap_or("{}").to_string();
+                                    LlmToolCall {
+                                        index,
+                                        id,
+                                        name,
+                                        arguments,
+                                    }
                                 })
                                 .collect::<Vec<_>>()
                         });
@@ -343,7 +379,9 @@ impl OpenAiAdapter {
                                 content_parts: None,
                                 tool_calls,
                                 tool_call_id: None,
-                                reasoning_content: message["reasoning_content"].as_str().map(String::from),
+                                reasoning_content: message["reasoning_content"]
+                                    .as_str()
+                                    .map(String::from),
                                 attachments: None,
                             },
                             finish_reason,
@@ -364,11 +402,7 @@ impl OpenAiAdapter {
             cached_content_token_count: 0,
         });
 
-        Ok(ChatResponse {
-            id,
-            choices,
-            usage,
-        })
+        Ok(ChatResponse { id, choices, usage })
     }
 }
 
@@ -384,7 +418,10 @@ impl LlmProvider for OpenAiAdapter {
         tools: &[ToolDefinition],
     ) -> Result<ChatResponse, CommandError> {
         log::info!("发送非流式请求, model={}", self.model);
-        let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.api_base_url.trim_end_matches('/')
+        );
         let body = self.build_request_body(messages, tools, false, None);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
@@ -401,7 +438,10 @@ impl LlmProvider for OpenAiAdapter {
         tools: &[ToolDefinition],
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
         log::info!("发送流式请求, model={}", self.model);
-        let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.api_base_url.trim_end_matches('/')
+        );
         let body = self.build_request_body(messages, tools, true, None);
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
         let response = self.send_streaming_with_retry(&url, &body).await?;
@@ -426,7 +466,9 @@ impl LlmProvider for OpenAiAdapter {
 
                             for line in event_text.lines() {
                                 // SSE 规范允许 data: 后有无空格，先尝试带空格再尝试无空格
-                                let data = line.strip_prefix("data: ").or_else(|| line.strip_prefix("data:"));
+                                let data = line
+                                    .strip_prefix("data: ")
+                                    .or_else(|| line.strip_prefix("data:"));
                                 if let Some(data) = data {
                                     let data = data.trim();
                                     if data == "[DONE]" {
@@ -441,44 +483,94 @@ impl LlmProvider for OpenAiAdapter {
                                             let choices = value["choices"]
                                                 .as_array()
                                                 .map(|arr| {
-                                                    arr.iter().map(|c| {
-                                                        let index = c["index"].as_u64().unwrap_or(0) as u32;
-                                                        let delta = &c["delta"];
-                                                        let role = delta["role"].as_str().map(String::from);
-                                                        let content = delta["content"].as_str().map(String::from);
-                                                        let reasoning_content = delta["reasoning_content"].as_str().map(String::from);
-                                                        let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
-                                                            tc_arr.iter().map(|tc| {
-                                                                let index = tc["index"].as_u64().unwrap_or(0) as u32;
-                                                                let id = tc["id"].as_str().unwrap_or("").to_string();
-                                                                let func = &tc["function"];
-                                                                let name = func["name"].as_str().unwrap_or("").to_string();
-                                                                let arguments = func["arguments"].as_str().unwrap_or("").to_string();
-                                                                LlmToolCall { index, id, name, arguments }
-                                                            }).collect::<Vec<_>>()
-                                                        });
-                                                        let finish_reason = c["finish_reason"].as_str().map(String::from);
+                                                    arr.iter()
+                                                        .map(|c| {
+                                                            let index =
+                                                                c["index"].as_u64().unwrap_or(0)
+                                                                    as u32;
+                                                            let delta = &c["delta"];
+                                                            let role = delta["role"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let content = delta["content"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let reasoning_content = delta
+                                                                ["reasoning_content"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let tool_calls = delta["tool_calls"]
+                                                                .as_array()
+                                                                .map(|tc_arr| {
+                                                                    tc_arr
+                                                                        .iter()
+                                                                        .map(|tc| {
+                                                                            let index = tc["index"]
+                                                                                .as_u64()
+                                                                                .unwrap_or(0)
+                                                                                as u32;
+                                                                            let id = tc["id"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            let func =
+                                                                                &tc["function"];
+                                                                            let name = func["name"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            let arguments = func
+                                                                                ["arguments"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            LlmToolCall {
+                                                                                index,
+                                                                                id,
+                                                                                name,
+                                                                                arguments,
+                                                                            }
+                                                                        })
+                                                                        .collect::<Vec<_>>()
+                                                                });
+                                                            let finish_reason = c["finish_reason"]
+                                                                .as_str()
+                                                                .map(String::from);
 
-                                                        StreamChoice {
-                                                            index,
-                                                            delta: StreamDelta {
-                                                                role,
-                                                                content,
-                                                                reasoning_content,
-                                                                tool_calls,
-                                                            },
-                                                            finish_reason,
-                                                        }
-                                                    }).collect::<Vec<_>>()
-                                                }).unwrap_or_default();
+                                                            StreamChoice {
+                                                                index,
+                                                                delta: StreamDelta {
+                                                                    role,
+                                                                    content,
+                                                                    reasoning_content,
+                                                                    tool_calls,
+                                                                },
+                                                                finish_reason,
+                                                            }
+                                                        })
+                                                        .collect::<Vec<_>>()
+                                                })
+                                                .unwrap_or_default();
 
                                             // 提取 usage（仅在最后一个 chunk 中存在）
                                             let usage = value.get("usage").map(|u| ChatUsage {
-                                                prompt_tokens: u["prompt_tokens"].as_u64().unwrap_or(0),
-                                                completion_tokens: u["completion_tokens"].as_u64().unwrap_or(0),
-                                                total_tokens: u["total_tokens"].as_u64().unwrap_or(0),
-                                                prompt_cache_hit_tokens: u["prompt_cache_hit_tokens"].as_u64().unwrap_or(0),
-                                                prompt_cache_miss_tokens: u["prompt_cache_miss_tokens"].as_u64().unwrap_or(0),
+                                                prompt_tokens: u["prompt_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                completion_tokens: u["completion_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                total_tokens: u["total_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                prompt_cache_hit_tokens: u
+                                                    ["prompt_cache_hit_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                prompt_cache_miss_tokens: u
+                                                    ["prompt_cache_miss_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
                                                 cache_creation_input_tokens: 0,
                                                 cache_read_input_tokens: 0,
                                                 cached_content_token_count: 0,
@@ -490,8 +582,17 @@ impl LlmProvider for OpenAiAdapter {
                                             }
                                         }
                                         Err(e) => {
-                                            log::error!("解析 SSE 数据失败, model={}, 错误: {}", model_name, e);
-                                            let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                            log::error!(
+                                                "解析 SSE 数据失败, model={}, 错误: {}",
+                                                model_name,
+                                                e
+                                            );
+                                            let _ = tx
+                                                .send(Err(CommandError::llm(
+                                                    1000,
+                                                    format!("解析 SSE 数据失败: {}", e),
+                                                )))
+                                                .await;
                                         }
                                     }
                                 }
@@ -500,7 +601,9 @@ impl LlmProvider for OpenAiAdapter {
                     }
                     Err(e) => {
                         log::error!("流读取错误, model={}, 错误: {}", model_name, e);
-                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        let _ = tx
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
+                            .await;
                         return;
                     }
                 }
@@ -518,8 +621,15 @@ impl LlmProvider for OpenAiAdapter {
         tools: &[ToolDefinition],
         max_tokens_override: u32,
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
-        log::info!("发送流式请求 (max_tokens={}), model={}", max_tokens_override, self.model);
-        let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
+        log::info!(
+            "发送流式请求 (max_tokens={}), model={}",
+            max_tokens_override,
+            self.model
+        );
+        let url = format!(
+            "{}/chat/completions",
+            self.api_base_url.trim_end_matches('/')
+        );
         let body = self.build_request_body(messages, tools, true, Some(max_tokens_override));
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
         let response = self.send_streaming_with_retry(&url, &body).await?;
@@ -556,45 +666,97 @@ impl LlmProvider for OpenAiAdapter {
                                     match serde_json::from_str::<Value>(data) {
                                         Ok(value) => {
                                             let id = value["id"].as_str().unwrap_or("").to_string();
-                                            let choices = value["choices"].as_array().map(|arr| {
-                                                arr.iter().map(|c| {
-                                                    let index = c["index"].as_u64().unwrap_or(0) as u32;
-                                                    let delta = &c["delta"];
-                                                    let role = delta["role"].as_str().map(String::from);
-                                                    let content = delta["content"].as_str().map(String::from);
-                                                    let reasoning_content = delta["reasoning_content"].as_str().map(String::from);
-                                                    let tool_calls = delta["tool_calls"].as_array().map(|tc_arr| {
-                                                        tc_arr.iter().map(|tc| {
-                                                            let index = tc["index"].as_u64().unwrap_or(0) as u32;
-                                                            let id = tc["id"].as_str().unwrap_or("").to_string();
-                                                            let func = &tc["function"];
-                                                            let name = func["name"].as_str().unwrap_or("").to_string();
-                                                            let arguments = func["arguments"].as_str().unwrap_or("").to_string();
-                                                            LlmToolCall { index, id, name, arguments }
-                                                        }).collect::<Vec<_>>()
-                                                    });
-                                                    let finish_reason = c["finish_reason"].as_str().map(String::from);
+                                            let choices = value["choices"]
+                                                .as_array()
+                                                .map(|arr| {
+                                                    arr.iter()
+                                                        .map(|c| {
+                                                            let index =
+                                                                c["index"].as_u64().unwrap_or(0)
+                                                                    as u32;
+                                                            let delta = &c["delta"];
+                                                            let role = delta["role"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let content = delta["content"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let reasoning_content = delta
+                                                                ["reasoning_content"]
+                                                                .as_str()
+                                                                .map(String::from);
+                                                            let tool_calls = delta["tool_calls"]
+                                                                .as_array()
+                                                                .map(|tc_arr| {
+                                                                    tc_arr
+                                                                        .iter()
+                                                                        .map(|tc| {
+                                                                            let index = tc["index"]
+                                                                                .as_u64()
+                                                                                .unwrap_or(0)
+                                                                                as u32;
+                                                                            let id = tc["id"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            let func =
+                                                                                &tc["function"];
+                                                                            let name = func["name"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            let arguments = func
+                                                                                ["arguments"]
+                                                                                .as_str()
+                                                                                .unwrap_or("")
+                                                                                .to_string();
+                                                                            LlmToolCall {
+                                                                                index,
+                                                                                id,
+                                                                                name,
+                                                                                arguments,
+                                                                            }
+                                                                        })
+                                                                        .collect::<Vec<_>>()
+                                                                });
+                                                            let finish_reason = c["finish_reason"]
+                                                                .as_str()
+                                                                .map(String::from);
 
-                                                    StreamChoice {
-                                                        index,
-                                                        delta: StreamDelta {
-                                                            role,
-                                                            content,
-                                                            reasoning_content,
-                                                            tool_calls,
-                                                        },
-                                                        finish_reason,
-                                                    }
-                                                }).collect::<Vec<_>>()
-                                            }).unwrap_or_default();
+                                                            StreamChoice {
+                                                                index,
+                                                                delta: StreamDelta {
+                                                                    role,
+                                                                    content,
+                                                                    reasoning_content,
+                                                                    tool_calls,
+                                                                },
+                                                                finish_reason,
+                                                            }
+                                                        })
+                                                        .collect::<Vec<_>>()
+                                                })
+                                                .unwrap_or_default();
 
                                             // 提取 usage（仅在最后一个 chunk 中存在）
                                             let usage = value.get("usage").map(|u| ChatUsage {
-                                                prompt_tokens: u["prompt_tokens"].as_u64().unwrap_or(0),
-                                                completion_tokens: u["completion_tokens"].as_u64().unwrap_or(0),
-                                                total_tokens: u["total_tokens"].as_u64().unwrap_or(0),
-                                                prompt_cache_hit_tokens: u["prompt_cache_hit_tokens"].as_u64().unwrap_or(0),
-                                                prompt_cache_miss_tokens: u["prompt_cache_miss_tokens"].as_u64().unwrap_or(0),
+                                                prompt_tokens: u["prompt_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                completion_tokens: u["completion_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                total_tokens: u["total_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                prompt_cache_hit_tokens: u
+                                                    ["prompt_cache_hit_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
+                                                prompt_cache_miss_tokens: u
+                                                    ["prompt_cache_miss_tokens"]
+                                                    .as_u64()
+                                                    .unwrap_or(0),
                                                 cache_creation_input_tokens: 0,
                                                 cache_read_input_tokens: 0,
                                                 cached_content_token_count: 0,
@@ -606,8 +768,17 @@ impl LlmProvider for OpenAiAdapter {
                                             }
                                         }
                                         Err(e) => {
-                                            log::error!("解析 SSE 数据失败, model={}, 错误: {}", model_name, e);
-                                            let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                            log::error!(
+                                                "解析 SSE 数据失败, model={}, 错误: {}",
+                                                model_name,
+                                                e
+                                            );
+                                            let _ = tx
+                                                .send(Err(CommandError::llm(
+                                                    1000,
+                                                    format!("解析 SSE 数据失败: {}", e),
+                                                )))
+                                                .await;
                                         }
                                     }
                                 }
@@ -616,7 +787,9 @@ impl LlmProvider for OpenAiAdapter {
                     }
                     Err(e) => {
                         log::error!("流读取错误, model={}, 错误: {}", model_name, e);
-                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        let _ = tx
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
+                            .await;
                         return;
                     }
                 }
@@ -638,7 +811,10 @@ impl LlmProvider for OpenAiAdapter {
             reasoning_content: None,
             attachments: None,
         }];
-        let url = format!("{}/chat/completions", self.api_base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/chat/completions",
+            self.api_base_url.trim_end_matches('/')
+        );
         let body = self.build_request_body(&test_messages, &[], false, None);
 
         match self.send_with_retry(&url, &body).await {
@@ -701,7 +877,8 @@ impl LlmProvider for OpenAiAdapter {
         let start = std::time::Instant::now();
         let url = format!("{}/models", self.api_base_url.trim_end_matches('/'));
 
-        let result = self.client
+        let result = self
+            .client
             .head(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .timeout(Duration::from_secs(10))
@@ -716,7 +893,10 @@ impl LlmProvider for OpenAiAdapter {
                 let reachable = status < 500;
                 log::info!(
                     "轻量级健康检查, model={}, status={}, 可达={}, 延迟={}ms",
-                    self.model, status, reachable, latency_ms
+                    self.model,
+                    status,
+                    reachable,
+                    latency_ms
                 );
                 Ok(ConnectionResult {
                     success: reachable,
@@ -724,7 +904,11 @@ impl LlmProvider for OpenAiAdapter {
                     latency_ms,
                     model_info: None,
                     model: None,
-                    error_message: if reachable { None } else { Some(format!("服务端错误 ({})", status)) },
+                    error_message: if reachable {
+                        None
+                    } else {
+                        Some(format!("服务端错误 ({})", status))
+                    },
                     error: None,
                 })
             }

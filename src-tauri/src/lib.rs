@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tauri::{Manager, Emitter};
 use tauri::path::BaseDirectory;
+use tauri::{Emitter, Manager};
 
 pub mod commands;
 pub mod config;
@@ -27,17 +27,23 @@ pub struct AppState {
     pub db: Arc<crate::db::Database>,
     pub config: Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     pub active_agents: Arc<tokio::sync::Mutex<HashMap<String, bool>>>,
-    pub confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
+    pub confirm_channels:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
-    pub handler_registry: Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
+    pub handler_registry:
+        Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
     pub network_monitor: Arc<crate::services::network_monitor::NetworkMonitor<tauri::Wry>>,
     /// Scratchpad 共享状态：智能体草稿本，按 session_id 隔离
     /// 由 ScratchpadTool 写入，由 AgentContext 在每轮迭代时读取摘要
     pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
 }
+
+// TODO(Phase 2): permission_registry: Arc<PermissionRegistry>
+// TODO(Phase 3): skill_service: Arc<SkillService>
+// TODO(Phase 5): lsp_manager: Arc<LspManager>
 
 /// 从系统 PATH 中查找 Python 可执行文件（开发模式兜底）
 ///
@@ -183,8 +189,9 @@ pub fn run() {
 
             let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config)
                 .with_app_handle(Some(app.handle().clone()));
-            let llm_router_arc: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>> =
-                Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router)));
+            let llm_router_arc: Arc<
+                tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>,
+            > = Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router)));
 
             // 解析 Python 可执行文件路径
             // 优先级：
@@ -208,10 +215,15 @@ pub fn run() {
                 #[cfg(not(debug_assertions))]
                 {
                     // 生产模式：优先使用应用资源目录中的嵌入式 Python
-                    let embedded_python = app.path()
+                    let embedded_python = app
+                        .path()
                         .resolve("sidecar_dist/python/python.exe", BaseDirectory::Resource)
                         .ok()
-                        .map(|p| crate::utils::strip_unc_prefix(&p).to_string_lossy().to_string());
+                        .map(|p| {
+                            crate::utils::strip_unc_prefix(&p)
+                                .to_string_lossy()
+                                .to_string()
+                        });
 
                     if let Some(path) = embedded_python {
                         if std::path::Path::new(&path).exists() {
@@ -219,7 +231,10 @@ pub fn run() {
                             path
                         } else {
                             // 资源路径解析成功但文件不存在，回退到系统 PATH
-                            log::warn!("嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH", path);
+                            log::warn!(
+                                "嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH",
+                                path
+                            );
                             find_system_python()
                         }
                     } else {
@@ -244,7 +259,8 @@ pub fn run() {
                 // Tauri 资源路径解析：生产环境中 bundle.resources 打包的文件通过此 API 定位
                 // resolve() 会自动处理路径中的 .. -> _up_ 等转换，比手动拼接 resource_dir() 更可靠
                 // 生产环境通过 sidecar_dist/ 打包，脚本路径为 sidecar_dist/sidecar/main.py
-                let embedded_script = app.path()
+                let embedded_script = app
+                    .path()
                     .resolve("sidecar_dist/sidecar/main.py", BaseDirectory::Resource)
                     .ok();
 
@@ -288,12 +304,14 @@ pub fn run() {
                     None => {
                         log::error!(
                             "Sidecar 脚本未找到，已尝试以下路径: {:?}",
-                            candidates.iter()
+                            candidates
+                                .iter()
                                 .map(|p| p.to_string_lossy().to_string())
                                 .collect::<Vec<_>>()
                         );
                         // 兜底：使用绝对路径形式的最后候选，避免依赖 CWD
-                        candidates.last()
+                        candidates
+                            .last()
                             .map(|p| p.to_string_lossy().to_string())
                             .unwrap_or_else(|| "sidecar/main.py".to_string())
                     }
@@ -335,7 +353,8 @@ pub fn run() {
             log::info!("DocAgent 应用初始化完成");
 
             // 初始化文件监听服务
-            let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(app.handle().clone());
+            let fs_watcher =
+                crate::services::fs_watcher::FsWatcherService::new(app.handle().clone());
 
             // 初始化网络监控服务
             let network_monitor = crate::services::network_monitor::NetworkMonitor::new(
@@ -368,7 +387,9 @@ pub fn run() {
                     if let Ok(settings) = cfg.load_app_settings() {
                         let active_id = &settings.workspace.default_workspace_id;
                         if !active_id.is_empty() {
-                            if let Some(ws) = ws_config.workspaces.iter().find(|w| w.id == *active_id) {
+                            if let Some(ws) =
+                                ws_config.workspaces.iter().find(|w| w.id == *active_id)
+                            {
                                 fs_watcher.watch(ws.id.clone(), ws.path.clone()).await;
                             }
                         }
@@ -393,9 +414,8 @@ pub fn run() {
                         continue;
                     }
                     let results = router_snapshot.health_check_all().await;
-                    let summary: Vec<(&String, bool)> = results.iter()
-                        .map(|(k, v)| (k, v.success))
-                        .collect();
+                    let summary: Vec<(&String, bool)> =
+                        results.iter().map(|(k, v)| (k, v.success)).collect();
                     log::info!("定期健康检查完成: {:?}", summary);
                 }
             });
@@ -429,7 +449,9 @@ pub fn run() {
                         fs_watcher_for_check.stop().await;
                         continue;
                     }
-                    if let Some((wid, wpath, wname)) = fs_watcher_for_check.get_active_watch_info().await {
+                    if let Some((wid, wpath, wname)) =
+                        fs_watcher_for_check.get_active_watch_info().await
+                    {
                         if !wpath.exists() || !wpath.is_dir() {
                             log::warn!(
                                 "定期检查: 工作区目录已不存在, workspace_id={}, path={}, name={}",
@@ -438,11 +460,12 @@ pub fn run() {
                                 wname
                             );
                             // 发射工作区目录删除事件
-                            let deleted_payload = crate::events::types::WorkspaceDirectoryDeletedPayload {
-                                workspace_id: wid.clone(),
-                                workspace_name: wname.clone(),
-                                workspace_path: wpath.to_string_lossy().to_string(),
-                            };
+                            let deleted_payload =
+                                crate::events::types::WorkspaceDirectoryDeletedPayload {
+                                    workspace_id: wid.clone(),
+                                    workspace_name: wname.clone(),
+                                    workspace_path: wpath.to_string_lossy().to_string(),
+                                };
                             let _ = app_handle_for_check.emit(
                                 crate::events::types::WORKSPACE_DIRECTORY_DELETED,
                                 deleted_payload,
@@ -603,7 +626,14 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                 fn SetWindowLongPtrW(hwnd: HWND_PTR, index: i32, new_long: LONG_PTR) -> LONG_PTR;
                 fn SetWindowSubclass(
                     hwnd: HWND_PTR,
-                    subclass_proc: unsafe extern "system" fn(*mut std::ffi::c_void, u32, usize, isize, usize, usize) -> isize,
+                    subclass_proc: unsafe extern "system" fn(
+                        *mut std::ffi::c_void,
+                        u32,
+                        usize,
+                        isize,
+                        usize,
+                        usize,
+                    ) -> isize,
                     uid: usize,
                     dw_ref_data: usize,
                 ) -> BOOL_T;
@@ -627,24 +657,31 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                     window_name.as_ptr(),
                 );
 
-                if !child.is_null() {
-                    if is_maximized {
-                        let _ = ShowWindow(child, SW_HIDE);
-                        let _ = SetWindowPos(
-                            child,
-                            0 as HWND_PTR,
-                            0, 0, 0, 0,
-                            SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
-                        );
-                    }
+                if !child.is_null() && is_maximized {
+                    let _ = ShowWindow(child, SW_HIDE);
+                    let _ = SetWindowPos(
+                        child,
+                        0 as HWND_PTR,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
+                    );
                 }
 
                 // 最大化时移除 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU 样式
                 if is_maximized {
                     let mut remove_mask: u32 = 0;
-                    if (style & WS_SIZEBOX) != 0 { remove_mask |= WS_SIZEBOX; }
-                    if (style & WS_MAXIMIZEBOX) != 0 { remove_mask |= WS_MAXIMIZEBOX; }
-                    if (style & WS_SYSMENU) != 0 { remove_mask |= WS_SYSMENU; }
+                    if (style & WS_SIZEBOX) != 0 {
+                        remove_mask |= WS_SIZEBOX;
+                    }
+                    if (style & WS_MAXIMIZEBOX) != 0 {
+                        remove_mask |= WS_MAXIMIZEBOX;
+                    }
+                    if (style & WS_SYSMENU) != 0 {
+                        remove_mask |= WS_SYSMENU;
+                    }
 
                     if remove_mask != 0 {
                         let new_style = (style & !remove_mask) as LONG_PTR;
@@ -653,20 +690,23 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                         let _ = SetWindowPos(
                             parent_hwnd,
                             0 as HWND_PTR,
-                            0, 0, 0, 0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE
+                                | SWP_NOSIZE
+                                | SWP_NOZORDER
+                                | SWP_NOACTIVATE
+                                | SWP_FRAMECHANGED
+                                | SWP_ASYNCWINDOWPOS,
                         );
                     }
                 }
 
                 // 安装 WM_SIZE subclass，在窗口状态切换时自动调整样式和子窗口
                 let subclass_uid: usize = 0xD0CA6E77;
-                let _ = SetWindowSubclass(
-                    parent_hwnd,
-                    fix_hit_test_subclass_proc,
-                    subclass_uid,
-                    0,
-                );
+                let _ = SetWindowSubclass(parent_hwnd, fix_hit_test_subclass_proc, subclass_uid, 0);
             }
         }
     }
@@ -675,6 +715,7 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
 /// 自定义 subclass：监听 WM_SIZE 事件，在窗口状态切换时调整样式、子窗口可见性和窗口尺寸
 #[cfg(target_os = "windows")]
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)] // RECT/MONITORINFO 是 Win32 API 标准类型名
 unsafe extern "system" fn fix_hit_test_subclass_proc(
     hwnd: *mut std::ffi::c_void,
     msg: u32,
@@ -779,9 +820,15 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // - WS_MAXIMIZEBOX + WS_SYSMENU: 防止 Windows 11 Snap Layouts 拦截 mouseup
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
                 let mut remove_mask: u32 = 0;
-                if (style & WS_SIZEBOX) != 0 { remove_mask |= WS_SIZEBOX; }
-                if (style & WS_MAXIMIZEBOX) != 0 { remove_mask |= WS_MAXIMIZEBOX; }
-                if (style & WS_SYSMENU) != 0 { remove_mask |= WS_SYSMENU; }
+                if (style & WS_SIZEBOX) != 0 {
+                    remove_mask |= WS_SIZEBOX;
+                }
+                if (style & WS_MAXIMIZEBOX) != 0 {
+                    remove_mask |= WS_MAXIMIZEBOX;
+                }
+                if (style & WS_SYSMENU) != 0 {
+                    remove_mask |= WS_SYSMENU;
+                }
 
                 if remove_mask != 0 {
                     let new_style = (style & !remove_mask) as LONG_PTR;
@@ -789,8 +836,16 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE
+                            | SWP_NOSIZE
+                            | SWP_NOZORDER
+                            | SWP_NOACTIVATE
+                            | SWP_FRAMECHANGED
+                            | SWP_ASYNCWINDOWPOS,
                     );
                 }
                 // 关键修复：从最小化恢复到最大化时，Windows 在恢复样式后已设置了包含边框的
@@ -817,7 +872,11 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 let wa_h = work_area.bottom - work_area.top;
                 let win_w = win_rect.right - win_rect.left;
                 let win_h = win_rect.bottom - win_rect.top;
-                if win_w != wa_w || win_h != wa_h || win_rect.left != work_area.left || win_rect.top != work_area.top {
+                if win_w != wa_w
+                    || win_h != wa_h
+                    || win_rect.left != work_area.left
+                    || win_rect.top != work_area.top
+                {
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
@@ -831,13 +890,21 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // 隐藏 TAURI_DRAG_RESIZE_WINDOW 子窗口
                 let class_name: Vec<u16> = "TAURI_DRAG_RESIZE_BORDERS\0".encode_utf16().collect();
                 let window_name: Vec<u16> = "TAURI_DRAG_RESIZE_WINDOW\0".encode_utf16().collect();
-                let child = FindWindowExW(hwnd, std::ptr::null_mut(), class_name.as_ptr(), window_name.as_ptr());
+                let child = FindWindowExW(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    class_name.as_ptr(),
+                    window_name.as_ptr(),
+                );
                 if !child.is_null() {
                     let _ = ShowWindow(child, SW_HIDE);
                     let _ = SetWindowPos(
                         child,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
+                        0,
+                        0,
+                        0,
+                        0,
                         SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
                     );
                 }
@@ -846,9 +913,15 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // 窗口非最大化（真正还原）：恢复 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
                 let mut add_mask: u32 = 0;
-                if (style & WS_SIZEBOX) == 0 { add_mask |= WS_SIZEBOX; }
-                if (style & WS_MAXIMIZEBOX) == 0 { add_mask |= WS_MAXIMIZEBOX; }
-                if (style & WS_SYSMENU) == 0 { add_mask |= WS_SYSMENU; }
+                if (style & WS_SIZEBOX) == 0 {
+                    add_mask |= WS_SIZEBOX;
+                }
+                if (style & WS_MAXIMIZEBOX) == 0 {
+                    add_mask |= WS_MAXIMIZEBOX;
+                }
+                if (style & WS_SYSMENU) == 0 {
+                    add_mask |= WS_SYSMENU;
+                }
 
                 if add_mask != 0 {
                     let new_style = (style | add_mask) as LONG_PTR;
@@ -856,8 +929,16 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE
+                            | SWP_NOSIZE
+                            | SWP_NOZORDER
+                            | SWP_NOACTIVATE
+                            | SWP_FRAMECHANGED
+                            | SWP_ASYNCWINDOWPOS,
                     );
                 }
                 DefSubclassProc(hwnd, msg, wparam, lparam)
@@ -882,6 +963,7 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
 /// 的窗口管理逻辑冲突。DWMWA_WINDOW_CORNER_PREFERENCE 是独立的 DWM 属性，
 /// 不依赖 WS_THICKFRAME 即可生效。
 #[cfg(target_os = "windows")]
+#[allow(clippy::upper_case_acronyms)] // DWORD 是 Win32 API 标准类型名
 fn apply_window_rounded_corners(app: &tauri::AppHandle) {
     use tauri::Manager;
     if let Some(window) = app.get_webview_window("main") {

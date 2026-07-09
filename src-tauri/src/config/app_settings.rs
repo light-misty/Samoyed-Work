@@ -68,7 +68,7 @@ impl Default for AppearanceSettings {
 }
 
 /// 通用设置
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneralSettings {
     #[serde(default)]
@@ -81,17 +81,6 @@ pub struct GeneralSettings {
     pub author_company: String,
     #[serde(default)]
     pub confirmation_level: ConfirmationLevel,
-}
-
-impl Default for GeneralSettings {
-    fn default() -> Self {
-        Self {
-            author_name: String::new(),
-            author_email: String::new(),
-            author_company: String::new(),
-            confirmation_level: ConfirmationLevel::default(),
-        }
-    }
 }
 
 /// 版本快照设置
@@ -222,7 +211,7 @@ pub struct AppSettings {
     #[serde(default)]
     pub preferred_provider_id: Option<String>,
     /// Git Bash 可执行文件路径（空字符串表示从 PATH 环境变量自动检测）
-    /// 用于 run_command 工具执行 Shell 命令
+    /// 用于 bash 工具执行 Shell 命令
     #[serde(default)]
     pub git_bash_path: String,
 }

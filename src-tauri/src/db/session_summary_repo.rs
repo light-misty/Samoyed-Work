@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::context_memory::ContextSessionSummary;
+use chrono::Utc;
+use rusqlite::Connection;
 
 /// 创建会话摘要
 #[allow(clippy::too_many_arguments)]
@@ -23,8 +23,15 @@ pub fn create_session_summary(
              files_involved, tools_used, errors_resolved, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         rusqlite::params![
-            id, session_id, workspace_id, user_goal, result_summary,
-            files_involved, tools_used, errors_resolved, now,
+            id,
+            session_id,
+            workspace_id,
+            user_goal,
+            result_summary,
+            files_involved,
+            tools_used,
+            errors_resolved,
+            now,
         ],
     )?;
     Ok(())
@@ -40,34 +47,34 @@ pub fn list_summaries_by_workspace(
     exclude_session_id: Option<&str>,
 ) -> Vec<ContextSessionSummary> {
     // 根据是否排除特定会话构建不同的SQL
-    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(exclude_id) = exclude_session_id {
-        (
-            "SELECT id, session_id, workspace_id, user_goal, result_summary,
+    let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) =
+        if let Some(exclude_id) = exclude_session_id {
+            (
+                "SELECT id, session_id, workspace_id, user_goal, result_summary,
                     files_involved, tools_used, errors_resolved, created_at
              FROM session_summaries
              WHERE workspace_id = ?1 AND session_id != ?3
              ORDER BY created_at DESC
-             LIMIT ?2".to_string(),
-            vec![
-                Box::new(workspace_id.to_string()),
-                Box::new(limit),
-                Box::new(exclude_id.to_string()),
-            ],
-        )
-    } else {
-        (
-            "SELECT id, session_id, workspace_id, user_goal, result_summary,
+             LIMIT ?2"
+                    .to_string(),
+                vec![
+                    Box::new(workspace_id.to_string()),
+                    Box::new(limit),
+                    Box::new(exclude_id.to_string()),
+                ],
+            )
+        } else {
+            (
+                "SELECT id, session_id, workspace_id, user_goal, result_summary,
                     files_involved, tools_used, errors_resolved, created_at
              FROM session_summaries
              WHERE workspace_id = ?1
              ORDER BY created_at DESC
-             LIMIT ?2".to_string(),
-            vec![
-                Box::new(workspace_id.to_string()),
-                Box::new(limit),
-            ],
-        )
-    };
+             LIMIT ?2"
+                    .to_string(),
+                vec![Box::new(workspace_id.to_string()), Box::new(limit)],
+            )
+        };
 
     let mut stmt = match conn.prepare(&sql) {
         Ok(s) => s,
@@ -100,10 +107,7 @@ pub fn list_summaries_by_workspace(
 }
 
 /// 删除指定会话的摘要
-pub fn delete_summary_by_session(
-    conn: &Connection,
-    session_id: &str,
-) -> Result<(), CommandError> {
+pub fn delete_summary_by_session(conn: &Connection, session_id: &str) -> Result<(), CommandError> {
     conn.execute(
         "DELETE FROM session_summaries WHERE session_id = ?1",
         rusqlite::params![session_id],

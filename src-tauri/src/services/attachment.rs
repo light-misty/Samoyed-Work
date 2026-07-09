@@ -1,8 +1,8 @@
-use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use crate::errors::CommandError;
-use crate::models::message::{AttachmentMeta, AttachmentType};
 use crate::models::llm::ContentPart;
+use crate::models::message::{AttachmentMeta, AttachmentType};
 use crate::services::document::DocumentService;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use serde_json::json;
 
 /// 支持的图片 MIME 类型
@@ -32,9 +32,18 @@ const SUPPORTED_TEXT_MIME_TYPES: &[&str] = &[
 
 /// 文档 MIME 类型到 Sidecar doc_type 的映射
 const DOCUMENT_MIME_TO_DOCTYPE: &[(&str, &str)] = &[
-    ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
-    ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"),
-    ("application/vnd.openxmlformats-officedocument.presentationml.presentation", "pptx"),
+    (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "docx",
+    ),
+    (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsx",
+    ),
+    (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "pptx",
+    ),
     ("application/pdf", "pdf"),
 ];
 
@@ -77,13 +86,18 @@ impl AttachmentService {
         if attachments.len() > MAX_ATTACHMENT_COUNT {
             return Err(CommandError::doc(
                 3012,
-                format!("附件数量超过上限 ({}个)，最多支持 {} 个", attachments.len(), MAX_ATTACHMENT_COUNT),
+                format!(
+                    "附件数量超过上限 ({}个)，最多支持 {} 个",
+                    attachments.len(),
+                    MAX_ATTACHMENT_COUNT
+                ),
             ));
         }
 
         let mut parts = Vec::new();
         for attachment in attachments {
-            let content_parts = Self::resolve_single(attachment, workspace_root, doc_service).await?;
+            let content_parts =
+                Self::resolve_single(attachment, workspace_root, doc_service).await?;
             parts.extend(content_parts);
         }
         Ok(parts)
@@ -100,9 +114,7 @@ impl AttachmentService {
             AttachmentType::Document => {
                 Self::resolve_document(attachment, workspace_root, doc_service).await
             }
-            AttachmentType::Text => {
-                Self::resolve_text(attachment, workspace_root)
-            }
+            AttachmentType::Text => Self::resolve_text(attachment, workspace_root),
         }
     }
 
@@ -180,7 +192,11 @@ impl AttachmentService {
         let doc_type = Self::infer_doc_type(&attachment.mime_type, &attachment.name);
         let Some(doc_type) = doc_type else {
             // 无法识别文档类型，降级为文本处理
-            log::warn!("无法识别文档类型: mime={}, name={}，降级为文本处理", attachment.mime_type, attachment.name);
+            log::warn!(
+                "无法识别文档类型: mime={}, name={}，降级为文本处理",
+                attachment.mime_type,
+                attachment.name
+            );
             return Self::resolve_text(attachment, workspace_root);
         };
 
@@ -190,15 +206,29 @@ impl AttachmentService {
             Err(e) => {
                 // 路径解析失败，尝试使用前端传入的 base64 数据写入临时文件后调用 Sidecar
                 if let Some(ref data) = attachment.data {
-                    log::info!("文档路径解析失败，尝试将 base64 数据写入临时文件后调用 Sidecar: {}", attachment.name);
-                    return Self::resolve_document_from_base64(attachment, data, doc_type, doc_service).await;
+                    log::info!(
+                        "文档路径解析失败，尝试将 base64 数据写入临时文件后调用 Sidecar: {}",
+                        attachment.name
+                    );
+                    return Self::resolve_document_from_base64(
+                        attachment,
+                        data,
+                        doc_type,
+                        doc_service,
+                    )
+                    .await;
                 }
                 return Err(e);
             }
         };
 
         // 调用 Sidecar read 操作
-        log::info!("调用 Sidecar 解析文档附件: name={}, doc_type={}, path={}", attachment.name, doc_type, file_path);
+        log::info!(
+            "调用 Sidecar 解析文档附件: name={}, doc_type={}, path={}",
+            attachment.name,
+            doc_type,
+            file_path
+        );
 
         let sidecar_params = json!({
             "path": file_path,
@@ -207,7 +237,11 @@ impl AttachmentService {
         let result = match doc_service.process("read", doc_type, sidecar_params).await {
             Ok(data) => data,
             Err(e) => {
-                log::warn!("Sidecar 文档解析失败: {}，降级为文本处理: {}", attachment.name, e.message);
+                log::warn!(
+                    "Sidecar 文档解析失败: {}，降级为文本处理: {}",
+                    attachment.name,
+                    e.message
+                );
                 // Sidecar 解析失败时降级为文本处理
                 return Self::resolve_text(attachment, workspace_root);
             }
@@ -218,8 +252,17 @@ impl AttachmentService {
 
         // 截断过长的文档内容
         let truncated_content = if text_content.len() > MAX_DOCUMENT_TEXT_LENGTH {
-            log::warn!("文档解析后文本过长 ({}字符)，截断至 {} 字符: {}", text_content.len(), MAX_DOCUMENT_TEXT_LENGTH, attachment.name);
-            format!("{}...\n\n[内容过长已截断，原始长度: {} 字符]", &text_content[..MAX_DOCUMENT_TEXT_LENGTH], text_content.len())
+            log::warn!(
+                "文档解析后文本过长 ({}字符)，截断至 {} 字符: {}",
+                text_content.len(),
+                MAX_DOCUMENT_TEXT_LENGTH,
+                attachment.name
+            );
+            format!(
+                "{}...\n\n[内容过长已截断，原始长度: {} 字符]",
+                &text_content[..MAX_DOCUMENT_TEXT_LENGTH],
+                text_content.len()
+            )
         } else {
             text_content
         };
@@ -252,12 +295,8 @@ impl AttachmentService {
 
         // 写入临时文件
         let temp_dir = std::env::temp_dir().join("docagent_attachments");
-        std::fs::create_dir_all(&temp_dir).map_err(|e| {
-            CommandError::fs(
-                6006,
-                format!("创建临时目录失败: {}", e),
-            )
-        })?;
+        std::fs::create_dir_all(&temp_dir)
+            .map_err(|e| CommandError::fs(6006, format!("创建临时目录失败: {}", e)))?;
 
         // 根据文档类型确定文件扩展名
         let ext = match doc_type {
@@ -307,8 +346,17 @@ impl AttachmentService {
 
         // 截断过长的文档内容
         let truncated_content = if text_content.len() > MAX_DOCUMENT_TEXT_LENGTH {
-            log::warn!("文档解析后文本过长 ({}字符)，截断至 {} 字符: {}", text_content.len(), MAX_DOCUMENT_TEXT_LENGTH, attachment.name);
-            format!("{}...\n\n[内容过长已截断，原始长度: {} 字符]", &text_content[..MAX_DOCUMENT_TEXT_LENGTH], text_content.len())
+            log::warn!(
+                "文档解析后文本过长 ({}字符)，截断至 {} 字符: {}",
+                text_content.len(),
+                MAX_DOCUMENT_TEXT_LENGTH,
+                attachment.name
+            );
+            format!(
+                "{}...\n\n[内容过长已截断，原始长度: {} 字符]",
+                &text_content[..MAX_DOCUMENT_TEXT_LENGTH],
+                text_content.len()
+            )
         } else {
             text_content
         };
@@ -377,7 +425,11 @@ impl AttachmentService {
     }
 
     /// 将 Sidecar 返回的结构化文档数据转换为可读文本
-    fn format_document_content(doc_type: &str, data: &serde_json::Value, file_name: &str) -> String {
+    fn format_document_content(
+        doc_type: &str,
+        data: &serde_json::Value,
+        file_name: &str,
+    ) -> String {
         match doc_type {
             "docx" => Self::format_docx_content(data),
             "xlsx" => Self::format_xlsx_content(data),
@@ -386,7 +438,8 @@ impl AttachmentService {
             _ => {
                 // 未知文档类型，尝试直接提取文本
                 log::warn!("未知文档类型: {}，尝试直接提取文本", doc_type);
-                serde_json::to_string_pretty(data).unwrap_or_else(|_| format!("[无法格式化文档内容: {}]", file_name))
+                serde_json::to_string_pretty(data)
+                    .unwrap_or_else(|_| format!("[无法格式化文档内容: {}]", file_name))
             }
         }
     }
@@ -433,7 +486,8 @@ impl AttachmentService {
                     text.push_str(&format!("\n--- 表格 {} ---\n", i + 1));
                     for row in rows {
                         if let Some(cells) = row.as_array() {
-                            let cell_texts: Vec<String> = cells.iter()
+                            let cell_texts: Vec<String> = cells
+                                .iter()
                                 .map(|c| c.as_str().unwrap_or("").to_string())
                                 .collect();
                             text.push_str(&format!("| {} |\n", cell_texts.join(" | ")));
@@ -464,9 +518,11 @@ impl AttachmentService {
                 if let Some(rows) = sheet.get("data").and_then(|v| v.as_array()) {
                     for row in rows {
                         if let Some(cells) = row.as_array() {
-                            let cell_texts: Vec<String> = cells.iter()
+                            let cell_texts: Vec<String> = cells
+                                .iter()
                                 .map(|c| {
-                                    c.as_str().map(|s| s.to_string())
+                                    c.as_str()
+                                        .map(|s| s.to_string())
                                         .or_else(|| c.as_f64().map(|n| n.to_string()))
                                         .or_else(|| c.as_i64().map(|n| n.to_string()))
                                         .or_else(|| c.as_bool().map(|b| b.to_string()))
@@ -485,9 +541,11 @@ impl AttachmentService {
             if let Some(rows) = data.as_array() {
                 for row in rows {
                     if let Some(cells) = row.as_array() {
-                        let cell_texts: Vec<String> = cells.iter()
+                        let cell_texts: Vec<String> = cells
+                            .iter()
                             .map(|c| {
-                                c.as_str().map(|s| s.to_string())
+                                c.as_str()
+                                    .map(|s| s.to_string())
                                     .or_else(|| c.as_f64().map(|n| n.to_string()))
                                     .or_else(|| c.as_i64().map(|n| n.to_string()))
                                     .unwrap_or_default()
@@ -618,7 +676,10 @@ impl AttachmentService {
     /// 解析附件的文件路径
     /// 优先使用绝对路径，否则拼接工作区根目录 + 相对路径
     /// 包含路径遍历安全校验，与 Tool 系统使用相同的 canonicalize + starts_with 模式
-    fn resolve_path(attachment: &AttachmentMeta, workspace_root: &str) -> Result<std::path::PathBuf, CommandError> {
+    fn resolve_path(
+        attachment: &AttachmentMeta,
+        workspace_root: &str,
+    ) -> Result<std::path::PathBuf, CommandError> {
         let candidate = if let Some(ref abs_path) = attachment.absolute_path {
             std::path::PathBuf::from(abs_path)
         } else if let Some(ref rel_path) = attachment.path {
@@ -641,15 +702,13 @@ impl AttachmentService {
                     ));
                 }
             };
-            let canonical_root = match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
-                Ok(p) => p,
-                Err(_) => {
-                    return Err(CommandError::fs(
-                        6001,
-                        "工作区根目录路径无效".to_string(),
-                    ));
-                }
-            };
+            let canonical_root =
+                match crate::utils::canonicalize(std::path::Path::new(workspace_root)) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        return Err(CommandError::fs(6001, "工作区根目录路径无效".to_string()));
+                    }
+                };
             if !canonical_file.starts_with(&canonical_root) {
                 return Err(CommandError::fs(
                     6001,
@@ -691,6 +750,8 @@ impl AttachmentService {
 
     /// 检查附件是否包含图片
     pub fn has_image_attachments(attachments: &[AttachmentMeta]) -> bool {
-        attachments.iter().any(|a| matches!(a.attachment_type, AttachmentType::Image))
+        attachments
+            .iter()
+            .any(|a| matches!(a.attachment_type, AttachmentType::Image))
     }
 }

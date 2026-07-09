@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::VersionInfo;
+use chrono::Utc;
+use rusqlite::Connection;
 
 /// 创建版本快照记录
 pub fn create_snapshot(
@@ -18,7 +18,15 @@ pub fn create_snapshot(
         "INSERT INTO version_snapshots
             (id, workspace_id, session_id, file_path, snapshot_path, operation, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        rusqlite::params![id, workspace_id, session_id, file_path, snapshot_path, operation, now],
+        rusqlite::params![
+            id,
+            workspace_id,
+            session_id,
+            file_path,
+            snapshot_path,
+            operation,
+            now
+        ],
     )?;
     Ok(())
 }
@@ -31,7 +39,7 @@ pub fn list_snapshots(
 ) -> Vec<VersionInfo> {
     let mut sql = String::from(
         "SELECT id, workspace_id, session_id, file_path, snapshot_path, operation, created_at
-         FROM version_snapshots WHERE 1=1"
+         FROM version_snapshots WHERE 1=1",
     );
     let mut param_idx = 1u32;
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -49,7 +57,8 @@ pub fn list_snapshots(
 
     sql.push_str(" ORDER BY created_at DESC");
 
-    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = match conn.prepare(&sql) {
         Ok(s) => s,
@@ -155,7 +164,10 @@ pub fn cleanup_snapshots(
     if !deleted_ids.is_empty() {
         log::info!(
             "快照清理完成: workspace_id={}, file_path={}, policy={}, 清理数量={}",
-            workspace_id, file_path, policy, deleted_ids.len()
+            workspace_id,
+            file_path,
+            policy,
+            deleted_ids.len()
         );
     }
 
@@ -196,14 +208,21 @@ fn cleanup_by_count(
     }
 
     // 保留前 max_count 个（最新的），删除其余的
-    let to_delete: Vec<&str> = all_ids.iter()
+    let to_delete: Vec<&str> = all_ids
+        .iter()
         .skip(max_count as usize)
         .map(|s| s.as_str())
         .collect();
 
     let mut deleted = Vec::new();
     for id in to_delete {
-        if conn.execute("DELETE FROM version_snapshots WHERE id = ?1", rusqlite::params![id]).is_ok() {
+        if conn
+            .execute(
+                "DELETE FROM version_snapshots WHERE id = ?1",
+                rusqlite::params![id],
+            )
+            .is_ok()
+        {
             deleted.push(id.to_string());
         }
     }
@@ -248,7 +267,13 @@ fn cleanup_by_days(
 
     let mut deleted = Vec::new();
     for id in &to_delete {
-        if conn.execute("DELETE FROM version_snapshots WHERE id = ?1", rusqlite::params![id]).is_ok() {
+        if conn
+            .execute(
+                "DELETE FROM version_snapshots WHERE id = ?1",
+                rusqlite::params![id],
+            )
+            .is_ok()
+        {
             deleted.push(id.clone());
         }
     }

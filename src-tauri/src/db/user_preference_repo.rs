@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::context_memory::UserPreference;
+use chrono::Utc;
+use rusqlite::Connection;
 
 /// 创建或更新用户偏好
 /// 如果 (category, key) 已存在，则增加观察次数并更新置信度
@@ -105,11 +105,7 @@ pub fn list_all_preferences(conn: &Connection) -> Vec<UserPreference> {
 }
 
 /// 删除指定偏好
-pub fn delete_preference(
-    conn: &Connection,
-    category: &str,
-    key: &str,
-) -> Result<(), CommandError> {
+pub fn delete_preference(conn: &Connection, category: &str, key: &str) -> Result<(), CommandError> {
     conn.execute(
         "DELETE FROM user_preferences WHERE category = ?1 AND key = ?2",
         rusqlite::params![category, key],

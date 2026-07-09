@@ -2,17 +2,17 @@ use std::collections::HashMap;
 use std::sync::RwLock as StdRwLock;
 use std::time::Duration;
 
-use tokio::sync::RwLock;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::RwLock;
 
+use super::anthropic_adapter::AnthropicAdapter;
+use super::gemini_adapter::GeminiAdapter;
+use super::openai_adapter::OpenAiAdapter;
+use super::provider::LlmProvider;
 use crate::config::llm_config::{LlmConfig, ProviderType};
 use crate::errors::CommandError;
-use crate::events::types::{LLM_PROVIDER_SWITCH, ProviderSwitchPayload};
+use crate::events::types::{ProviderSwitchPayload, LLM_PROVIDER_SWITCH};
 use crate::models::llm::*;
-use super::provider::LlmProvider;
-use super::anthropic_adapter::AnthropicAdapter;
-use super::openai_adapter::OpenAiAdapter;
-use super::gemini_adapter::GeminiAdapter;
 
 /// 连续失败次数阈值，超过此值标记为不可用
 const MAX_CONSECUTIVE_FAILURES: u32 = 3;
@@ -101,58 +101,61 @@ impl LlmRouter {
             let is_deepseek = provider.api_base_url.to_lowercase().contains("deepseek");
             if is_deepseek {
                 advanced.reasoning_in_content = false;
-                log::info!("检测到 DeepSeek Provider, 设置 reasoning_in_content=false, id={}", provider.id);
+                log::info!(
+                    "检测到 DeepSeek Provider, 设置 reasoning_in_content=false, id={}",
+                    provider.id
+                );
             }
 
             let adapter: Box<dyn LlmProvider> = match provider.provider_type {
-                ProviderType::OpenAI | ProviderType::Custom => {
-                    Box::new(OpenAiAdapter::new(
-                        provider.api_base_url.clone(),
-                        provider.api_key_encrypted.clone(),
-                        provider.model.clone(),
-                        advanced,
-                    ))
-                }
-                ProviderType::Anthropic => {
-                    Box::new(AnthropicAdapter::new(
-                        provider.api_base_url.clone(),
-                        provider.api_key_encrypted.clone(),
-                        provider.model.clone(),
-                        advanced,
-                    ))
-                }
-                ProviderType::Ollama => {
-                    Box::new(OpenAiAdapter::new(
-                        provider.api_base_url.clone(),
-                        provider.api_key_encrypted.clone(),
-                        provider.model.clone(),
-                        advanced,
-                    ))
-                }
-                ProviderType::Gemini => {
-                    Box::new(GeminiAdapter::new(
-                        provider.api_base_url.clone(),
-                        provider.api_key_encrypted.clone(),
-                        provider.model.clone(),
-                        advanced,
-                    ))
-                }
+                ProviderType::OpenAI | ProviderType::Custom => Box::new(OpenAiAdapter::new(
+                    provider.api_base_url.clone(),
+                    provider.api_key_encrypted.clone(),
+                    provider.model.clone(),
+                    advanced,
+                )),
+                ProviderType::Anthropic => Box::new(AnthropicAdapter::new(
+                    provider.api_base_url.clone(),
+                    provider.api_key_encrypted.clone(),
+                    provider.model.clone(),
+                    advanced,
+                )),
+                ProviderType::Ollama => Box::new(OpenAiAdapter::new(
+                    provider.api_base_url.clone(),
+                    provider.api_key_encrypted.clone(),
+                    provider.model.clone(),
+                    advanced,
+                )),
+                ProviderType::Gemini => Box::new(GeminiAdapter::new(
+                    provider.api_base_url.clone(),
+                    provider.api_key_encrypted.clone(),
+                    provider.model.clone(),
+                    advanced,
+                )),
             };
 
-            meta.insert(provider.id.clone(), ProviderMeta {
-                name: provider.name.clone(),
-                provider_type: provider_type_str.to_string(),
-                api_base: provider.api_base_url.clone(),
-                model: provider.model.clone(),
-                created_at: String::new(),
-                context_window: provider.resolve_context_window(),
-                supports_vision: provider.supports_vision,
-            });
+            meta.insert(
+                provider.id.clone(),
+                ProviderMeta {
+                    name: provider.name.clone(),
+                    provider_type: provider_type_str.to_string(),
+                    api_base: provider.api_base_url.clone(),
+                    model: provider.model.clone(),
+                    created_at: String::new(),
+                    context_window: provider.resolve_context_window(),
+                    supports_vision: provider.supports_vision,
+                },
+            );
 
             providers.insert(provider.id.clone(), adapter);
         }
 
-        log::info!("LLM 路由器初始化完成, 加载 {} 个 Provider, 主 Provider: {:?}, Fallback 顺序: {:?}", providers.len(), default_id, config.fallback_order);
+        log::info!(
+            "LLM 路由器初始化完成, 加载 {} 个 Provider, 主 Provider: {:?}, Fallback 顺序: {:?}",
+            providers.len(),
+            default_id,
+            config.fallback_order
+        );
 
         Self {
             providers: RwLock::new(providers),
@@ -207,12 +210,15 @@ impl LlmRouter {
         if health.avg_latency_ms == 0 {
             health.avg_latency_ms = latency_ms;
         } else {
-            health.avg_latency_ms =
-                (health.avg_latency_ms as f64 * LATENCY_EMA_ALPHA + latency_ms as f64 * (1.0 - LATENCY_EMA_ALPHA)) as u64;
+            health.avg_latency_ms = (health.avg_latency_ms as f64 * LATENCY_EMA_ALPHA
+                + latency_ms as f64 * (1.0 - LATENCY_EMA_ALPHA))
+                as u64;
         }
         log::debug!(
             "Provider {} 标记成功, 延迟={}ms, 平均延迟={}ms",
-            provider_id, latency_ms, health.avg_latency_ms
+            provider_id,
+            latency_ms,
+            health.avg_latency_ms
         );
     }
 
@@ -228,13 +234,16 @@ impl LlmRouter {
             health.is_available = false;
             log::warn!(
                 "Provider {} 连续失败 {} 次，标记为不可用",
-                provider_id, health.consecutive_failures
+                provider_id,
+                health.consecutive_failures
             );
         }
 
         log::debug!(
             "Provider {} 标记失败, 连续失败次数={}, 错误: {}",
-            provider_id, health.consecutive_failures, error
+            provider_id,
+            health.consecutive_failures,
+            error
         );
     }
 
@@ -246,7 +255,11 @@ impl LlmRouter {
                 if !h.is_available {
                     if let Some(last_failure) = h.last_failure_at {
                         if last_failure.elapsed() >= RECOVERY_DURATION {
-                            log::info!("Provider {} 已过恢复期（{}秒），自动标记为可用", provider_id, RECOVERY_DURATION.as_secs());
+                            log::info!(
+                                "Provider {} 已过恢复期（{}秒），自动标记为可用",
+                                provider_id,
+                                RECOVERY_DURATION.as_secs()
+                            );
                             h.is_available = true;
                             h.consecutive_failures = 0;
                         }
@@ -273,10 +286,8 @@ impl LlmRouter {
                     None => continue,
                 };
                 // 优先使用轻量级健康检查，减少 Token 消耗
-                tokio::time::timeout(
-                    HEALTH_CHECK_TIMEOUT,
-                    provider.lightweight_health_check(),
-                ).await
+                tokio::time::timeout(HEALTH_CHECK_TIMEOUT, provider.lightweight_health_check())
+                    .await
             };
 
             let conn_result = match result {
@@ -285,7 +296,9 @@ impl LlmRouter {
                     if r.success {
                         self.mark_success(&id, r.latency_ms);
                     } else {
-                        let error_msg = r.error.as_deref()
+                        let error_msg = r
+                            .error
+                            .as_deref()
                             .or(r.error_message.as_deref())
                             .unwrap_or("未知错误");
                         self.mark_failure(&id, error_msg);
@@ -320,7 +333,9 @@ impl LlmRouter {
 
             log::info!(
                 "健康检查: Provider {}, 成功={}, 延迟={}ms",
-                id, conn_result.success, conn_result.latency_ms
+                id,
+                conn_result.success,
+                conn_result.latency_ms
             );
             results.insert(id.clone(), conn_result);
         }
@@ -358,13 +373,7 @@ impl LlmRouter {
     // ================================================================
 
     /// 发送 Provider 切换通知事件
-    fn emit_provider_switch(
-        &self,
-        from_id: &str,
-        to_id: &str,
-        reason: &str,
-        is_automatic: bool,
-    ) {
+    fn emit_provider_switch(&self, from_id: &str, to_id: &str, reason: &str, is_automatic: bool) {
         if let Some(ref app_handle) = self.app_handle {
             let payload = ProviderSwitchPayload {
                 from_provider_id: from_id.to_string(),
@@ -388,7 +397,9 @@ impl LlmRouter {
         messages: &[ChatMessage],
         tools: &[ToolDefinition],
     ) -> Result<ChatResponse, CommandError> {
-        let default_id = self.default_id.clone()
+        let default_id = self
+            .default_id
+            .clone()
             .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))?;
 
         log::info!("非流式对话, 使用默认 Provider: {}", default_id);
@@ -413,14 +424,18 @@ impl LlmRouter {
                 }
             }
         } else {
-            log::warn!("默认 Provider {} 不可用（健康检查未通过），跳过", default_id);
+            log::warn!(
+                "默认 Provider {} 不可用（健康检查未通过），跳过",
+                default_id
+            );
         }
 
         let error = CommandError::llm(
             crate::errors::LLM_PROVIDER_UNAVAILABLE,
             format!("默认 Provider {} 不可用", default_id),
         );
-        self.fallback_chat(messages, tools, &default_id, error).await
+        self.fallback_chat(messages, tools, &default_id, error)
+            .await
     }
 
     /// 非流式 Fallback 逻辑
@@ -477,7 +492,9 @@ impl LlmRouter {
         tools: &[ToolDefinition],
         preferred_provider_id: Option<&str>,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
-        let provider_id = self.resolve_stream_provider_id(preferred_provider_id).await?;
+        let provider_id = self
+            .resolve_stream_provider_id(preferred_provider_id)
+            .await?;
 
         log::info!("流式对话, 使用 Provider: {}", provider_id);
 
@@ -493,9 +510,15 @@ impl LlmRouter {
                     }
                     Err(e) => {
                         self.mark_failure(&provider_id, &e.message);
-                        log::warn!("Provider {} 流式请求失败, 尝试 Fallback, 错误: {}", provider_id, e.message);
+                        log::warn!(
+                            "Provider {} 流式请求失败, 尝试 Fallback, 错误: {}",
+                            provider_id,
+                            e.message
+                        );
                         drop(providers);
-                        return self.fallback_chat_stream(messages, tools, &provider_id, e).await;
+                        return self
+                            .fallback_chat_stream(messages, tools, &provider_id, e)
+                            .await;
                     }
                 }
             }
@@ -507,7 +530,8 @@ impl LlmRouter {
             crate::errors::LLM_PROVIDER_UNAVAILABLE,
             format!("Provider {} 不可用", provider_id),
         );
-        self.fallback_chat_stream(messages, tools, &provider_id, error).await
+        self.fallback_chat_stream(messages, tools, &provider_id, error)
+            .await
     }
 
     /// 流式对话，支持覆盖 max_tokens 参数
@@ -520,15 +544,24 @@ impl LlmRouter {
         max_tokens_override: u32,
         preferred_provider_id: Option<&str>,
     ) -> Result<tokio::sync::mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
-        let provider_id = self.resolve_stream_provider_id(preferred_provider_id).await?;
+        let provider_id = self
+            .resolve_stream_provider_id(preferred_provider_id)
+            .await?;
 
-        log::info!("流式对话 (max_tokens={}), 使用 Provider: {}", max_tokens_override, provider_id);
+        log::info!(
+            "流式对话 (max_tokens={}), 使用 Provider: {}",
+            max_tokens_override,
+            provider_id
+        );
 
         if self.is_provider_available(&provider_id) {
             let providers = self.providers.read().await;
             if let Some(provider) = providers.get(&provider_id) {
                 let start = std::time::Instant::now();
-                match provider.chat_stream_with_max_tokens(messages, tools, max_tokens_override).await {
+                match provider
+                    .chat_stream_with_max_tokens(messages, tools, max_tokens_override)
+                    .await
+                {
                     Ok(rx) => {
                         let latency = start.elapsed().as_millis() as u64;
                         self.mark_success(&provider_id, latency);
@@ -536,9 +569,16 @@ impl LlmRouter {
                     }
                     Err(e) => {
                         self.mark_failure(&provider_id, &e.message);
-                        log::warn!("Provider {} 流式请求 (max_tokens={}) 失败, 尝试 Fallback, 错误: {}", provider_id, max_tokens_override, e.message);
+                        log::warn!(
+                            "Provider {} 流式请求 (max_tokens={}) 失败, 尝试 Fallback, 错误: {}",
+                            provider_id,
+                            max_tokens_override,
+                            e.message
+                        );
                         drop(providers);
-                        return self.fallback_chat_stream(messages, tools, &provider_id, e).await;
+                        return self
+                            .fallback_chat_stream(messages, tools, &provider_id, e)
+                            .await;
                     }
                 }
             }
@@ -550,7 +590,8 @@ impl LlmRouter {
             crate::errors::LLM_PROVIDER_UNAVAILABLE,
             format!("Provider {} 不可用", provider_id),
         );
-        self.fallback_chat_stream(messages, tools, &provider_id, error).await
+        self.fallback_chat_stream(messages, tools, &provider_id, error)
+            .await
     }
 
     /// 解析流式对话应使用的 Provider ID：优先使用用户指定的 Provider，不存在时回退默认 Provider
@@ -565,7 +606,8 @@ impl LlmRouter {
             }
             log::warn!("指定的首选 Provider {} 不存在，回退到默认 Provider", id);
         }
-        self.default_id.clone()
+        self.default_id
+            .clone()
             .ok_or_else(|| CommandError::llm(1002, "未配置 LLM Provider".to_string()))
     }
 
@@ -606,7 +648,11 @@ impl LlmRouter {
                     }
                     Err(e) => {
                         self.mark_failure(fallback_id, &e.message);
-                        log::warn!("Fallback Provider {} (流式) 也失败: {}", fallback_id, e.message);
+                        log::warn!(
+                            "Fallback Provider {} (流式) 也失败: {}",
+                            fallback_id,
+                            e.message
+                        );
                     }
                 }
             }
@@ -635,13 +681,21 @@ impl LlmRouter {
     }
 
     /// 测试指定 Provider 的连接
-    pub async fn test_connection(&self, provider_id: &str) -> Result<ConnectionResult, CommandError> {
+    pub async fn test_connection(
+        &self,
+        provider_id: &str,
+    ) -> Result<ConnectionResult, CommandError> {
         log::info!("测试 Provider 连接, provider_id={}", provider_id);
         let providers = self.providers.read().await;
-        let provider = providers.get(provider_id)
+        let provider = providers
+            .get(provider_id)
             .ok_or_else(|| CommandError::llm(1002, format!("Provider 不存在: {}", provider_id)))?;
         let mut result = provider.test_connection().await?;
-        log::info!("Provider 连接测试完成, provider_id={}, 成功={}", provider_id, result.success);
+        log::info!(
+            "Provider 连接测试完成, provider_id={}, 成功={}",
+            provider_id,
+            result.success
+        );
         result.provider_id = Some(provider_id.to_string());
         Ok(result)
     }
@@ -653,24 +707,9 @@ impl LlmRouter {
         // 这里使用 try_read() 避免在同步上下文中 await
         let providers = self.providers.try_read();
         match providers {
-            Ok(p) => p.keys().map(|id| {
-                let m = self.meta.get(id);
-                ProviderInfo {
-                    id: id.clone(),
-                    name: m.map(|m| m.name.clone()).unwrap_or_default(),
-                    provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
-                    api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
-                    model: m.map(|m| m.model.clone()).unwrap_or_default(),
-                    is_available: self.is_provider_available(id),
-                    created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
-                    is_connected: None,
-                    context_window: m.map(|m| m.context_window).unwrap_or(128_000),
-                    supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
-                }
-            }).collect(),
-            Err(_) => {
-                // 无法获取锁时，仅基于 meta 返回基本信息
-                self.meta.keys().map(|id| {
+            Ok(p) => p
+                .keys()
+                .map(|id| {
                     let m = self.meta.get(id);
                     ProviderInfo {
                         id: id.clone(),
@@ -678,13 +717,34 @@ impl LlmRouter {
                         provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
                         api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
                         model: m.map(|m| m.model.clone()).unwrap_or_default(),
-                        is_available: true,
+                        is_available: self.is_provider_available(id),
                         created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                         is_connected: None,
                         context_window: m.map(|m| m.context_window).unwrap_or(128_000),
                         supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
                     }
-                }).collect()
+                })
+                .collect(),
+            Err(_) => {
+                // 无法获取锁时，仅基于 meta 返回基本信息
+                self.meta
+                    .keys()
+                    .map(|id| {
+                        let m = self.meta.get(id);
+                        ProviderInfo {
+                            id: id.clone(),
+                            name: m.map(|m| m.name.clone()).unwrap_or_default(),
+                            provider_type: m.map(|m| m.provider_type.clone()).unwrap_or_default(),
+                            api_base: m.map(|m| m.api_base.clone()).unwrap_or_default(),
+                            model: m.map(|m| m.model.clone()).unwrap_or_default(),
+                            is_available: true,
+                            created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
+                            is_connected: None,
+                            context_window: m.map(|m| m.context_window).unwrap_or(128_000),
+                            supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
+                        }
+                    })
+                    .collect()
             }
         }
     }

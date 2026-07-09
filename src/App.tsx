@@ -448,7 +448,7 @@ export default function App() {
             ...existingData,
             success: lastToolResult.success,
             error: lastToolResult.success ? undefined : (lastToolResult.error || t('toolNode.executionFailed')),
-            // 保存工具执行结果（如 run_command 的 stdout/stderr/exit_code），用于 UI 展示
+            // 保存工具执行结果（如 bash 的 stdout/stderr/exit_code），用于 UI 展示
             result: lastToolResult.success && lastToolResult.result
               ? (lastToolResult.result as Record<string, unknown>)
               : existingData.result,

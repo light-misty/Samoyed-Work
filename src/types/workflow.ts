@@ -36,7 +36,7 @@ export interface ToolNodeData {
   callId?: string;
   success?: boolean;
   error?: string;
-  /** 工具执行结果（如 run_command 的 stdout/stderr/exit_code），成功时填充 */
+  /** 工具执行结果（如 bash 的 stdout/stderr/exit_code），成功时填充 */
   result?: Record<string, unknown>;
 }
 

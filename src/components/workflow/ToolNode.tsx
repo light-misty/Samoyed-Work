@@ -23,8 +23,8 @@ export function ToolNode({ node }: ToolNodeProps) {
     ? errorText.slice(0, 150) + "..."
     : errorText;
 
-  // run_command 工具的命令和结果展示
-  const isRunCommand = data.toolName === "run_command";
+  // bash 工具的命令和结果展示
+  const isRunCommand = data.toolName === "bash";
   const command = isRunCommand ? String(data.input?.command ?? "") : "";
   const workingDir = isRunCommand ? String(data.input?.working_dir ?? "") : "";
   // 执行结果：stdout/stderr/exit_code
@@ -73,7 +73,7 @@ export function ToolNode({ node }: ToolNodeProps) {
           )}
         </div>
 
-        {/* run_command 工具：合并卡片展示 Bash 标签、命令和执行结果 */}
+        {/* bash 工具：合并卡片展示 Bash 标签、命令和执行结果 */}
         {isRunCommand && command && (
           <div className="wf-run-command-detail">
             {/* 卡片头部：Bash 标签 + 工作区 */}

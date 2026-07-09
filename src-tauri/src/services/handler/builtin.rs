@@ -4,9 +4,9 @@ use std::time::Instant;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
+use super::registry::Handler;
 use crate::models::handler::HandlerResult;
 use crate::services::document::DocumentService;
-use super::registry::Handler;
 
 /// 将相对路径解析为绝对路径
 fn resolve_path(path: &str, workspace_root: &str) -> String {
@@ -86,7 +86,8 @@ async fn execute_read(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -96,7 +97,8 @@ async fn execute_read(
 
     // read 操作的通用参数
     if !params["include_formatting"].is_null() {
-        sidecar_params["include_formatting"] = json!(params["include_formatting"].as_bool().unwrap_or(false));
+        sidecar_params["include_formatting"] =
+            json!(params["include_formatting"].as_bool().unwrap_or(false));
     }
 
     // Word read 专用参数（include_formatting=true 时等价于 include_runs=true）
@@ -104,13 +106,16 @@ async fn execute_read(
         sidecar_params["include_runs"] = json!(params["include_runs"].as_bool().unwrap_or(false));
     }
     if !params["include_tables_detailed"].is_null() {
-        sidecar_params["include_tables_detailed"] = json!(params["include_tables_detailed"].as_bool().unwrap_or(false));
+        sidecar_params["include_tables_detailed"] =
+            json!(params["include_tables_detailed"].as_bool().unwrap_or(false));
     }
     if !params["include_sections"].is_null() {
-        sidecar_params["include_sections"] = json!(params["include_sections"].as_bool().unwrap_or(false));
+        sidecar_params["include_sections"] =
+            json!(params["include_sections"].as_bool().unwrap_or(false));
     }
     if !params["include_headers_footers"].is_null() {
-        sidecar_params["include_headers_footers"] = json!(params["include_headers_footers"].as_bool().unwrap_or(false));
+        sidecar_params["include_headers_footers"] =
+            json!(params["include_headers_footers"].as_bool().unwrap_or(false));
     }
 
     // Excel read 专用参数
@@ -126,19 +131,23 @@ async fn execute_read(
         sidecar_params["pages"] = json!(pages);
     }
     if !params["include_layout"].is_null() {
-        sidecar_params["include_layout"] = json!(params["include_layout"].as_bool().unwrap_or(false));
+        sidecar_params["include_layout"] =
+            json!(params["include_layout"].as_bool().unwrap_or(false));
     }
     if !params["include_forms"].is_null() {
         sidecar_params["include_forms"] = json!(params["include_forms"].as_bool().unwrap_or(false));
     }
     if !params["include_annotations"].is_null() {
-        sidecar_params["include_annotations"] = json!(params["include_annotations"].as_bool().unwrap_or(false));
+        sidecar_params["include_annotations"] =
+            json!(params["include_annotations"].as_bool().unwrap_or(false));
     }
     if !params["extract_tables"].is_null() {
-        sidecar_params["extract_tables"] = json!(params["extract_tables"].as_bool().unwrap_or(false));
+        sidecar_params["extract_tables"] =
+            json!(params["extract_tables"].as_bool().unwrap_or(false));
     }
     if !params["include_images"].is_null() {
-        sidecar_params["include_images"] = json!(params["include_images"].as_bool().unwrap_or(false));
+        sidecar_params["include_images"] =
+            json!(params["include_images"].as_bool().unwrap_or(false));
     }
     // PDF read 扩展参数（视觉级布局/链接/书签/字体/绘图/图片二进制/元数据/页面几何/签名）
     if !params["include_links"].is_null() {
@@ -151,22 +160,28 @@ async fn execute_read(
         sidecar_params["include_fonts"] = json!(params["include_fonts"].as_bool().unwrap_or(false));
     }
     if !params["include_drawings"].is_null() {
-        sidecar_params["include_drawings"] = json!(params["include_drawings"].as_bool().unwrap_or(false));
+        sidecar_params["include_drawings"] =
+            json!(params["include_drawings"].as_bool().unwrap_or(false));
     }
     if !params["include_image_data"].is_null() {
-        sidecar_params["include_image_data"] = json!(params["include_image_data"].as_bool().unwrap_or(false));
+        sidecar_params["include_image_data"] =
+            json!(params["include_image_data"].as_bool().unwrap_or(false));
     }
     if !params["include_metadata_full"].is_null() {
-        sidecar_params["include_metadata_full"] = json!(params["include_metadata_full"].as_bool().unwrap_or(false));
+        sidecar_params["include_metadata_full"] =
+            json!(params["include_metadata_full"].as_bool().unwrap_or(false));
     }
     if !params["include_page_geometry"].is_null() {
-        sidecar_params["include_page_geometry"] = json!(params["include_page_geometry"].as_bool().unwrap_or(false));
+        sidecar_params["include_page_geometry"] =
+            json!(params["include_page_geometry"].as_bool().unwrap_or(false));
     }
     if !params["include_signatures"].is_null() {
-        sidecar_params["include_signatures"] = json!(params["include_signatures"].as_bool().unwrap_or(false));
+        sidecar_params["include_signatures"] =
+            json!(params["include_signatures"].as_bool().unwrap_or(false));
     }
     if !params["include_visual"].is_null() {
-        sidecar_params["include_visual"] = json!(params["include_visual"].as_bool().unwrap_or(false));
+        sidecar_params["include_visual"] =
+            json!(params["include_visual"].as_bool().unwrap_or(false));
     }
 
     // PPT read 专用参数
@@ -174,21 +189,26 @@ async fn execute_read(
         sidecar_params["include_notes"] = json!(params["include_notes"].as_bool().unwrap_or(false));
     }
     if !params["include_shapes_detailed"].is_null() {
-        sidecar_params["include_shapes_detailed"] = json!(params["include_shapes_detailed"].as_bool().unwrap_or(false));
+        sidecar_params["include_shapes_detailed"] =
+            json!(params["include_shapes_detailed"].as_bool().unwrap_or(false));
     }
 
     // Excel 扩展 read 专用参数（P1-2）
     if !params["include_formulas"].is_null() {
-        sidecar_params["include_formulas"] = json!(params["include_formulas"].as_bool().unwrap_or(false));
+        sidecar_params["include_formulas"] =
+            json!(params["include_formulas"].as_bool().unwrap_or(false));
     }
     if !params["include_charts"].is_null() {
-        sidecar_params["include_charts"] = json!(params["include_charts"].as_bool().unwrap_or(false));
+        sidecar_params["include_charts"] =
+            json!(params["include_charts"].as_bool().unwrap_or(false));
     }
     if !params["include_merged_cells"].is_null() {
-        sidecar_params["include_merged_cells"] = json!(params["include_merged_cells"].as_bool().unwrap_or(false));
+        sidecar_params["include_merged_cells"] =
+            json!(params["include_merged_cells"].as_bool().unwrap_or(false));
     }
     if !params["include_comments"].is_null() {
-        sidecar_params["include_comments"] = json!(params["include_comments"].as_bool().unwrap_or(false));
+        sidecar_params["include_comments"] =
+            json!(params["include_comments"].as_bool().unwrap_or(false));
     }
 
     match doc_service.process("read", doc_type, sidecar_params).await {
@@ -196,13 +216,15 @@ async fn execute_read(
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
     }
 }
@@ -228,7 +250,8 @@ async fn execute_convert(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -255,7 +278,8 @@ async fn execute_convert(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -270,18 +294,23 @@ async fn execute_convert(
         sidecar_params["sheet"] = json!(sheet);
     }
 
-    match doc_service.process("convert", doc_type, sidecar_params).await {
+    match doc_service
+        .process("convert", doc_type, sidecar_params)
+        .await
+    {
         Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
     }
 }
@@ -304,7 +333,8 @@ async fn execute_analyze(
             success: false,
             output: None,
             error: Some(e),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
         };
     }
 
@@ -312,18 +342,23 @@ async fn execute_analyze(
         "path": resolved_path,
     });
 
-    match doc_service.process("analyze", doc_type, sidecar_params).await {
+    match doc_service
+        .process("analyze", doc_type, sidecar_params)
+        .await
+    {
         Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
             error: None,
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
         Err(e) => HandlerResult {
             success: false,
             output: None,
             error: Some(e.message),
-            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+            duration_ms: start.elapsed().as_millis() as u64,
+            error_code: None,
         },
     }
 }
@@ -384,7 +419,10 @@ async fn execute_modify(
     if let Some(obj) = params.as_object() {
         for (key, value) in obj {
             // 跳过已处理或不需要透传的字段
-            if matches!(key.as_str(), "workspace_root" | "path" | "output_path" | "action" | "operation") {
+            if matches!(
+                key.as_str(),
+                "workspace_root" | "path" | "output_path" | "action" | "operation"
+            ) {
                 continue;
             }
 
@@ -456,7 +494,10 @@ async fn execute_modify(
         }
     }
 
-    match doc_service.process("modify", doc_type, sidecar_params).await {
+    match doc_service
+        .process("modify", doc_type, sidecar_params)
+        .await
+    {
         Ok(data) => HandlerResult {
             success: true,
             output: Some(data),
@@ -507,12 +548,18 @@ impl DocxHandler {
 
 #[async_trait]
 impl Handler for DocxHandler {
-    fn handler_name(&self) -> &str { "docx_handler" }
+    fn handler_name(&self) -> &str {
+        "docx"
+    }
     fn description(&self) -> &str {
         "Word文档(.docx)处理器，支持读取、格式转换、分析三种操作。转换支持 md/txt/pdf 格式（与 sidecar word_handler.convert 实际支持一致）。"
     }
-    fn category(&self) -> &str { "document" }
-    fn is_builtin(&self) -> bool { true }
+    fn category(&self) -> &str {
+        "document"
+    }
+    fn is_builtin(&self) -> bool {
+        true
+    }
     fn supported_types(&self) -> Vec<String> {
         vec!["docx".into()]
     }
@@ -577,7 +624,8 @@ impl Handler for DocxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("DocxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0, error_code: None,
+                duration_ms: 0,
+                error_code: None,
             },
         }
     }
@@ -601,12 +649,18 @@ impl XlsxHandler {
 
 #[async_trait]
 impl Handler for XlsxHandler {
-    fn handler_name(&self) -> &str { "xlsx_handler" }
+    fn handler_name(&self) -> &str {
+        "xlsx"
+    }
     fn description(&self) -> &str {
         "Excel文档(.xlsx)处理器，支持读取、格式转换、分析三种操作。转换支持 csv/pdf/html/txt 格式（与 sidecar excel_handler.convert 实际支持一致）。"
     }
-    fn category(&self) -> &str { "document" }
-    fn is_builtin(&self) -> bool { true }
+    fn category(&self) -> &str {
+        "document"
+    }
+    fn is_builtin(&self) -> bool {
+        true
+    }
     fn supported_types(&self) -> Vec<String> {
         vec!["xlsx".into()]
     }
@@ -679,7 +733,8 @@ impl Handler for XlsxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("XlsxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0, error_code: None,
+                duration_ms: 0,
+                error_code: None,
             },
         }
     }
@@ -703,12 +758,18 @@ impl PptxHandler {
 
 #[async_trait]
 impl Handler for PptxHandler {
-    fn handler_name(&self) -> &str { "pptx_handler" }
+    fn handler_name(&self) -> &str {
+        "pptx"
+    }
     fn description(&self) -> &str {
         "PPT演示文稿(.pptx)处理器，支持读取、分析两种操作。"
     }
-    fn category(&self) -> &str { "document" }
-    fn is_builtin(&self) -> bool { true }
+    fn category(&self) -> &str {
+        "document"
+    }
+    fn is_builtin(&self) -> bool {
+        true
+    }
     fn supported_types(&self) -> Vec<String> {
         vec!["pptx".into()]
     }
@@ -758,7 +819,8 @@ impl Handler for PptxHandler {
                 success: false,
                 output: None,
                 error: Some(format!("PptxHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0, error_code: None,
+                duration_ms: 0,
+                error_code: None,
             },
         }
     }
@@ -782,7 +844,9 @@ impl PdfHandler {
 
 #[async_trait]
 impl Handler for PdfHandler {
-    fn handler_name(&self) -> &str { "pdf_handler" }
+    fn handler_name(&self) -> &str {
+        "pdf"
+    }
     fn description(&self) -> &str {
         "PDF文档(.pdf)处理器，支持读取(read)、格式转换(convert)、分析(analyze)、修改(modify)四种操作。\
         modify 通过 operation 参数分发到 17 个子操作：\
@@ -792,8 +856,12 @@ impl Handler for PdfHandler {
         元数据(set_metadata)、书签目录(add_bookmarks/set_toc)、\
         注释(add_annotation)、表单填充(fill_form)、压缩(compress)。"
     }
-    fn category(&self) -> &str { "document" }
-    fn is_builtin(&self) -> bool { true }
+    fn category(&self) -> &str {
+        "document"
+    }
+    fn is_builtin(&self) -> bool {
+        true
+    }
     fn supported_types(&self) -> Vec<String> {
         vec!["pdf".into()]
     }
@@ -1145,7 +1213,8 @@ impl Handler for PdfHandler {
                 success: false,
                 output: None,
                 error: Some(format!("PdfHandler 不支持的操作类型: {}", action)),
-                duration_ms: 0, error_code: None,
+                duration_ms: 0,
+                error_code: None,
             },
         }
     }
@@ -1188,14 +1257,27 @@ impl ValidatorHandler {
 
 #[async_trait]
 impl Handler for ValidatorHandler {
-    fn handler_name(&self) -> &str { "validator_handler" }
+    fn handler_name(&self) -> &str {
+        "validator"
+    }
     fn description(&self) -> &str {
         "文档质量验证器，检测文档常见质量问题并返回警告列表。支持 docx/xlsx/pptx/pdf/md/txt 六种类型。Markdown 检测未闭合代码块/标题层级跳跃/行尾空白/连续空行；纯文本检测换行符混用/缩进混用/单行过长/连续空行。返回 {valid, warnings, stats}。"
     }
-    fn category(&self) -> &str { "document" }
-    fn is_builtin(&self) -> bool { true }
+    fn category(&self) -> &str {
+        "document"
+    }
+    fn is_builtin(&self) -> bool {
+        true
+    }
     fn supported_types(&self) -> Vec<String> {
-        vec!["docx".into(), "xlsx".into(), "pptx".into(), "pdf".into(), "md".into(), "txt".into()]
+        vec![
+            "docx".into(),
+            "xlsx".into(),
+            "pptx".into(),
+            "pdf".into(),
+            "md".into(),
+            "txt".into(),
+        ]
     }
     fn parameters(&self) -> Value {
         json!({
@@ -1287,7 +1369,11 @@ impl Handler for ValidatorHandler {
 
         // 调用 Sidecar：action="validate", type=doc_type
         // Sidecar main.py 中 action == "validate" 时调用 DocumentValidator.validate()
-        match self.doc_service.process("validate", &doc_type, sidecar_params).await {
+        match self
+            .doc_service
+            .process("validate", &doc_type, sidecar_params)
+            .await
+        {
             Ok(data) => HandlerResult {
                 success: true,
                 output: Some(data),
@@ -1320,7 +1406,10 @@ mod tests {
         assert_eq!(ValidatorHandler::infer_doc_type("test.md"), "md");
         assert_eq!(ValidatorHandler::infer_doc_type("test.txt"), "txt");
         assert_eq!(ValidatorHandler::infer_doc_type("test.DOCX"), "docx");
-        assert_eq!(ValidatorHandler::infer_doc_type("path/to/file.xlsx"), "xlsx");
+        assert_eq!(
+            ValidatorHandler::infer_doc_type("path/to/file.xlsx"),
+            "xlsx"
+        );
         assert_eq!(ValidatorHandler::infer_doc_type("no_ext"), "");
         assert_eq!(ValidatorHandler::infer_doc_type(""), "");
     }
@@ -1348,13 +1437,22 @@ mod tests {
     fn test_validator_handler_metadata() {
         // 由于 ValidatorHandler 需要 DocumentService 才能构造，
         // 这里仅校验静态方法的行为，完整的 execute() 测试需要集成测试
-        let supported = vec!["docx".to_string(), "xlsx".to_string(), "pptx".to_string(),
-                             "pdf".to_string(), "md".to_string(), "txt".to_string()];
+        let supported = vec![
+            "docx".to_string(),
+            "xlsx".to_string(),
+            "pptx".to_string(),
+            "pdf".to_string(),
+            "md".to_string(),
+            "txt".to_string(),
+        ];
 
         // 验证 supported_types() 应包含所有支持的类型
         for t in &supported {
-            assert!(ValidatorHandler::is_supported_doc_type(t),
-                "类型 {} 应被支持", t);
+            assert!(
+                ValidatorHandler::is_supported_doc_type(t),
+                "类型 {} 应被支持",
+                t
+            );
         }
     }
 

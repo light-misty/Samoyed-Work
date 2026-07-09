@@ -103,7 +103,10 @@ impl PromptLoader {
 
     /// 加载指定文档类型的设计规范
     pub fn load_guide(&self, doc_type: &str) -> PromptLayer {
-        let guide_path = self.prompts_dir.join("guides").join(format!("{}.toml", doc_type));
+        let guide_path = self
+            .prompts_dir
+            .join("guides")
+            .join(format!("{}.toml", doc_type));
 
         if guide_path.exists() {
             match std::fs::read_to_string(&guide_path) {
@@ -118,13 +121,17 @@ impl PromptLoader {
                     }
                 }
                 Err(e) => {
-                    log::warn!("读取 guides/{}.toml 失败: {}, 使用硬编码默认值", doc_type, e);
+                    log::warn!(
+                        "读取 guides/{}.toml 失败: {}, 使用硬编码默认值",
+                        doc_type,
+                        e
+                    );
                 }
             }
         }
 
-        // 回退到硬编码的设计规范
-        let content = super::document_design::get_design_guide_by_type(doc_type).to_string();
+        // 回退到硬编码的设计规范（document_design 模块已移除，Document 模式阶段 2 重新实现）
+        let content = String::new();
         let token_estimate = TokenBudgetManager::estimate_tokens(&content);
         PromptLayer {
             name: format!("guide_{}", doc_type),
@@ -135,7 +142,10 @@ impl PromptLoader {
 
     /// 加载指定任务类型的示例
     pub fn load_examples(&self, example_type: &str) -> PromptLayer {
-        let example_path = self.prompts_dir.join("examples").join(format!("{}.toml", example_type));
+        let example_path = self
+            .prompts_dir
+            .join("examples")
+            .join(format!("{}.toml", example_type));
 
         if example_path.exists() {
             match std::fs::read_to_string(&example_path) {
@@ -150,7 +160,11 @@ impl PromptLoader {
                     }
                 }
                 Err(e) => {
-                    log::warn!("读取 examples/{}.toml 失败: {}, 使用硬编码默认值", example_type, e);
+                    log::warn!(
+                        "读取 examples/{}.toml 失败: {}, 使用硬编码默认值",
+                        example_type,
+                        e
+                    );
                 }
             }
         }
@@ -317,7 +331,8 @@ impl PromptLoader {
 4. 对于文件路径，只使用工具确认存在的路径，不要编造路径
 5. 当用户要求的操作超出你的能力范围时，明确告知限制
 6. 当被问及超出你能力范围的问题时，明确告知限制，不要编造功能或工具
-</anti_hallucination>"#.to_string()
+</anti_hallucination>"#
+            .to_string()
     }
 
     /// 默认错误处理层
@@ -347,7 +362,8 @@ impl PromptLoader {
 - 你会收到"用户拒绝了操作"的反馈
 - 此时不要重复调用相同的工具和参数
 - 应向用户说明操作被取消，并提供替代方案
-</error_handling>"#.to_string()
+</error_handling>"#
+            .to_string()
     }
 
     /// 默认示例
@@ -363,7 +379,8 @@ impl PromptLoader {
   "path": "会议笔记.md",
   "content": "# 会议笔记\n\n## 议题\n1. 项目进度\n2. 下周计划\n\n## 结论\n- 进度符合预期"
 })
-</examples>"##.to_string(),
+</examples>"##
+                .to_string(),
             _ => String::new(),
         }
     }

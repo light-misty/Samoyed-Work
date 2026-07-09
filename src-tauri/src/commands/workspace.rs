@@ -3,21 +3,24 @@ use std::path::PathBuf;
 use tauri::{AppHandle, State};
 
 use crate::db::session_repo;
-use crate::errors::{CommandError, FS_PATH_NOT_FOUND, FS_NOT_A_DIRECTORY};
-use crate::events::AgentEmitter;
+use crate::errors::{CommandError, FS_NOT_A_DIRECTORY, FS_PATH_NOT_FOUND};
 use crate::events::types;
+use crate::events::AgentEmitter;
 use crate::models::workspace::{FileNode, SearchOptions, SearchResult, WorkspaceInfo};
 use crate::AppState;
 
 /// 列出所有工作区
 #[tauri::command]
-pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo>, CommandError> {
+pub async fn list_workspaces(
+    state: State<'_, AppState>,
+) -> Result<Vec<WorkspaceInfo>, CommandError> {
     log::info!("list_workspaces: 查询所有工作区");
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
     // 从应用设置中读取默认工作区 ID，用于判断 is_active
-    let default_workspace_id = config.load_app_settings()
+    let default_workspace_id = config
+        .load_app_settings()
         .map(|s| s.workspace.default_workspace_id)
         .unwrap_or_default();
 
@@ -27,7 +30,11 @@ pub async fn list_workspaces(state: State<'_, AppState>) -> Result<Vec<Workspace
         .map(|w| {
             let path = PathBuf::from(&w.path);
             let path_exists = path.exists() && path.is_dir();
-            let file_count = if path_exists { count_files_in_dir(&path).unwrap_or(0) } else { 0 };
+            let file_count = if path_exists {
+                count_files_in_dir(&path).unwrap_or(0)
+            } else {
+                0
+            };
             WorkspaceInfo {
                 id: w.id.clone(),
                 name: w.name.clone(),
@@ -83,7 +90,11 @@ pub async fn add_workspace(
     cfg_manager.save_workspaces(&ws_config)?;
 
     let file_count = count_files_in_dir(&dir_path).unwrap_or(0);
-    log::info!("add_workspace: 工作区添加成功, name={}, id={}", display_name, entry.id);
+    log::info!(
+        "add_workspace: 工作区添加成功, name={}, id={}",
+        display_name,
+        entry.id
+    );
 
     Ok(WorkspaceInfo {
         id: entry.id,
@@ -185,9 +196,15 @@ pub async fn set_active_workspace(
 
     // 启动文件监听（传入工作区名称以便 FsWatcher 在目录删除时使用）
     drop(cfg_manager);
-    state.fs_watcher.watch_with_name(workspace_id, ws.path.clone(), ws.name.clone()).await;
+    state
+        .fs_watcher
+        .watch_with_name(workspace_id, ws.path.clone(), ws.name.clone())
+        .await;
 
-    log::info!("set_active_workspace: 活动工作区设置成功, id={}", settings.workspace.default_workspace_id);
+    log::info!(
+        "set_active_workspace: 活动工作区设置成功, id={}",
+        settings.workspace.default_workspace_id
+    );
     Ok(())
 }
 
@@ -199,7 +216,12 @@ pub async fn get_file_tree(
     depth: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<Vec<FileNode>, CommandError> {
-    log::info!("get_file_tree: 获取文件树, workspace_id={}, path={:?}, depth={:?}", workspace_id, path, depth);
+    log::info!(
+        "get_file_tree: 获取文件树, workspace_id={}, path={:?}, depth={:?}",
+        workspace_id,
+        path,
+        depth
+    );
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -235,7 +257,11 @@ pub async fn search_files(
     options: Option<SearchOptions>,
     state: State<'_, AppState>,
 ) -> Result<Vec<SearchResult>, CommandError> {
-    log::info!("search_files: 搜索文件, workspace_id={}, query={}", workspace_id, query);
+    log::info!(
+        "search_files: 搜索文件, workspace_id={}, query={}",
+        workspace_id,
+        query
+    );
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -251,10 +277,7 @@ pub async fn search_files(
             )
         })?;
 
-    let max_results = options
-        .as_ref()
-        .and_then(|o| o.max_results)
-        .unwrap_or(50) as usize;
+    let max_results = options.as_ref().and_then(|o| o.max_results).unwrap_or(50) as usize;
 
     let extensions: Vec<String> = options
         .as_ref()
@@ -269,7 +292,14 @@ pub async fn search_files(
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
 
-    search_files_recursive(&root, &root, &query_lower, &extensions, max_results, &mut results);
+    search_files_recursive(
+        &root,
+        &root,
+        &query_lower,
+        &extensions,
+        max_results,
+        &mut results,
+    );
 
     log::info!("search_files: 搜索完成, 结果数={}", results.len());
     Ok(results)
@@ -323,16 +353,11 @@ fn build_file_tree(
 
         let is_dir = metadata.is_dir();
         let size = if is_dir { None } else { Some(metadata.len()) };
-        let modified = metadata
-            .modified()
-            .ok()
-            .map(|t| {
-                let dt: chrono::DateTime<chrono::Utc> = t.into();
-                dt.to_rfc3339()
-            });
-        let extension = path
-            .extension()
-            .map(|e| e.to_string_lossy().to_string());
+        let modified = metadata.modified().ok().map(|t| {
+            let dt: chrono::DateTime<chrono::Utc> = t.into();
+            dt.to_rfc3339()
+        });
+        let extension = path.extension().map(|e| e.to_string_lossy().to_string());
 
         let children = if is_dir && current_depth < max_depth - 1 {
             Some(build_file_tree(&path, root, max_depth, current_depth + 1))

@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::{Session, SessionSummary};
+use chrono::Utc;
+use rusqlite::Connection;
 
 /// 创建新会话
 pub fn create_session(
@@ -87,7 +87,8 @@ pub fn list_sessions(
     param_values.push(Box::new(limit));
     param_values.push(Box::new(offset));
 
-    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = match conn.prepare(&sql) {
         Ok(s) => s,
@@ -134,7 +135,11 @@ pub fn list_sessions(
 }
 
 /// 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话）
-pub fn update_session_workspace(conn: &Connection, id: &str, workspace_id: &str) -> Result<(), CommandError> {
+pub fn update_session_workspace(
+    conn: &Connection,
+    id: &str,
+    workspace_id: &str,
+) -> Result<(), CommandError> {
     let affected = conn.execute(
         "UPDATE sessions SET workspace_id = ?1 WHERE id = ?2",
         rusqlite::params![workspace_id, id],
@@ -187,10 +192,7 @@ pub fn delete_session(conn: &Connection, id: &str) -> Result<(), CommandError> {
         rusqlite::params![id],
     )?;
 
-    let affected = conn.execute(
-        "DELETE FROM sessions WHERE id = ?1",
-        rusqlite::params![id],
-    )?;
+    let affected = conn.execute("DELETE FROM sessions WHERE id = ?1", rusqlite::params![id])?;
     if affected == 0 {
         return Err(CommandError::db(
             crate::errors::DB_RECORD_NOT_FOUND,
@@ -203,11 +205,16 @@ pub fn delete_session(conn: &Connection, id: &str) -> Result<(), CommandError> {
 /// 删除指定工作区下的所有会话（同时删除关联的消息记录）
 /// 用于删除工作区时清理关联会话，避免出现孤儿会话导致前端分组错乱
 /// 返回被删除的会话 ID 列表，供前端清理本地状态使用
-pub fn delete_sessions_by_workspace(conn: &Connection, workspace_id: &str) -> Result<Vec<String>, CommandError> {
+pub fn delete_sessions_by_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+) -> Result<Vec<String>, CommandError> {
     // 先查询将被删除的会话 ID 列表，用于事件通知
     let session_ids: Vec<String> = {
         let mut stmt = conn.prepare("SELECT id FROM sessions WHERE workspace_id = ?1")?;
-        let rows = stmt.query_map(rusqlite::params![workspace_id], |row| row.get::<_, String>(0))?;
+        let rows = stmt.query_map(rusqlite::params![workspace_id], |row| {
+            row.get::<_, String>(0)
+        })?;
         rows.filter_map(|r| r.ok()).collect()
     };
 
@@ -252,7 +259,11 @@ pub fn clear_all_sessions(conn: &Connection) -> Result<u64, CommandError> {
 }
 
 /// 保存上下文窗口使用信息到会话（持久化 JSON）
-pub fn save_context_usage(conn: &Connection, session_id: &str, json: &str) -> Result<(), CommandError> {
+pub fn save_context_usage(
+    conn: &Connection,
+    session_id: &str,
+    json: &str,
+) -> Result<(), CommandError> {
     conn.execute(
         "UPDATE sessions SET context_usage_json = ?1 WHERE id = ?2",
         rusqlite::params![json, session_id],
@@ -261,7 +272,10 @@ pub fn save_context_usage(conn: &Connection, session_id: &str, json: &str) -> Re
 }
 
 /// 读取会话的上下文窗口使用信息（从持久化的 JSON 反序列化）
-pub fn load_context_usage(conn: &Connection, session_id: &str) -> Option<crate::models::llm::ContextUsageInfo> {
+pub fn load_context_usage(
+    conn: &Connection,
+    session_id: &str,
+) -> Option<crate::models::llm::ContextUsageInfo> {
     let json_str: String = conn
         .query_row(
             "SELECT context_usage_json FROM sessions WHERE id = ?1",

@@ -1,5 +1,5 @@
-use rusqlite::Connection;
 use crate::errors::CommandError;
+use rusqlite::Connection;
 
 /// 执行数据库初始化：建表、创建索引、插入种子数据
 pub fn initialize_database(conn: &Connection) -> Result<(), CommandError> {
@@ -44,7 +44,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             reasoning_content TEXT        DEFAULT NULL,
             attachments       TEXT        DEFAULT NULL,
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );"
+        );",
     )?;
 
     // version_snapshots 版本快照表
@@ -57,7 +57,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             snapshot_path     TEXT        NOT NULL,
             operation         TEXT        NOT NULL DEFAULT '',
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );"
+        );",
     )?;
 
     // prompt_templates Prompt模板表
@@ -72,7 +72,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             variables         TEXT        DEFAULT NULL,
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             updated_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );"
+        );",
     )?;
 
     // session_summaries 会话摘要表（情景记忆）
@@ -87,7 +87,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             tools_used        TEXT        NOT NULL DEFAULT '[]',
             errors_resolved   TEXT        NOT NULL DEFAULT '[]',
             created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );"
+        );",
     )?;
 
     // user_preferences 用户偏好表（语义记忆）
@@ -101,7 +101,7 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
             observation_count INTEGER     NOT NULL DEFAULT 1,
             last_observed_at  TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
             UNIQUE(category, key)
-        );"
+        );",
     )?;
 
     log::info!("数据表创建完成");
@@ -147,7 +147,7 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
             ON session_summaries (session_id);
 
         CREATE INDEX IF NOT EXISTS idx_user_preferences_category
-            ON user_preferences (category);"
+            ON user_preferences (category);",
     )?;
 
     log::info!("索引创建完成");

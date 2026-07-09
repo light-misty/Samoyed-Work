@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
-use crate::models::{Message, MessageRole, ToolCall, AttachmentMeta};
+use crate::models::{AttachmentMeta, Message, MessageRole, ToolCall};
+use chrono::Utc;
+use rusqlite::Connection;
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_message(
@@ -20,8 +20,8 @@ pub fn create_message(
 ) -> Result<(), CommandError> {
     let now = Utc::now().to_rfc3339();
     // 附件序列化为 JSON 字符串存储
-    let attachments_json = attachments
-        .map(|atts| serde_json::to_string(atts).unwrap_or_else(|_| "[]".to_string()));
+    let attachments_json =
+        attachments.map(|atts| serde_json::to_string(atts).unwrap_or_else(|_| "[]".to_string()));
     conn.execute(
         "INSERT INTO session_messages
             (id, session_id, role, content, tool_name, tool_args, tool_result,
@@ -107,8 +107,7 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
             let arguments = tool_args
                 .and_then(|args| serde_json::from_str(&args).ok())
                 .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-            let result_val = tool_result
-                .and_then(|res| serde_json::from_str(&res).ok());
+            let result_val = tool_result.and_then(|res| serde_json::from_str(&res).ok());
             Some(vec![ToolCall {
                 id: call_id,
                 name,
@@ -127,15 +126,21 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
                                 .and_then(|id_str| serde_json::from_str::<Vec<String>>(id_str).ok())
                                 .unwrap_or_else(|| {
                                     // 旧数据回退：使用 msg_id_index 格式
-                                    names.iter().enumerate()
+                                    names
+                                        .iter()
+                                        .enumerate()
                                         .map(|(i, _)| format!("{}_{}", msg_id, i))
                                         .collect()
                                 });
 
-                            let calls: Vec<ToolCall> = names.iter().zip(args_list.iter()).zip(ids.iter())
+                            let calls: Vec<ToolCall> = names
+                                .iter()
+                                .zip(args_list.iter())
+                                .zip(ids.iter())
                                 .map(|((name, args), id)| {
-                                    let arguments = serde_json::from_str(args)
-                                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                                    let arguments = serde_json::from_str(args).unwrap_or(
+                                        serde_json::Value::Object(serde_json::Map::new()),
+                                    );
                                     ToolCall {
                                         id: id.clone(),
                                         name: name.clone(),
@@ -185,10 +190,7 @@ pub fn list_messages(conn: &Connection, session_id: &str) -> Vec<Message> {
     result
 }
 
-pub fn delete_messages_by_session(
-    conn: &Connection,
-    session_id: &str,
-) -> Result<(), CommandError> {
+pub fn delete_messages_by_session(conn: &Connection, session_id: &str) -> Result<(), CommandError> {
     conn.execute(
         "DELETE FROM session_messages WHERE session_id = ?1",
         rusqlite::params![session_id],

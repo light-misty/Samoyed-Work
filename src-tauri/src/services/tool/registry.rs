@@ -1,10 +1,10 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use crate::models::tool::ToolInfo;
 use super::trait_def::Tool;
+use crate::models::tool::ToolInfo;
 
 /// Tool 注册表
 /// 工具在运行时不会增删，不需要 Mutex 保护
@@ -41,7 +41,9 @@ impl ToolRegistry {
     /// 生成 OpenAI function calling 格式的工具定义
     pub fn tool_definitions(&self) -> Vec<Value> {
         log::debug!("生成工具定义, 工具总数: {}", self.tools.len());
-        let definitions: Vec<Value> = self.tools.values()
+        let definitions: Vec<Value> = self
+            .tools
+            .values()
             .map(|tool| {
                 json!({
                     "type": "function",
@@ -51,15 +53,17 @@ impl ToolRegistry {
                         "parameters": tool.parameters(),
                     }
                 })
-            }).collect();
+            })
+            .collect();
         log::debug!("工具定义生成完成, 数量: {}", definitions.len());
         definitions
     }
 
     /// 列出所有工具信息
     pub fn list_tools(&self) -> Vec<ToolInfo> {
-        self.tools.values().map(|tool| {
-            ToolInfo {
+        self.tools
+            .values()
+            .map(|tool| ToolInfo {
                 id: tool.tool_name().to_string(),
                 name: tool.tool_name().to_string(),
                 description: tool.description().to_string(),
@@ -68,8 +72,8 @@ impl ToolRegistry {
                 enabled: true,
                 version: "1.0.0".to_string(),
                 params_schema: Some(tool.parameters()),
-            }
-        }).collect()
+            })
+            .collect()
     }
 }
 
@@ -85,21 +89,31 @@ mod tests {
 
     impl MockTool {
         fn new(name: &str, desc: &str) -> Self {
-            Self { name: name.to_string(), desc: desc.to_string() }
+            Self {
+                name: name.to_string(),
+                desc: desc.to_string(),
+            }
         }
     }
 
     #[async_trait]
     impl Tool for MockTool {
-        fn tool_name(&self) -> &str { &self.name }
-        fn description(&self) -> &str { &self.desc }
-        fn parameters(&self) -> Value { json!({"type": "object"}) }
+        fn tool_name(&self) -> &str {
+            &self.name
+        }
+        fn description(&self) -> &str {
+            &self.desc
+        }
+        fn parameters(&self) -> Value {
+            json!({"type": "object"})
+        }
         async fn execute(&self, _params: Value) -> crate::models::tool::ToolResult {
             crate::models::tool::ToolResult {
                 success: true,
                 output: None,
                 error: None,
-                duration_ms: 0, error_code: None,
+                duration_ms: 0,
+                error_code: None,
             }
         }
     }

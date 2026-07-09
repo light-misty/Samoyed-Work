@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Mutex;
 
-use crate::events::types::{FILE_CHANGE, WORKSPACE_DIRECTORY_DELETED, FileChangePayload, WorkspaceDirectoryDeletedPayload};
+use crate::events::types::{
+    FileChangePayload, WorkspaceDirectoryDeletedPayload, FILE_CHANGE, WORKSPACE_DIRECTORY_DELETED,
+};
 
 /// 文件系统监听服务，监听活动工作区目录变更并发射事件到前端
 pub struct FsWatcherService<R: Runtime> {
@@ -40,11 +42,17 @@ impl<R: Runtime> FsWatcherService<R> {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "未命名工作区".to_string());
-        self.watch_with_name(workspace_id, workspace_path, workspace_name).await;
+        self.watch_with_name(workspace_id, workspace_path, workspace_name)
+            .await;
     }
 
     /// 开始监听指定工作区目录（带名称）
-    pub async fn watch_with_name(&self, workspace_id: String, workspace_path: String, workspace_name: String) {
+    pub async fn watch_with_name(
+        &self,
+        workspace_id: String,
+        workspace_path: String,
+        workspace_name: String,
+    ) {
         let path = PathBuf::from(&workspace_path);
         if !path.exists() || !path.is_dir() {
             log::warn!("FsWatcher: 路径无效或不是目录: {}", workspace_path);
@@ -119,7 +127,8 @@ impl<R: Runtime> FsWatcherService<R> {
                                     workspace_name: ws_wname.clone(),
                                     workspace_path: ws_wpath.clone(),
                                 };
-                                let _ = ws_app_handle.emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
+                                let _ = ws_app_handle
+                                    .emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
                                 return;
                             }
                         }
@@ -150,16 +159,18 @@ impl<R: Runtime> FsWatcherService<R> {
                                 workspace_name: ws_wname.clone(),
                                 workspace_path: ws_wpath.clone(),
                             };
-                            let _ = ws_app_handle.emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
+                            let _ =
+                                ws_app_handle.emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
                         }
                     }
                 }
             }
         };
 
-        let mut ws_watcher = match RecommendedWatcher::new(workspace_callback, notify::Config::default()
-            .with_poll_interval(Duration::from_secs(2)))
-        {
+        let mut ws_watcher = match RecommendedWatcher::new(
+            workspace_callback,
+            notify::Config::default().with_poll_interval(Duration::from_secs(2)),
+        ) {
             Ok(w) => w,
             Err(e) => {
                 log::error!("FsWatcher: 创建工作区监听器失败: {:?}", e);
@@ -190,7 +201,9 @@ impl<R: Runtime> FsWatcherService<R> {
                         if matches!(event.kind, EventKind::Remove(_)) {
                             for event_path in &event.paths {
                                 // 检查被删除的是否是工作区根目录
-                                if event_path == &parent_ws_path && !parent_deletion_emitted.load(Ordering::SeqCst) {
+                                if event_path == &parent_ws_path
+                                    && !parent_deletion_emitted.load(Ordering::SeqCst)
+                                {
                                     log::warn!(
                                         "FsWatcher(父目录): 检测到工作区根目录被删除, workspace_id={}, path={}",
                                         parent_wid,
@@ -202,7 +215,8 @@ impl<R: Runtime> FsWatcherService<R> {
                                         workspace_name: parent_wname.clone(),
                                         workspace_path: parent_wpath.clone(),
                                     };
-                                    let _ = parent_app_handle.emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
+                                    let _ = parent_app_handle
+                                        .emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
                                     return;
                                 }
                             }
@@ -214,9 +228,10 @@ impl<R: Runtime> FsWatcherService<R> {
                 }
             };
 
-            let pt_watcher = match RecommendedWatcher::new(parent_callback, notify::Config::default()
-                .with_poll_interval(Duration::from_secs(1)))
-            {
+            let pt_watcher = match RecommendedWatcher::new(
+                parent_callback,
+                notify::Config::default().with_poll_interval(Duration::from_secs(1)),
+            ) {
                 Ok(w) => Some(w),
                 Err(e) => {
                     log::warn!("FsWatcher: 创建父目录监听器失败: {:?}", e);
@@ -231,7 +246,10 @@ impl<R: Runtime> FsWatcherService<R> {
                 } else {
                     let mut parent_guard = self.parent_watcher.lock().await;
                     *parent_guard = Some(pt_watcher);
-                    log::info!("FsWatcher: 父目录监听已启动, parent={}", parent_path.display());
+                    log::info!(
+                        "FsWatcher: 父目录监听已启动, parent={}",
+                        parent_path.display()
+                    );
                 }
             }
         }
@@ -246,7 +264,11 @@ impl<R: Runtime> FsWatcherService<R> {
             *active_guard = Some((workspace_id.clone(), path, workspace_name));
         }
 
-        log::info!("FsWatcher: 开始监听工作区 {} 路径 {}", workspace_id, workspace_path);
+        log::info!(
+            "FsWatcher: 开始监听工作区 {} 路径 {}",
+            workspace_id,
+            workspace_path
+        );
     }
 
     /// 停止监听

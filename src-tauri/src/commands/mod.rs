@@ -1,11 +1,11 @@
-pub mod llm;
-pub mod session;
-pub mod workspace;
+pub mod agent;
 pub mod document;
 pub mod handler;
-pub mod settings;
-pub mod agent;
-pub mod template;
+pub mod llm;
 pub mod log;
+pub mod session;
+pub mod settings;
+pub mod template;
 #[cfg(desktop)]
 pub mod update;
+pub mod workspace;
