@@ -46,15 +46,15 @@ impl Tool for LspTool {
     }
 
     fn description(&self) -> &str {
-        "LSP 代码智能工具(实验性)。通过 operation 参数指定操作类型:\n\
-         - definition: 跳转到符号定义\n\
-         - references: 查找符号引用\n\
-         - hover: 获取悬停信息\n\
-         - diagnostics: 获取文件诊断\n\
-         - document_symbol: 获取文档符号列表\n\
-         - workspace_symbol: 搜索工作区符号\n\
-         - implementation: 跳转到实现\n\
-         - call_hierarchy: 获取调用层级(direction=incoming|outgoing)"
+        "LSP code intelligence tool (experimental). Specify the operation type via the operation parameter:\n\
+         - definition: Go to symbol definition\n\
+         - references: Find symbol references\n\
+         - hover: Get hover information\n\
+         - diagnostics: Get file diagnostics\n\
+         - document_symbol: Get document symbol list\n\
+         - workspace_symbol: Search workspace symbols\n\
+         - implementation: Go to implementation\n\
+         - call_hierarchy: Get call hierarchy (direction=incoming|outgoing)"
     }
 
     fn parameters(&self) -> Value {
@@ -65,33 +65,33 @@ impl Tool for LspTool {
                     "type": "string",
                     "enum": ["definition", "references", "hover", "diagnostics",
                              "document_symbol", "workspace_symbol", "implementation", "call_hierarchy"],
-                    "description": "LSP 操作类型"
+                    "description": "LSP operation type"
                 },
                 "file_path": {
                     "type": "string",
-                    "description": "文件路径(绝对或相对工作区)"
+                    "description": "File path (absolute or relative to workspace)"
                 },
                 "line": {
                     "type": "integer",
-                    "description": "光标所在行号(从 0 开始)"
+                    "description": "Cursor line number (0-based)"
                 },
                 "character": {
                     "type": "integer",
-                    "description": "光标所在列号(从 0 开始)"
+                    "description": "Cursor character number (0-based)"
                 },
                 "direction": {
                     "type": "string",
                     "enum": ["incoming", "outgoing"],
-                    "description": "call_hierarchy 方向(incoming=被谁调用,outgoing=调用了谁)"
+                    "description": "call_hierarchy direction (incoming=who calls this, outgoing=who this calls)"
                 },
                 "query": {
                     "type": "string",
-                    "description": "workspace_symbol 搜索查询"
+                    "description": "workspace_symbol search query"
                 },
                 "include_declaration": {
                     "type": "boolean",
                     "default": true,
-                    "description": "references 是否包含声明位置"
+                    "description": "Whether references include the declaration location"
                 }
             },
             "required": ["operation"]
@@ -114,7 +114,7 @@ impl Tool for LspTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 operation 参数".to_string()),
+                    error: Some("Missing operation parameter".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 }
@@ -133,7 +133,7 @@ impl Tool for LspTool {
             "call_hierarchy" => self.try_lsp_call_hierarchy(&params, workspace_root).await,
             _ => Err(CommandError::tool(
                 TOOL_INVALID_PARAMS,
-                format!("未知 operation: {}", operation),
+                format!("Unknown operation: {}", operation),
             )),
         };
 
@@ -173,7 +173,7 @@ impl LspTool {
                 return Err(CommandError::tool(
                     TOOL_INVALID_PARAMS,
                     format!(
-                        "路径遍历校验失败,相对路径包含逃逸工作区根目录的 .. 组件: file_path={}",
+                        "Path traversal validation failed: relative path contains '..' components that escape the workspace root: file_path={}",
                         file_path_str
                     ),
                 ));
@@ -218,7 +218,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -247,7 +247,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "locations": [],
                     "total": 0,
                 }))
@@ -261,7 +261,7 @@ impl LspTool {
                 log::warn!("LSP definition 服务器不可用: {}, 降级返回空结果", e.message);
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "locations": [],
                     "total": 0,
                     "language": language,
@@ -271,7 +271,7 @@ impl LspTool {
 
         // 读取文件内容并发送 didOpen
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -304,7 +304,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -323,7 +323,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "references": [],
                     "total": 0,
                 }))
@@ -336,7 +336,7 @@ impl LspTool {
                 log::warn!("LSP references 服务器不可用: {}, 降级返回空结果", e.message);
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "references": [],
                     "total": 0,
                     "language": language,
@@ -345,7 +345,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -369,7 +369,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -396,7 +396,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "hover": null,
                 }))
             }
@@ -408,7 +408,7 @@ impl LspTool {
                 log::warn!("LSP hover 服务器不可用: {}, 降级返回空结果", e.message);
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "hover": null,
                     "language": language,
                 }));
@@ -416,7 +416,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -442,7 +442,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let abs_path = Self::resolve_path(file_path_str, workspace_root)?;
 
@@ -451,7 +451,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "diagnostics": [],
                     "total": 0,
                 }))
@@ -467,7 +467,7 @@ impl LspTool {
                 );
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "diagnostics": [],
                     "total": 0,
                     "language": language,
@@ -476,7 +476,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -505,7 +505,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let abs_path = Self::resolve_path(file_path_str, workspace_root)?;
 
@@ -514,7 +514,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "symbols": [],
                     "total": 0,
                 }))
@@ -530,7 +530,7 @@ impl LspTool {
                 );
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "symbols": [],
                     "total": 0,
                     "language": language,
@@ -539,7 +539,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -561,7 +561,7 @@ impl LspTool {
         let query = params
             .get("query")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 query 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing query parameter"))?;
 
         // workspace_symbol 不绑定特定文件,遍历所有已启动的 LSP 服务器
         let symbols = self.manager.workspace_symbol(query).await?;
@@ -583,7 +583,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -598,7 +598,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "locations": [],
                     "total": 0,
                 }))
@@ -614,7 +614,7 @@ impl LspTool {
                 );
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "locations": [],
                     "total": 0,
                     "language": language,
@@ -623,7 +623,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -647,7 +647,7 @@ impl LspTool {
         let file_path_str = params
             .get("file_path")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "缺少 file_path 参数"))?;
+            .ok_or_else(|| CommandError::tool(TOOL_INVALID_PARAMS, "Missing file_path parameter"))?;
 
         let line = params.get("line").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let character = params
@@ -666,7 +666,7 @@ impl LspTool {
             None => {
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("无法识别文件语言: {}", file_path_str),
+                    "message": format!("Cannot detect file language: {}", file_path_str),
                     "calls": [],
                     "total": 0,
                 }))
@@ -682,7 +682,7 @@ impl LspTool {
                 );
                 return Ok(json!({
                     "fallback": true,
-                    "message": format!("LSP 服务器不可用: {}", e.message),
+                    "message": format!("LSP server unavailable: {}", e.message),
                     "calls": [],
                     "total": 0,
                     "language": language,
@@ -691,7 +691,7 @@ impl LspTool {
         };
 
         let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("读取文件失败: {}", e)))?;
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("Failed to read file: {}", e)))?;
         let language_id = self.router.get_language_id(&language);
         client.did_open(&abs_path, language_id, &content).await?;
 
@@ -707,7 +707,7 @@ impl LspTool {
             _ => {
                 return Err(CommandError::tool(
                     TOOL_INVALID_PARAMS,
-                    format!("未知 direction: {}", direction),
+                    format!("Unknown direction: {}", direction),
                 ))
             }
         };

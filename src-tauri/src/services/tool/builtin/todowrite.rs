@@ -44,7 +44,7 @@ impl TodoWriteTool {
             .ok_or_else(|| {
                 CommandError::tool(
                     errors::TOOL_INVALID_PARAMS,
-                    "缺少 _session_id 参数".to_string(),
+                    "Missing _session_id parameter".to_string(),
                 )
             })
     }
@@ -57,9 +57,9 @@ impl Tool for TodoWriteTool {
     }
 
     fn description(&self) -> &str {
-        "结构化任务管理工具。支持创建、更新、列出和清除任务。\
-         任务状态: pending(待办)/in_progress(进行中)/completed(已完成)。\
-         同一时间最多一个 in_progress 任务，设置新任务为 in_progress 时会自动将其他 in_progress 任务改为 pending。"
+        "Structured task management tool. Supports creating, updating, listing, and clearing tasks. \
+         Task statuses: pending / in_progress / completed. At most one in_progress task at a time; \
+         setting a new task to in_progress automatically changes other in_progress tasks to pending."
     }
 
     fn category(&self) -> &str {
@@ -73,25 +73,25 @@ impl Tool for TodoWriteTool {
                 "action": {
                     "type": "string",
                     "enum": ["create", "update", "list", "clear"],
-                    "description": "操作类型"
+                    "description": "Action type"
                 },
                 "content": {
                     "type": "string",
-                    "description": "任务内容（create 时必填，update 时可选）"
+                    "description": "Task content (required for create, optional for update)"
                 },
                 "taskId": {
                     "type": "string",
-                    "description": "任务 ID（update 时必填）"
+                    "description": "Task ID (required for update)"
                 },
                 "status": {
                     "type": "string",
                     "enum": ["pending", "in_progress", "completed"],
-                    "description": "任务状态（update 时可选）"
+                    "description": "Task status (optional for update)"
                 },
                 "priority": {
                     "type": "string",
                     "enum": ["high", "medium", "low"],
-                    "description": "任务优先级（create 时可选，默认 medium）"
+                    "description": "Task priority (optional for create, default medium)"
                 }
             },
             "required": ["action"]
@@ -124,7 +124,7 @@ impl Tool for TodoWriteTool {
             "clear" => self.handle_clear(&session_id),
             _ => Err(CommandError::tool(
                 errors::TOOL_INVALID_PARAMS,
-                format!("未知操作: {}", action),
+                format!("Unknown action: {}", action),
             )),
         };
 
@@ -157,7 +157,7 @@ impl TodoWriteTool {
             .ok_or_else(|| {
                 CommandError::tool(
                     errors::TOOL_INVALID_PARAMS,
-                    "create 操作需要 content 参数".to_string(),
+                    "create action requires content parameter".to_string(),
                 )
             })?;
 
@@ -198,7 +198,7 @@ impl TodoWriteTool {
             .ok_or_else(|| {
                 CommandError::tool(
                     errors::TOOL_INVALID_PARAMS,
-                    "update 操作需要 taskId 参数".to_string(),
+                    "update action requires taskId parameter".to_string(),
                 )
             })?;
 
@@ -212,7 +212,7 @@ impl TodoWriteTool {
             .iter()
             .position(|i| i.id == task_id)
             .ok_or_else(|| {
-                CommandError::tool(errors::TOOL_NOT_FOUND, format!("任务不存在: {}", task_id))
+                CommandError::tool(errors::TOOL_NOT_FOUND, format!("Task not found: {}", task_id))
             })?;
 
         let now = Self::now_ts();

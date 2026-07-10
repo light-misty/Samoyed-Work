@@ -258,7 +258,7 @@ impl SubAgentExecutor {
                     agent_id,
                     success: false,
                     result: String::new(),
-                    error: Some(format!("执行超时（{}秒）", config.timeout_seconds)),
+                    error: Some(format!("Execution timeout ({} seconds)", config.timeout_seconds)),
                     iterations: 0,
                     duration_ms,
                     tool_calls: 0,
@@ -288,7 +288,7 @@ impl SubAgentExecutor {
         messages.push(ChatMessage {
             role: "user".to_string(),
             content: format!(
-                "请执行以下子任务:\n\n{}\n\n完成后给出最终结果摘要。",
+                "Please execute the following subtask:\n\n{}\n\nProvide a summary of the final result upon completion.",
                 config.task_description
             ),
             content_parts: None,
@@ -424,7 +424,7 @@ impl SubAgentExecutor {
     ) -> Result<String, CommandError> {
         // 获取工具的 Arc 引用
         let tool = self.tool_registry.get_arc(&tool_call.name).ok_or_else(|| {
-            CommandError::tool(TOOL_NOT_FOUND, format!("工具 {} 不存在", tool_call.name))
+            CommandError::tool(TOOL_NOT_FOUND, format!("Tool {} does not exist", tool_call.name))
         })?;
 
         // 解析 tool_call.arguments（String）为 serde_json::Value
@@ -434,7 +434,7 @@ impl SubAgentExecutor {
             serde_json::from_str(&tool_call.arguments).map_err(|e| {
                 CommandError::tool(
                     TOOL_INVALID_PARAMS,
-                    format!("工具 {} 参数解析失败: {}", tool_call.name, e),
+                    format!("Tool {} parameter parsing failed: {}", tool_call.name, e),
                 )
             })?
         };
@@ -470,9 +470,9 @@ impl SubAgentExecutor {
         {
             // 权限拒绝，返回错误信息给 LLM
             return Ok(serde_json::json!({
-                "error": "权限拒绝",
+                "error": "Permission denied",
                 "tool": tool_call.name,
-                "message": "子 Agent 工具调用被权限系统拒绝"
+                "message": "Sub-agent tool call denied by permission system"
             })
             .to_string());
         }

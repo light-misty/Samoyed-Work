@@ -55,9 +55,9 @@ impl Tool for SourceCodeTool {
     }
 
     fn description(&self) -> &str {
-        "代码语义搜索工具。基于 tree-sitter 解析代码语法树,支持按符号类型\
-         (function/method/class/struct/interface/enum 等)和名称通配符查询。\
-         支持 Rust/Python/JavaScript/TypeScript/Go/Java/C/C++ 8 种语言。"
+        "Code semantic search tool. Based on tree-sitter parsing of code syntax trees, supports \
+         querying by symbol type (function/method/class/struct/interface/enum, etc.) and name wildcards. \
+         Supports 8 languages: Rust/Python/JavaScript/TypeScript/Go/Java/C/C++."
     }
 
     fn category(&self) -> &str {
@@ -71,32 +71,32 @@ impl Tool for SourceCodeTool {
                 "action": {
                     "type": "string",
                     "enum": ["search", "list_symbols"],
-                    "description": "操作类型: search=在目录中搜索符号, list_symbols=列出单个文件的所有符号"
+                    "description": "Action type: search=search symbols in a directory, list_symbols=list all symbols in a single file"
                 },
                 "path": {
                     "type": "string",
-                    "description": "搜索目录(search)或文件路径(list_symbols)"
+                    "description": "Search directory (search) or file path (list_symbols)"
                 },
                 "symbolName": {
                     "type": "string",
-                    "description": "符号名称通配符(如 'get_*'),search 时可选"
+                    "description": "Symbol name wildcard (e.g., 'get_*'), optional for search"
                 },
                 "symbolType": {
                     "type": "string",
-                    "description": "符号类型过滤(function/method/class/struct/enum/interface/trait/type_alias/macro/variable/constant/module),search 时可选"
+                    "description": "Symbol type filter (function/method/class/struct/enum/interface/trait/type_alias/macro/variable/constant/module), optional for search"
                 },
                 "extensions": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "文件扩展名过滤(如 ['rs', 'py']),search 时可选"
+                    "description": "File extension filter (e.g., ['rs', 'py']), optional for search"
                 },
                 "recursive": {
                     "type": "boolean",
-                    "description": "是否递归搜索子目录,默认 true"
+                    "description": "Whether to search subdirectories recursively, default true"
                 },
                 "maxResults": {
                     "type": "number",
-                    "description": "最大结果数,默认 100"
+                    "description": "Maximum number of results, default 100"
                 }
             },
             "required": ["action", "path"]
@@ -112,7 +112,7 @@ impl Tool for SourceCodeTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少 path 参数".to_string()),
+                error: Some("Missing path parameter".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(errors::TOOL_INVALID_PARAMS),
             };
@@ -132,7 +132,7 @@ impl Tool for SourceCodeTool {
             "list_symbols" => self.handle_list_symbols(&full_path),
             _ => Err(CommandError::tool(
                 errors::TOOL_INVALID_PARAMS,
-                format!("未知操作: {}", action),
+                format!("Unknown action: {}", action),
             )),
         };
 
@@ -191,7 +191,7 @@ impl SourceCodeTool {
         let mut searcher = self
             .searcher
             .lock()
-            .map_err(|e| CommandError::runtime(7001, format!("搜索器锁中毒: {}", e)))?;
+            .map_err(|e| CommandError::runtime(7001, format!("Searcher lock poisoned: {}", e)))?;
         let results = searcher.search(&query)?;
 
         Ok(json!({
@@ -207,7 +207,7 @@ impl SourceCodeTool {
         if !path.exists() {
             return Err(CommandError::fs(
                 errors::FS_PATH_NOT_FOUND,
-                format!("文件不存在: {}", file_path),
+                format!("File does not exist: {}", file_path),
             ));
         }
 
@@ -215,21 +215,21 @@ impl SourceCodeTool {
         if !language.is_supported() {
             return Err(CommandError::tool(
                 errors::TOOL_INVALID_PARAMS,
-                format!("不支持的语言: {:?}", language),
+                format!("Unsupported language: {:?}", language),
             ));
         }
 
         let source = std::fs::read_to_string(path).map_err(|e| {
             CommandError::fs(
                 errors::FS_IO_ERROR,
-                format!("读取文件失败 {}: {}", file_path, e),
+                format!("Failed to read file {}: {}", file_path, e),
             )
         })?;
 
         let mut searcher = self
             .searcher
             .lock()
-            .map_err(|e| CommandError::runtime(7001, format!("搜索器锁中毒: {}", e)))?;
+            .map_err(|e| CommandError::runtime(7001, format!("Searcher lock poisoned: {}", e)))?;
         let symbols = searcher.parse_symbols(&source, language)?;
 
         Ok(json!({

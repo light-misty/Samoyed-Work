@@ -474,13 +474,13 @@ impl AgentContext {
                             crate::models::message::AttachmentType::Image
                         )
                     {
-                        format!("{} (图片-模型不可见)", a.name)
+                        format!("{} (image - model cannot see)", a.name)
                     } else {
                         a.name.clone()
                     }
                 })
                 .collect();
-            format!("\n\n[附件: {}]", names.join(", "))
+            format!("\n\n[Attachment: {}]", names.join(", "))
         } else {
             String::new()
         };
@@ -622,7 +622,7 @@ impl AgentContext {
         if self.completed_steps.is_empty() {
             return String::new();
         }
-        let mut result = String::from("已完成步骤：\n");
+        let mut result = String::from("Completed steps:\n");
         for (i, step) in self.completed_steps.iter().enumerate() {
             result.push_str(&format!("{}. {}\n", i + 1, step));
         }
@@ -698,7 +698,7 @@ impl AgentContext {
                 if !is_latest && rc.len() > REASONING_COMPRESS_THRESHOLD {
                     // 压缩早期的 reasoning_content：保留前 N 个字符 + 省略标记
                     let kept = rc.chars().take(REASONING_COMPRESS_KEEP).collect::<String>();
-                    compressed_msg.reasoning_content = Some(format!("{}...(已省略)", kept));
+                    compressed_msg.reasoning_content = Some(format!("{}...(omitted)", kept));
                     log::debug!(
                         "压缩早期 reasoning_content: 原始长度={}, 压缩后长度={}, 消息索引={}",
                         rc.len(),
@@ -801,8 +801,8 @@ impl AgentContext {
         // 提取遇到的错误：从 tool result 中提取错误信息
         let mut errors = Vec::new();
         for msg in &self.messages {
-            if msg.role == "tool" && msg.content.starts_with("错误:") {
-                let error_text = msg.content.trim_start_matches("错误:").trim();
+            if msg.role == "tool" && msg.content.starts_with("Error:") {
+                let error_text = msg.content.trim_start_matches("Error:").trim();
                 if !error_text.is_empty() && errors.len() < 5 {
                     errors.push(error_text.to_string());
                 }
@@ -1360,7 +1360,7 @@ mod tests {
 
         // 早期 reasoning_content 应该被压缩，包含省略标记
         let compressed = early_assistant.reasoning_content.as_ref().unwrap();
-        assert!(compressed.contains("...(已省略)"));
+        assert!(compressed.contains("...(omitted)"));
 
         // 压缩后应该以原始内容的前 REASONING_COMPRESS_KEEP 字符开头
         let expected_prefix = make_long_string(REASONING_COMPRESS_KEEP);
@@ -1396,7 +1396,7 @@ mod tests {
             .reasoning_content
             .as_ref()
             .unwrap()
-            .contains("...(已省略)"));
+            .contains("...(omitted)"));
     }
 
     /// 测试短 reasoning_content 不被压缩
@@ -1427,7 +1427,7 @@ mod tests {
             .reasoning_content
             .as_ref()
             .unwrap()
-            .contains("...(已省略)"));
+            .contains("...(omitted)"));
     }
 
     /// 测试多段式系统提示词构建
@@ -1850,7 +1850,7 @@ mod tests {
     fn test_extract_session_summary_with_errors() {
         let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
         ctx.add_user_message("读取文件");
-        ctx.add_tool_result("call_1", "错误: 文件不存在 test.docx");
+        ctx.add_tool_result("call_1", "Error: 文件不存在 test.docx");
 
         let (_, _, _, _, errors_resolved) = ctx.extract_session_summary_info();
         assert!(errors_resolved.contains("文件不存在"));

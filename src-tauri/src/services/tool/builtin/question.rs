@@ -74,8 +74,9 @@ impl Tool for QuestionTool {
     }
 
     fn description(&self) -> &str {
-        "向用户提出问题并等待回答。适用于需要用户决策、澄清需求或选择方案时。\
-         最多可同时提出 4 个问题，每个问题提供 2-4 个选项。用户回答后继续执行。"
+        "Ask the user a question and wait for an answer. Suitable when user decision, requirement \
+         clarification, or option selection is needed. Up to 4 questions can be asked at once, each \
+         with 2-4 options. Execution continues after the user answers."
     }
 
     fn category(&self) -> &str {
@@ -88,7 +89,7 @@ impl Tool for QuestionTool {
             "properties": {
                 "questions": {
                     "type": "array",
-                    "description": "问题列表（1-4 个）",
+                    "description": "Question list (1-4 items)",
                     "minItems": 1,
                     "maxItems": 4,
                     "items": {
@@ -96,30 +97,30 @@ impl Tool for QuestionTool {
                         "properties": {
                             "header": {
                                 "type": "string",
-                                "description": "短标签（最多 12 字符）",
+                                "description": "Short label (max 12 characters)",
                                 "maxLength": 12
                             },
                             "question": {
                                 "type": "string",
-                                "description": "完整问题文本"
+                                "description": "Full question text"
                             },
                             "options": {
                                 "type": "array",
-                                "description": "选项列表（2-4 个）",
+                                "description": "Options list (2-4 items)",
                                 "minItems": 2,
                                 "maxItems": 4,
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "label": { "type": "string", "description": "选项标签" },
-                                        "description": { "type": "string", "description": "选项描述" }
+                                        "label": { "type": "string", "description": "Option label" },
+                                        "description": { "type": "string", "description": "Option description" }
                                     },
                                     "required": ["label", "description"]
                                 }
                             },
                             "multiSelect": {
                                 "type": "boolean",
-                                "description": "是否允许多选（默认 false）",
+                                "description": "Whether multi-select is allowed (default false)",
                                 "default": false
                             }
                         },
@@ -141,7 +142,7 @@ impl Tool for QuestionTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 questions 参数或为空".to_string()),
+                    error: Some("Missing questions parameter or empty".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 };
@@ -154,7 +155,7 @@ impl Tool for QuestionTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "问题数量超过限制（最多 4 个，实际 {}）",
+                    "Question count exceeds limit (max 4, actual {})",
                     questions_raw.len()
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -187,7 +188,7 @@ impl Tool for QuestionTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("问题 {} 的选项数量必须在 2-4 个之间", idx)),
+                        error: Some(format!("Question {} must have between 2-4 options", idx)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(TOOL_INVALID_PARAMS),
                     };
@@ -284,7 +285,7 @@ impl Tool for QuestionTool {
                     output: Some(json!({
                         "questionId": question_id,
                         "answers": [],
-                        "note": "问题已被取消",
+                        "note": "Question has been cancelled",
                     })),
                     error: None,
                     duration_ms: start.elapsed().as_millis() as u64,
@@ -306,7 +307,7 @@ impl Tool for QuestionTool {
                     output: Some(json!({
                         "questionId": question_id,
                         "answers": [],
-                        "note": "等待用户回答超时(5分钟)，返回空答案",
+                        "note": "Timed out waiting for user answer (5 minutes), returning empty answer",
                     })),
                     error: None,
                     duration_ms: start.elapsed().as_millis() as u64,

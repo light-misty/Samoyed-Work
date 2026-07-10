@@ -1,4 +1,4 @@
-﻿//! SessionCompaction:上下文压缩策略
+//! SessionCompaction:上下文压缩策略
 //! 当上下文接近溢出时,压缩旧消息为摘要,保留最近消息和关键信息
 
 use crate::config::app_settings::CompactionConfig;
@@ -205,7 +205,7 @@ Requirements:\n\
 
         // 按字符边界安全截断(避免 UTF-8 截断 panic)
         let truncated: String = msg.content.chars().take(max_chars).collect();
-        msg.content = format!("{}\n...[已截断,原始长度 {} 字符]", truncated, char_count);
+        msg.content = format!("{}\n...[truncated, original length {} chars]", truncated, char_count);
 
         log::debug!(
             "工具输出截断:原始 {} 字符 -> 保留 {} 字符",

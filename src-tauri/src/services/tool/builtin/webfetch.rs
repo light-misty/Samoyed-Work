@@ -35,8 +35,9 @@ impl Tool for WebFetchTool {
     }
 
     fn description(&self) -> &str {
-        "获取指定 URL 的网页内容，自动转换为 Markdown 格式。支持 HTML 页面、JSON API、纯文本资源。\
-         适用于读取在线文档、API 参考、技术文章等。内网地址和敏感端口会被自动拦截。"
+        "Fetch the web content of a specified URL and automatically convert it to Markdown format. \
+         Supports HTML pages, JSON APIs, and plain text resources. Suitable for reading online docs, \
+         API references, technical articles, etc. Intranet addresses and sensitive ports are automatically blocked."
     }
 
     fn category(&self) -> &str {
@@ -49,11 +50,11 @@ impl Tool for WebFetchTool {
             "properties": {
                 "url": {
                     "type": "string",
-                    "description": "要获取的 URL（必须包含 http:// 或 https:// 协议）"
+                    "description": "URL to fetch (must include http:// or https:// protocol)"
                 },
                 "maxLength": {
                     "type": "integer",
-                    "description": "返回内容的最大字符数（默认 100000）",
+                    "description": "Maximum number of characters to return (default 100000)",
                     "default": 100000,
                     "minimum": 100,
                     "maximum": 500000
@@ -73,7 +74,7 @@ impl Tool for WebFetchTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 url 参数".to_string()),
+                    error: Some("Missing url parameter".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 };

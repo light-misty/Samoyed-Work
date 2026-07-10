@@ -27,15 +27,15 @@ fn resolve_path(path: &str, workspace_root: &str) -> String {
 /// 对于不存在的路径（如 convert 的 output_path），规范化父目录后校验
 fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<(), String> {
     if workspace_root.is_empty() {
-        return Err("workspace_root 为空，无法校验路径边界".to_string());
+        return Err("workspace_root is empty, cannot validate path boundary".to_string());
     }
     if resolved_path.is_empty() {
-        return Err("待校验路径为空".to_string());
+        return Err("Path to be validated is empty".to_string());
     }
 
     // 规范化工作区根目录（必须存在）
     let canonical_root = crate::utils::canonicalize(workspace_root)
-        .map_err(|e| format!("工作区根目录无效: {} ({})", workspace_root, e))?;
+        .map_err(|e| format!("Invalid workspace root directory: {} ({})", workspace_root, e))?;
 
     // 尝试规范化待校验路径
     // 路径可能不存在（如 convert 的 output_path），此时规范化父目录
@@ -50,7 +50,7 @@ fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<
                 canonical_root.join(path.file_name().unwrap_or_default())
             } else {
                 let canonical_parent = crate::utils::canonicalize(parent)
-                    .map_err(|e| format!("路径父目录无效: {} ({})", parent.display(), e))?;
+                    .map_err(|e| format!("Invalid path parent directory: {} ({})", parent.display(), e))?;
                 canonical_parent.join(path.file_name().unwrap_or_default())
             }
         }
@@ -59,7 +59,7 @@ fn validate_workspace_path(resolved_path: &str, workspace_root: &str) -> Result<
     // 路径组件级别的 starts_with 比较（避免字符串前缀匹配的绕过风险）
     if !canonical_path.starts_with(&canonical_root) {
         return Err(format!(
-            "路径不在工作区内，拒绝访问: {} (工作区: {})",
+            "Path is not within workspace, access denied: {} (workspace: {})",
             canonical_path.display(),
             canonical_root.display()
         ));
@@ -438,7 +438,7 @@ async fn execute_modify(
                                 return HandlerResult {
                                     success: false,
                                     output: None,
-                                    error: Some(format!("合并输入文件路径不在工作区内: {}", e)),
+                                    error: Some(format!("Merge input file path is not within workspace: {}", e)),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                                 };
@@ -460,7 +460,7 @@ async fn execute_modify(
                         return HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("拆分输出目录不在工作区内: {}", e)),
+                            error: Some(format!("Split output directory is not within workspace: {}", e)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                         };
@@ -479,7 +479,7 @@ async fn execute_modify(
                         return HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("水印图片路径不在工作区内: {}", e)),
+                            error: Some(format!("Watermark image path is not within workspace: {}", e)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(crate::errors::DOC_PERMISSION_DENIED),
                         };
@@ -552,7 +552,7 @@ impl Handler for DocxHandler {
         "docx"
     }
     fn description(&self) -> &str {
-        "Word文档(.docx)处理器，支持读取、格式转换、分析三种操作。转换支持 md/txt/pdf 格式（与 sidecar word_handler.convert 实际支持一致）。"
+        "Word document (.docx) handler, supports read, format conversion, and analysis operations. Conversion supports md/txt/pdf formats (consistent with sidecar word_handler.convert actual supported formats)."
     }
     fn category(&self) -> &str {
         "document"
@@ -570,45 +570,45 @@ impl Handler for DocxHandler {
                 "action": {
                     "type": "string",
                     "enum": ["read", "convert", "analyze"],
-                    "description": "操作类型: read=读取文档, convert=格式转换, analyze=分析文档"
+                    "description": "Operation type: read=document reading, convert=format conversion, analyze=document analysis"
                 },
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "include_formatting": {
                     "type": "boolean",
-                    "description": "[read] 是否包含格式信息（等价于 include_runs=true），默认 false",
+                    "description": "[read] Whether to include formatting information (equivalent to include_runs=true), default false",
                     "default": false
                 },
                 "include_runs": {
                     "type": "boolean",
-                    "description": "[read] 是否提取 Run 级字符属性（字体名/字号/粗体/斜体/下划线/颜色），默认 false",
+                    "description": "[read] Whether to extract Run-level character properties (font name/size/bold/italic/underline/color), default false",
                     "default": false
                 },
                 "include_tables_detailed": {
                     "type": "boolean",
-                    "description": "[read] 是否提取表格详细结构（合并单元格/列宽/行高/表格样式），默认 false",
+                    "description": "[read] Whether to extract detailed table structure (merged cells/column width/row height/table style), default false",
                     "default": false
                 },
                 "include_sections": {
                     "type": "boolean",
-                    "description": "[read] 是否提取节信息（页面尺寸/方向/边距），默认 false",
+                    "description": "[read] Whether to extract section information (page size/orientation/margins), default false",
                     "default": false
                 },
                 "include_headers_footers": {
                     "type": "boolean",
-                    "description": "[read] 是否提取页眉页脚内容，默认 false",
+                    "description": "[read] Whether to extract header and footer content, default false",
                     "default": false
                 },
                 "target_format": {
                     "type": "string",
                     "enum": ["md", "txt", "pdf"],
-                    "description": "[convert] 目标格式（与 sidecar word_handler.convert 实际支持格式一致）"
+                    "description": "[convert] Target format (consistent with sidecar word_handler.convert actual supported formats)"
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "[convert] 输出文件路径（可选，默认自动生成）"
+                    "description": "[convert] Output file path (optional, auto-generated by default)"
                 }
             },
             "required": ["action", "path"]
@@ -623,7 +623,7 @@ impl Handler for DocxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("DocxHandler 不支持的操作类型: {}", action)),
+                error: Some(format!("DocxHandler does not support operation type: {}", action)),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -653,7 +653,7 @@ impl Handler for XlsxHandler {
         "xlsx"
     }
     fn description(&self) -> &str {
-        "Excel文档(.xlsx)处理器，支持读取、格式转换、分析三种操作。转换支持 csv/pdf/html/txt 格式（与 sidecar excel_handler.convert 实际支持一致）。"
+        "Excel document (.xlsx) handler, supports read, format conversion, and analysis operations. Conversion supports csv/pdf/html/txt formats (consistent with sidecar excel_handler.convert actual supported formats)."
     }
     fn category(&self) -> &str {
         "document"
@@ -671,53 +671,53 @@ impl Handler for XlsxHandler {
                 "action": {
                     "type": "string",
                     "enum": ["read", "convert", "analyze"],
-                    "description": "操作类型: read=读取文档, convert=格式转换, analyze=分析文档"
+                    "description": "Operation type: read=document reading, convert=format conversion, analyze=document analysis"
                 },
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "sheet": {
                     "type": "string",
-                    "description": "[read/convert] 工作表名称"
+                    "description": "[read/convert] Worksheet name"
                 },
                 "range": {
                     "type": "string",
-                    "description": "[read] 单元格范围，如 A1:D10"
+                    "description": "[read] Cell range, e.g. A1:D10"
                 },
                 "include_formatting": {
                     "type": "boolean",
-                    "description": "[read] 是否提取单元格格式（字体/填充/边框/对齐/数字格式），默认 false",
+                    "description": "[read] Whether to extract cell formatting (font/fill/border/alignment/number format), default false",
                     "default": false
                 },
                 "include_formulas": {
                     "type": "boolean",
-                    "description": "[read] 是否分离公式与计算结果值（同时加载 data_only=True 工作簿），默认 false",
+                    "description": "[read] Whether to separate formulas from calculated result values (also loads data_only=True workbook), default false",
                     "default": false
                 },
                 "include_charts": {
                     "type": "boolean",
-                    "description": "[read] 是否提取图表信息（类型/标题/数据范围），默认 false",
+                    "description": "[read] Whether to extract chart information (type/title/data range), default false",
                     "default": false
                 },
                 "include_merged_cells": {
                     "type": "boolean",
-                    "description": "[read] 是否提取合并单元格范围列表，默认 false",
+                    "description": "[read] Whether to extract merged cell range list, default false",
                     "default": false
                 },
                 "include_comments": {
                     "type": "boolean",
-                    "description": "[read] 是否提取单元格批注，默认 false",
+                    "description": "[read] Whether to extract cell comments, default false",
                     "default": false
                 },
                 "target_format": {
                     "type": "string",
                     "enum": ["csv", "pdf", "html", "txt"],
-                    "description": "[convert] 目标格式（与 sidecar excel_handler.convert 实际支持格式一致）"
+                    "description": "[convert] Target format (consistent with sidecar excel_handler.convert actual supported formats)"
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "[convert] 输出文件路径（可选，默认自动生成）"
+                    "description": "[convert] Output file path (optional, auto-generated by default)"
                 }
             },
             "required": ["action", "path"]
@@ -732,7 +732,7 @@ impl Handler for XlsxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("XlsxHandler 不支持的操作类型: {}", action)),
+                error: Some(format!("XlsxHandler does not support operation type: {}", action)),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -762,7 +762,7 @@ impl Handler for PptxHandler {
         "pptx"
     }
     fn description(&self) -> &str {
-        "PPT演示文稿(.pptx)处理器，支持读取、分析两种操作。"
+        "PowerPoint presentation (.pptx) handler, supports read and analysis operations."
     }
     fn category(&self) -> &str {
         "document"
@@ -780,30 +780,30 @@ impl Handler for PptxHandler {
                 "action": {
                     "type": "string",
                     "enum": ["read", "convert", "analyze"],
-                    "description": "操作类型: read=读取文档, convert=格式转换, analyze=分析文档"
+                    "description": "Operation type: read=document reading, convert=format conversion, analyze=document analysis"
                 },
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "include_notes": {
                     "type": "boolean",
-                    "description": "[read] 是否提取幻灯片备注内容，默认 false",
+                    "description": "[read] Whether to extract slide notes content, default false",
                     "default": false
                 },
                 "include_shapes_detailed": {
                     "type": "boolean",
-                    "description": "[read] 是否提取形状详细信息（位置/尺寸/填充/边框/版式/表格/图表识别），默认 false",
+                    "description": "[read] Whether to extract detailed shape information (position/size/fill/border/layout/table/chart recognition), default false",
                     "default": false
                 },
                 "target_format": {
                     "type": "string",
                     "enum": [],
-                    "description": "[convert] 目标格式（PPT 转 PDF 已不再支持，此字段保留用于未来扩展）"
+                    "description": "[convert] Target format (PPT to PDF is no longer supported, this field is reserved for future extension)"
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "[convert] 输出文件路径（可选，默认自动生成，当前 convert 操作将返回不支持错误）"
+                    "description": "[convert] Output file path (optional, auto-generated by default, current convert operation will return unsupported error)"
                 }
             },
             "required": ["action", "path"]
@@ -818,7 +818,7 @@ impl Handler for PptxHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PptxHandler 不支持的操作类型: {}", action)),
+                error: Some(format!("PptxHandler does not support operation type: {}", action)),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -848,13 +848,13 @@ impl Handler for PdfHandler {
         "pdf"
     }
     fn description(&self) -> &str {
-        "PDF文档(.pdf)处理器，支持读取(read)、格式转换(convert)、分析(analyze)、修改(modify)四种操作。\
-        modify 通过 operation 参数分发到 17 个子操作：\
-        页面操作(rotate_pages/delete_pages/extract_pages/reorder_pages)、\
-        合并拆分(merge/split)、水印(add_text_watermark/add_image_watermark)、\
-        页眉页脚(add_header_footer)、加密解密(encrypt/decrypt)、\
-        元数据(set_metadata)、书签目录(add_bookmarks/set_toc)、\
-        注释(add_annotation)、表单填充(fill_form)、压缩(compress)。"
+        "PDF document (.pdf) handler, supports read, format conversion (convert), analysis (analyze), and modification (modify) operations. \
+        modify dispatches to 17 sub-operations via the operation parameter: \
+        page operations (rotate_pages/delete_pages/extract_pages/reorder_pages), \
+        merge/split, watermarks (add_text_watermark/add_image_watermark), \
+        header/footer (add_header_footer), encryption/decryption (encrypt/decrypt), \
+        metadata (set_metadata), bookmarks/TOC (add_bookmarks/set_toc), \
+        annotations (add_annotation), form filling (fill_form), compression (compress)."
     }
     fn category(&self) -> &str {
         "document"
@@ -872,92 +872,92 @@ impl Handler for PdfHandler {
                 "action": {
                     "type": "string",
                     "enum": ["read", "convert", "analyze", "modify"],
-                    "description": "操作类型: read=读取文档, convert=格式转换, analyze=分析文档, modify=修改文档"
+                    "description": "Operation type: read=document reading, convert=format conversion, analyze=document analysis, modify=document modification"
                 },
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "pages": {
                     "type": "string",
-                    "description": "[read/modify] 页码范围，如 \"1-5,8,10-12\" 或 \"all\"，默认读取所有页"
+                    "description": "[read/modify] Page range, e.g. \"1-5,8,10-12\" or \"all\", default reads all pages"
                 },
                 // ===== read 操作参数 =====
                 "include_layout": {
                     "type": "boolean",
-                    "description": "[read] 是否提取文本位置和样式（字号/字体/颜色），使用 PyMuPDF get_text(\"dict\")，默认 false",
+                    "description": "[read] Whether to extract text position and style (font size/font/color), uses PyMuPDF get_text(\"dict\"), default false",
                     "default": false
                 },
                 "include_forms": {
                     "type": "boolean",
-                    "description": "[read] 是否提取表单字段（AcroForm），使用 pypdf，默认 false",
+                    "description": "[read] Whether to extract form fields (AcroForm), uses pypdf, default false",
                     "default": false
                 },
                 "include_annotations": {
                     "type": "boolean",
-                    "description": "[read] 是否提取注释（高亮/批注/签名等），使用 pypdf，默认 false",
+                    "description": "[read] Whether to extract annotations (highlights/comments/signatures etc.), uses pypdf, default false",
                     "default": false
                 },
                 "extract_tables": {
                     "type": "boolean",
-                    "description": "[read] 是否提取表格结构，使用 pdfplumber extract_tables()，默认 false",
+                    "description": "[read] Whether to extract table structure, uses pdfplumber extract_tables(), default false",
                     "default": false
                 },
                 "include_images": {
                     "type": "boolean",
-                    "description": "[read] 是否提取图片信息（数量/位置/尺寸），使用 PyMuPDF，默认 false",
+                    "description": "[read] Whether to extract image information (count/position/size), uses PyMuPDF, default false",
                     "default": false
                 },
                 "include_links": {
                     "type": "boolean",
-                    "description": "[read] 是否提取超链接（URI/内部跳转），使用 PyMuPDF page.get_links()，默认 false",
+                    "description": "[read] Whether to extract hyperlinks (URI/internal jumps), uses PyMuPDF page.get_links(), default false",
                     "default": false
                 },
                 "include_toc": {
                     "type": "boolean",
-                    "description": "[read] 是否提取书签/大纲（目录），使用 PyMuPDF doc.get_toc()，默认 false",
+                    "description": "[read] Whether to extract bookmarks/outline (TOC), uses PyMuPDF doc.get_toc(), default false",
                     "default": false
                 },
                 "include_fonts": {
                     "type": "boolean",
-                    "description": "[read] 是否提取字体清单，使用 PyMuPDF page.get_fonts()，默认 false",
+                    "description": "[read] Whether to extract font list, uses PyMuPDF page.get_fonts(), default false",
                     "default": false
                 },
                 "include_drawings": {
                     "type": "boolean",
-                    "description": "[read] 是否提取绘图元素（横线/边框/矩形/曲线等矢量图形），使用 PyMuPDF page.get_drawings()，默认 false。视觉级布局的核心开关，让智能体看到 PDF 中的所有视觉元素",
+                    "description": "[read] Whether to extract drawing elements (horizontal lines/borders/rectangles/curves and other vector graphics), uses PyMuPDF page.get_drawings(), default false. Core switch for visual-level layout, lets the agent see all visual elements in the PDF",
                     "default": false
                 },
                 "include_image_data": {
                     "type": "boolean",
-                    "description": "[read] 是否提取图片二进制数据（base64 编码），使用 PyMuPDF doc.extract_image()，默认 false。注意：开启后返回数据可能很大",
+                    "description": "[read] Whether to extract image binary data (base64 encoded), uses PyMuPDF doc.extract_image(), default false. Note: enabling this may return very large data",
                     "default": false
                 },
                 "include_metadata_full": {
                     "type": "boolean",
-                    "description": "[read] 是否提取完整元数据（含日期/keywords/PDF版本/加密状态等），默认 false",
+                    "description": "[read] Whether to extract complete metadata (including date/keywords/PDF version/encryption status etc.), default false",
                     "default": false
                 },
                 "include_page_geometry": {
                     "type": "boolean",
-                    "description": "[read] 是否提取页面几何信息（尺寸/方向/旋转角度/mediabox/cropbox），默认 false",
+                    "description": "[read] Whether to extract page geometry information (size/orientation/rotation angle/mediabox/cropbox), default false",
                     "default": false
                 },
                 "include_signatures": {
                     "type": "boolean",
-                    "description": "[read] 是否提取数字签名信息（遍历 widget 中的签名字段），默认 false",
+                    "description": "[read] Whether to extract digital signature information (iterates signature fields in widgets), default false",
                     "default": false
                 },
                 "include_visual": {
                     "type": "boolean",
-                    "description": "[read] 便捷开关，启用时同时提取 layout + drawings + page_geometry（视觉级布局）。让智能体像看页面一样获得 PDF 的所有视觉元素布局信息，默认 false",
+                    "description": "[read] Convenience switch, when enabled simultaneously extracts layout + drawings + page_geometry (visual-level layout). Lets the agent obtain all visual element layout information of the PDF as if viewing the page, default false",
                     "default": false
                 },
                 // ===== convert 操作参数 =====
                 "target_format": {
                     "type": "string",
                     "enum": ["txt", "md", "html"],
-                    "description": "[convert] 目标格式"
+                    "description": "[convert] Target format"
                 },
                 // ===== modify 操作参数 =====
                 "operation": {
@@ -972,68 +972,68 @@ impl Handler for PdfHandler {
                              "add_annotation",
                              "fill_form",
                              "compress"],
-                    "description": "[modify] 修改操作类型，分发到具体子操作"
+                    "description": "[modify] Modification operation type, dispatches to specific sub-operation"
                 },
                 "output_path": {
                     "type": "string",
-                    "description": "[convert/modify] 输出文件路径（可选；convert 默认自动生成，modify 默认覆盖源文件）"
+                    "description": "[convert/modify] Output file path (optional; convert auto-generates by default, modify overwrites source file by default)"
                 },
                 // 页面操作参数
                 "rotation": {
                     "type": "integer",
                     "enum": [90, 180, 270],
-                    "description": "[modify rotate_pages] 旋转角度（顺时针）"
+                    "description": "[modify rotate_pages] Rotation angle (clockwise)"
                 },
                 "new_order": {
                     "type": "array",
                     "items": {"type": "integer"},
-                    "description": "[modify reorder_pages] 新的页面顺序列表（1-based），必须包含所有页面且每个只出现一次"
+                    "description": "[modify reorder_pages] New page order list (1-based), must contain all pages and each appears only once"
                 },
                 // 合并拆分参数
                 "input_paths": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "[modify merge] 要合并到源 PDF 之后的 PDF 文件路径列表（相对于工作区）"
+                    "description": "[modify merge] List of PDF file paths to merge after the source PDF (relative to workspace)"
                 },
                 "mode": {
                     "type": "string",
                     "enum": ["ranges", "every_page", "every_n_pages"],
-                    "description": "[modify split] 拆分模式: ranges=按范围, every_page=每页一个PDF, every_n_pages=每N页一个PDF"
+                    "description": "[modify split] Split mode: ranges=by range, every_page=one PDF per page, every_n_pages=one PDF every N pages"
                 },
                 "ranges": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "start": {"type": "integer", "description": "起始页（1-based）"},
-                            "end": {"type": "integer", "description": "结束页（1-based）"}
+                            "start": {"type": "integer", "description": "Start page (1-based)"},
+                            "end": {"type": "integer", "description": "End page (1-based)"}
                         }
                     },
-                    "description": "[modify split] 拆分范围列表（mode='ranges' 时必填）"
+                    "description": "[modify split] Split range list (required when mode='ranges')"
                 },
                 "n": {
                     "type": "integer",
-                    "description": "[modify split] 每 N 页拆分为一个 PDF（mode='every_n_pages' 时必填）"
+                    "description": "[modify split] Split every N pages into one PDF (required when mode='every_n_pages')"
                 },
                 "output_dir": {
                     "type": "string",
-                    "description": "[modify split] 输出目录（可选，默认与源文件同目录）"
+                    "description": "[modify split] Output directory (optional, default same as source file directory)"
                 },
                 // 水印参数
                 "text": {
                     "type": "string",
-                    "description": "[modify add_text_watermark] 水印文字（支持中文，自动使用 CJK 字体）"
+                    "description": "[modify add_text_watermark] Watermark text (supports CJK, automatically uses CJK fonts)"
                 },
                 "image_path": {
                     "type": "string",
-                    "description": "[modify add_image_watermark] 水印图片路径（相对于工作区）"
+                    "description": "[modify add_image_watermark] Watermark image path (relative to workspace)"
                 },
                 "font_size": {
                     "type": "number",
-                    "description": "[modify add_text_watermark/add_header_footer] 字号（add_text_watermark 默认 50，add_header_footer 默认 10）"
+                    "description": "[modify add_text_watermark/add_header_footer] Font size (add_text_watermark default 50, add_header_footer default 10)"
                 },
                 "color": {
-                    "description": "[modify add_text_watermark/add_annotation] 颜色，可为十六进制字符串（如 \"#FF0000\"）或 RGB 元组 [r,g,b]（0-1）",
+                    "description": "[modify add_text_watermark/add_annotation] Color, can be a hex string (e.g. \"#FF0000\") or an RGB tuple [r,g,b] (0-1)",
                     "oneOf": [
                         {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
                         {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
@@ -1042,10 +1042,10 @@ impl Handler for PdfHandler {
                 "opacity": {
                     "type": "number",
                     "minimum": 0, "maximum": 1,
-                    "description": "[modify add_text_watermark/add_image_watermark] 不透明度（0-1，默认 0.3）"
+                    "description": "[modify add_text_watermark/add_image_watermark] Opacity (0-1, default 0.3)"
                 },
                 "position": {
-                    "description": "[modify add_text_watermark/add_image_watermark] 水印位置：枚举或坐标",
+                    "description": "[modify add_text_watermark/add_image_watermark] Watermark position: enum or coordinates",
                     "oneOf": [
                         {"type": "string", "enum": ["center", "top-left", "top-right", "bottom-left", "bottom-right"]},
                         {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}
@@ -1053,51 +1053,51 @@ impl Handler for PdfHandler {
                 },
                 "scale": {
                     "type": "number",
-                    "description": "[modify add_image_watermark] 图片缩放比例（默认 0.5）"
+                    "description": "[modify add_image_watermark] Image scale ratio (default 0.5)"
                 },
                 // 页眉页脚参数
                 "header_text": {
                     "type": "string",
-                    "description": "[modify add_header_footer] 页眉文字（可选）"
+                    "description": "[modify add_header_footer] Header text (optional)"
                 },
                 "footer_text": {
                     "type": "string",
-                    "description": "[modify add_header_footer] 页脚文字（可选）"
+                    "description": "[modify add_header_footer] Footer text (optional)"
                 },
                 "margin": {
                     "type": "number",
-                    "description": "[modify add_header_footer] 边距（points，默认 30）"
+                    "description": "[modify add_header_footer] Margin (points, default 30)"
                 },
                 "show_page_number": {
                     "type": "boolean",
-                    "description": "[modify add_header_footer] 是否在页脚显示页码（默认 true）"
+                    "description": "[modify add_header_footer] Whether to show page number in footer (default true)"
                 },
                 "header_align": {
                     "type": "string",
                     "enum": ["left", "center", "right"],
-                    "description": "[modify add_header_footer] 页眉对齐（默认 center）"
+                    "description": "[modify add_header_footer] Header alignment (default center)"
                 },
                 "footer_align": {
                     "type": "string",
                     "enum": ["left", "center", "right"],
-                    "description": "[modify add_header_footer] 页脚对齐（默认 center）"
+                    "description": "[modify add_header_footer] Footer alignment (default center)"
                 },
                 // 加密解密参数
                 "user_password": {
                     "type": "string",
-                    "description": "[modify encrypt] 用户密码（打开 PDF 需要）"
+                    "description": "[modify encrypt] User password (required to open PDF)"
                 },
                 "owner_password": {
                     "type": "string",
-                    "description": "[modify encrypt] 所有者密码（修改权限需要，默认同 user_password）"
+                    "description": "[modify encrypt] Owner password (required for modification permissions, default same as user_password)"
                 },
                 "password": {
                     "type": "string",
-                    "description": "[modify decrypt] PDF 密码（用户密码或所有者密码）"
+                    "description": "[modify decrypt] PDF password (user password or owner password)"
                 },
                 "permissions": {
                     "type": "object",
-                    "description": "[modify encrypt] 权限字典，可包含 print/copy/modify/annotate/fill_forms/extract/assemble/print_hq（默认全部允许）",
+                    "description": "[modify encrypt] Permissions dictionary, can include print/copy/modify/annotate/fill_forms/extract/assemble/print_hq (default all allowed)",
                     "properties": {
                         "print": {"type": "boolean"},
                         "copy": {"type": "boolean"},
@@ -1112,7 +1112,7 @@ impl Handler for PdfHandler {
                 // 元数据参数
                 "metadata": {
                     "type": "object",
-                    "description": "[modify set_metadata] 元数据字典，可包含 title/author/subject/keywords/creator/producer",
+                    "description": "[modify set_metadata] Metadata dictionary, can include title/author/subject/keywords/creator/producer",
                     "properties": {
                         "title": {"type": "string"},
                         "author": {"type": "string"},
@@ -1125,26 +1125,26 @@ impl Handler for PdfHandler {
                 // 书签目录参数
                 "bookmarks": {
                     "type": "array",
-                    "description": "[modify add_bookmarks] 书签列表（在现有书签后追加）",
+                    "description": "[modify add_bookmarks] Bookmark list (appended after existing bookmarks)",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "title": {"type": "string", "description": "书签标题"},
-                            "page": {"type": "integer", "description": "目标页码（1-based）"},
-                            "level": {"type": "integer", "description": "层级（1=顶级，2=二级，...）"}
+                            "title": {"type": "string", "description": "Bookmark title"},
+                            "page": {"type": "integer", "description": "Target page number (1-based)"},
+                            "level": {"type": "integer", "description": "Level (1=top level, 2=second level, ...)"}
                         },
                         "required": ["title", "page"]
                     }
                 },
                 "toc": {
                     "type": "array",
-                    "description": "[modify set_toc] 目录大纲列表（覆盖现有 TOC）",
+                    "description": "[modify set_toc] TOC outline list (overwrites existing TOC)",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "title": {"type": "string", "description": "目录条目标题"},
-                            "page": {"type": "integer", "description": "目标页码（1-based）"},
-                            "level": {"type": "integer", "description": "层级（1=顶级，2=二级，...）"}
+                            "title": {"type": "string", "description": "TOC entry title"},
+                            "page": {"type": "integer", "description": "Target page number (1-based)"},
+                            "level": {"type": "integer", "description": "Level (1=top level, 2=second level, ...)"}
                         },
                         "required": ["title", "page"]
                     }
@@ -1153,50 +1153,50 @@ impl Handler for PdfHandler {
                 "type": {
                     "type": "string",
                     "enum": ["text", "highlight", "underline", "strikethrough", "squiggly", "stamp"],
-                    "description": "[modify add_annotation] 注释类型"
+                    "description": "[modify add_annotation] Annotation type"
                 },
                 "rect": {
                     "type": "array",
                     "items": {"type": "number"},
                     "minItems": 4, "maxItems": 4,
-                    "description": "[modify add_annotation] 注释区域 [x0, y0, x1, y1]（highlight/underline/strikethrough/squiggly/stamp 必填）"
+                    "description": "[modify add_annotation] Annotation area [x0, y0, x1, y1] (required for highlight/underline/strikethrough/squiggly/stamp)"
                 },
                 "point": {
                     "type": "array",
                     "items": {"type": "number"},
                     "minItems": 2, "maxItems": 2,
-                    "description": "[modify add_annotation] 注释位置 [x, y]（text 类型必填）"
+                    "description": "[modify add_annotation] Annotation position [x, y] (required for text type)"
                 },
                 "contents": {
                     "type": "string",
-                    "description": "[modify add_annotation] 注释内容文字"
+                    "description": "[modify add_annotation] Annotation content text"
                 },
                 "author": {
                     "type": "string",
-                    "description": "[modify add_annotation] 注释作者"
+                    "description": "[modify add_annotation] Annotation author"
                 },
                 // 表单参数
                 "fields": {
                     "type": "object",
-                    "description": "[modify fill_form] 表单字段值字典，如 {\"name\": \"张三\", \"age\": \"25\"}",
+                    "description": "[modify fill_form] Form field value dictionary, e.g. {\"name\": \"John\", \"age\": \"25\"}",
                     "additionalProperties": {"type": "string"}
                 },
                 // 压缩参数
                 "garbage": {
                     "type": "boolean",
-                    "description": "[modify compress] 是否清除垃圾对象（默认 true）"
+                    "description": "[modify compress] Whether to remove garbage objects (default true)"
                 },
                 "deflate": {
                     "type": "boolean",
-                    "description": "[modify compress] 是否使用 deflate 压缩流（默认 true）"
+                    "description": "[modify compress] Whether to use deflate compression streams (default true)"
                 },
                 "clean": {
                     "type": "boolean",
-                    "description": "[modify compress] 是否清理内容流（默认 true）"
+                    "description": "[modify compress] Whether to clean content streams (default true)"
                 },
                 "subset_fonts": {
                     "type": "boolean",
-                    "description": "[modify compress] 是否子集化字体（默认 true）"
+                    "description": "[modify compress] Whether to subset fonts (default true)"
                 }
             },
             "required": ["action", "path"]
@@ -1212,7 +1212,7 @@ impl Handler for PdfHandler {
             _ => HandlerResult {
                 success: false,
                 output: None,
-                error: Some(format!("PdfHandler 不支持的操作类型: {}", action)),
+                error: Some(format!("PdfHandler does not support operation type: {}", action)),
                 duration_ms: 0,
                 error_code: None,
             },
@@ -1261,7 +1261,7 @@ impl Handler for ValidatorHandler {
         "validator"
     }
     fn description(&self) -> &str {
-        "文档质量验证器，检测文档常见质量问题并返回警告列表。支持 docx/xlsx/pptx/pdf/md/txt 六种类型。Markdown 检测未闭合代码块/标题层级跳跃/行尾空白/连续空行；纯文本检测换行符混用/缩进混用/单行过长/连续空行。返回 {valid, warnings, stats}。"
+        "Document quality validator, detects common document quality issues and returns a warning list. Supports docx/xlsx/pptx/pdf/md/txt types. Markdown detects unclosed code blocks/heading level jumps/trailing whitespace/consecutive blank lines; plain text detects mixed line endings/mixed indentation/overly long single lines/consecutive blank lines. Returns {valid, warnings, stats}."
     }
     fn category(&self) -> &str {
         "document"
@@ -1285,16 +1285,16 @@ impl Handler for ValidatorHandler {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "doc_type": {
                     "type": "string",
                     "enum": ["docx", "xlsx", "pptx", "pdf", "md", "txt"],
-                    "description": "文档类型。不传时根据文件扩展名自动推断"
+                    "description": "Document type. When not provided, it is automatically inferred from the file extension"
                 },
                 "options": {
                     "type": "object",
-                    "description": "验证选项，控制检查范围（预留扩展字段，目前无需传入）",
+                    "description": "Validation options, controls check scope (reserved extension field, currently no need to pass)",
                     "additionalProperties": true
                 }
             },
@@ -1312,7 +1312,7 @@ impl Handler for ValidatorHandler {
             return HandlerResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -1344,7 +1344,7 @@ impl Handler for ValidatorHandler {
         // 校验文档类型是否被支持
         if !Self::is_supported_doc_type(&doc_type) {
             let err_msg = format!(
-                "不支持的文档类型: '{}'。Validator 支持 docx/xlsx/pptx/pdf/md/txt",
+                "Unsupported document type: '{}'. Validator supports docx/xlsx/pptx/pdf/md/txt",
                 doc_type
             );
             log::warn!("validator_handler 失败: {}", err_msg);

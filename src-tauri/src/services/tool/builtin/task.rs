@@ -26,10 +26,10 @@ pub fn check_nesting_depth(
     allow_nested_task: bool,
 ) -> Result<(), &'static str> {
     if current_depth >= 3 {
-        return Err("子 Agent 嵌套深度超过限制(3 层)");
+        return Err("Sub-agent nesting depth exceeds limit (3 levels)");
     }
     if current_depth >= 1 && !allow_nested_task {
-        return Err("子 Agent 不允许调用 task 工具");
+        return Err("Sub-agent is not allowed to call the task tool");
     }
     Ok(())
 }
@@ -99,8 +99,10 @@ impl Tool for TaskTool {
     }
 
     fn description(&self) -> &str {
-        "委托子任务给子 Agent 执行。子 Agent 拥有独立上下文，继承父 Agent 的系统提示词、工作区和工具配置。\
-         适用于将复杂任务分解为子任务独立执行。支持 single（单个子任务）和 batch（并行批量子任务）两种模式。"
+        "Delegate a subtask to a sub-agent for execution. The sub-agent has its own independent context \
+         and inherits the parent agent's system prompt, workspace, and tool configuration. \
+         Suitable for decomposing complex tasks into independent subtasks. Supports two modes: \
+         single (single subtask) and batch (parallel batch subtasks)."
     }
 
     fn category(&self) -> &str {
@@ -114,33 +116,33 @@ impl Tool for TaskTool {
                 "action": {
                     "type": "string",
                     "enum": ["single", "batch"],
-                    "description": "操作模式：single=单个子任务，batch=并行批量子任务（最多 5 个）",
+                    "description": "Operation mode: single=single subtask, batch=parallel batch subtasks (max 5)",
                     "default": "single"
                 },
                 "description": {
                     "type": "string",
-                    "description": "子任务描述（action=single 时必填）"
+                    "description": "Subtask description (required when action=single)"
                 },
                 "tasks": {
                     "type": "array",
-                    "description": "批量子任务列表（action=batch 时必填，最多 5 个）",
+                    "description": "Batch subtask list (required when action=batch, max 5)",
                     "items": {
                         "type": "object",
                         "properties": {
                             "description": {
                                 "type": "string",
-                                "description": "子任务描述"
+                                "description": "Subtask description"
                             },
                             "maxIterations": {
                                 "type": "integer",
-                                "description": "子 Agent 最大迭代次数（默认 10，最大 50）",
+                                "description": "Sub-agent max iterations (default 10, max 50)",
                                 "default": 10,
                                 "minimum": 1,
                                 "maximum": 50
                             },
                             "timeoutSeconds": {
                                 "type": "integer",
-                                "description": "子 Agent 超时时间（秒，默认 300，最大 600）",
+                                "description": "Sub-agent timeout in seconds (default 300, max 600)",
                                 "default": 300,
                                 "minimum": 1,
                                 "maximum": 600
@@ -151,14 +153,14 @@ impl Tool for TaskTool {
                 },
                 "maxIterations": {
                     "type": "integer",
-                    "description": "子 Agent 最大迭代次数（默认 10，最大 50）",
+                    "description": "Sub-agent max iterations (default 10, max 50)",
                     "default": 10,
                     "minimum": 1,
                     "maximum": 50
                 },
                 "timeoutSeconds": {
                     "type": "integer",
-                    "description": "子 Agent 超时时间（秒，默认 300，最大 600）",
+                    "description": "Sub-agent timeout in seconds (default 300, max 600)",
                     "default": 300,
                     "minimum": 1,
                     "maximum": 600
@@ -166,7 +168,7 @@ impl Tool for TaskTool {
                 "allowedTools": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "子 Agent 可用工具列表（空表示继承所有工具）"
+                    "description": "List of tools available to the sub-agent (empty means inherit all tools)"
                 }
             },
             "required": ["description"]
@@ -191,7 +193,7 @@ impl Tool for TaskTool {
             _ => ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("未知 action: {}，支持 single/batch", action)),
+                error: Some(format!("Unknown action: {}, supported: single/batch", action)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(TOOL_INVALID_PARAMS),
             },
@@ -209,7 +211,7 @@ impl TaskTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 description 参数".to_string()),
+                    error: Some("Missing description parameter".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 };
@@ -309,7 +311,7 @@ impl TaskTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some("子 Agent 执行器尚未初始化".to_string()),
+                        error: Some("Sub-agent executor not initialized".to_string()),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(AGENT_EXECUTION_ERROR),
                     };
@@ -352,7 +354,7 @@ impl TaskTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 tasks 参数或 tasks 为空".to_string()),
+                    error: Some("Missing tasks parameter or tasks is empty".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 };
@@ -365,7 +367,7 @@ impl TaskTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "批量任务数量超过限制(最多 5 个)，当前: {}",
+                    "Batch task count exceeds limit (max 5), current: {}",
                     tasks.len()
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -437,7 +439,7 @@ impl TaskTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some("tasks 中存在缺少 description 的任务".to_string()),
+                        error: Some("Some task in tasks is missing description".to_string()),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(TOOL_INVALID_PARAMS),
                     };
@@ -483,7 +485,7 @@ impl TaskTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("子 Agent 执行器尚未初始化".to_string()),
+                            error: Some("Sub-agent executor not initialized".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(AGENT_EXECUTION_ERROR),
                         };
@@ -515,7 +517,7 @@ impl TaskTool {
                         agent_id: String::new(),
                         success: false,
                         result: String::new(),
-                        error: Some(format!("子任务执行异常: {}", e)),
+                        error: Some(format!("Subtask execution error: {}", e)),
                         iterations: 0,
                         duration_ms: 0,
                         tool_calls: 0,

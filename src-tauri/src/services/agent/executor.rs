@@ -1843,7 +1843,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             ctx.session_id, tool_call.name, tool_call.arguments.len()
                         );
                         let retry_msg = format!(
-                            "上一次 {} 调用的参数因响应被截断而不完整，请重新生成完整的代码。注意控制代码长度，确保参数完整。",
+                            "The parameters of the previous {} call were incomplete due to response truncation. Please regenerate complete code. Control the code length to ensure parameter completeness.",
                             tool_call.name
                         );
                         // 发射思考事件，让用户看到重试提示
@@ -1881,7 +1881,7 @@ impl<R: Runtime> AgentExecutor<R> {
                     if !permitted {
                         // 权限被拒绝（Plan 模式/Doom loop/规则拒绝/用户拒绝）
                         // 发射带正确 call_id 的 tool_result，确保前端能关闭对应工具节点
-                        let reject_msg = format!("操作被权限系统拒绝: {}", tool_call.name);
+                        let reject_msg = format!("Operation denied by permission system: {}", tool_call.name);
                         log::info!(
                             "操作被权限系统拒绝: session_id={}, tool={}",
                             ctx.session_id,
@@ -1909,7 +1909,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             .emit_tool_call(ToolCallPayload {
                                 session_id: ctx.session_id.clone(),
                                 call_id: tool_call.id.clone(),
-                                tool_name: format!("{} (等待确认)", tool_call.name),
+                                tool_name: format!("{} (awaiting confirmation)", tool_call.name),
                                 arguments: params.clone(),
                                 iteration: Some(current_iteration),
                             })
@@ -1920,7 +1920,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             .await?;
 
                         if !approved {
-                            let skip_msg = format!("用户拒绝了操作: {}", tool_call.name);
+                            let skip_msg = format!("User denied the operation: {}", tool_call.name);
                             log::info!(
                                 "操作被拒绝: session_id={}, tool={}",
                                 ctx.session_id,
@@ -1961,7 +1961,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         && !current_mode.includes_document_handlers()
                     {
                         let reject_msg = format!(
-                            "当前模式({:?})下不允许调用文档处理器: {}，请切换到 Document 模式",
+                            "Document handlers are not allowed in the current mode ({:?}): {}. Please switch to Document mode",
                             current_mode, tool_call.name
                         );
                         log::warn!(
@@ -2114,7 +2114,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     success: false,
                                     output: None,
                                     error: Some(format!(
-                                        "工具执行发生内部错误: {}",
+                                        "Internal error occurred during tool execution: {}",
                                         tool_call.name
                                     )),
                                     duration_ms: 0,
@@ -2133,7 +2133,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                     success: false,
                                     output: None,
                                     error: Some(format!(
-                                        "处理器执行发生内部错误: {}",
+                                        "Internal error occurred during handler execution: {}",
                                         tool_call.name
                                     )),
                                     duration_ms: 0,
@@ -2145,7 +2145,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         crate::models::handler::HandlerResult {
                             success: false,
                             output: None,
-                            error: Some(format!("工具或处理器不存在: {}", tool_call.name)),
+                            error: Some(format!("Tool or handler does not exist: {}", tool_call.name)),
                             duration_ms: 0,
                             error_code: Some(crate::errors::AGENT_HANDLER_NOT_FOUND),
                         }
@@ -2201,7 +2201,7 @@ impl<R: Runtime> AgentExecutor<R> {
                                                 .rev()
                                                 .collect();
                                             let truncated_content = format!(
-                                                "{}\n\n...[已截断: 原始 {} 字符，保留头部 {} + 尾部 {}，省略中间 {} 字符]...\n\n{}",
+                                                "{}\n\n...[truncated: original {} chars, kept head {} + tail {}, omitted middle {} chars]...\n\n{}",
                                                 head,
                                                 total_chars,
                                                 head_chars,
@@ -2245,7 +2245,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             let safe_truncated: String =
                                 serialized.chars().take(MAX_TOOL_RESULT_CHARS * 2).collect();
                             format!(
-                                "{}...\n[已截断: 工具结果过大，仅保留前 {} 字符]",
+                                "{}...\n[truncated: tool result too large, kept first {} chars only]",
                                 safe_truncated,
                                 MAX_TOOL_RESULT_CHARS * 2
                             )
@@ -2253,7 +2253,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             serialized
                         }
                     } else {
-                        format!("错误: {}", result.error.clone().unwrap_or_default())
+                        format!("Error: {}", result.error.clone().unwrap_or_default())
                     };
                     ctx.add_tool_result(&tool_call.id, &result_content);
                 }
@@ -2429,8 +2429,8 @@ impl<R: Runtime> AgentExecutor<R> {
         });
 
         messages.push(ChatMessage {
-            role: "system".to_string(),
-            content: "请继续完成之前的回复，不要重复已输出的内容。".to_string(),
+            role: "user".to_string(),
+            content: "Please continue completing the previous response. Do not repeat already output content.".to_string(),
             content_parts: None,
             reasoning_content: None,
             tool_calls: None,

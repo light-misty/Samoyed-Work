@@ -37,8 +37,9 @@ impl Tool for WebSearchTool {
     }
 
     fn description(&self) -> &str {
-        "执行网络搜索，返回相关结果列表（标题、URL、摘要）。\
-         适用于查找最新信息、技术文档、API 用法等。搜索后端由配置决定（MCP/Tavily/SerpAPI）。"
+        "Perform a web search and return a list of relevant results (title, URL, snippet). \
+         Suitable for finding latest information, technical docs, API usage, etc. \
+         The search backend is determined by configuration (MCP/Tavily/SerpAPI)."
     }
 
     fn category(&self) -> &str {
@@ -51,11 +52,11 @@ impl Tool for WebSearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "搜索查询关键词"
+                    "description": "Search query keywords"
                 },
                 "maxResults": {
                     "type": "integer",
-                    "description": "最大返回结果数（默认 5，最大 20）",
+                    "description": "Maximum number of results to return (default 5, max 20)",
                     "default": 5,
                     "minimum": 1,
                     "maximum": 20
@@ -75,7 +76,7 @@ impl Tool for WebSearchTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("缺少 query 参数".to_string()),
+                    error: Some("Missing query parameter".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(TOOL_INVALID_PARAMS),
                 };

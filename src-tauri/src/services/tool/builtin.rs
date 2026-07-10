@@ -172,7 +172,7 @@ impl Tool for ListDirectoryTool {
         "list"
     }
     fn description(&self) -> &str {
-        "列出指定目录中的文件和子目录结构。使用场景：浏览工作区内容、查找文件位置、了解目录层级。支持深度控制和扩展名过滤。"
+        "List files and subdirectories in the specified directory. Use cases: browsing workspace contents, locating files, understanding directory hierarchy. Supports depth control and extension filtering."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -183,17 +183,17 @@ impl Tool for ListDirectoryTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "目录路径，默认为当前工作目录"
+                    "description": "Directory path, defaults to current working directory"
                 },
                 "depth": {
                     "type": "integer",
-                    "description": "遍历深度，默认1",
+                    "description": "Traversal depth, default 1",
                     "default": 1
                 },
                 "extensions": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "筛选文件扩展名，如 [\"docx\", \"pdf\"]"
+                    "description": "Filter file extensions, e.g. [\"docx\", \"pdf\"]"
                 }
             }
         })
@@ -209,7 +209,7 @@ impl Tool for ListDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("depth 参数必须大于等于 1".to_string()),
+                error: Some("depth parameter must be greater than or equal to 1".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -230,7 +230,7 @@ impl Tool for ListDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("目录不存在: {}", dir_path)),
+                error: Some(format!("Directory does not exist: {}", dir_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -240,7 +240,7 @@ impl Tool for ListDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("路径不是目录: {}", dir_path)),
+                error: Some(format!("Path is not a directory: {}", dir_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -254,7 +254,7 @@ impl Tool for ListDirectoryTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("目录路径无效: {}", dir_path)),
+                        error: Some(format!("Directory path is invalid: {}", dir_path)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -267,7 +267,7 @@ impl Tool for ListDirectoryTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("工作区根目录路径无效".to_string()),
+                            error: Some("Workspace root directory path is invalid".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -277,7 +277,7 @@ impl Tool for ListDirectoryTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("目录不在工作区内，拒绝访问".to_string()),
+                    error: Some("Directory is outside the workspace, access denied".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -300,7 +300,7 @@ impl Tool for ListDirectoryTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("目录列出任务执行失败: {}", join_err)),
+                    error: Some(format!("Directory listing task failed: {}", join_err)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -415,7 +415,7 @@ impl Tool for SearchFilesTool {
         "search"
     }
     fn description(&self) -> &str {
-        "在指定目录中搜索文件，支持按文件名或内容搜索。使用场景：按名称查找文件、按内容关键词搜索、按扩展名筛选。设置include_content=true可搜索文件内容。"
+        "Search files in the specified directory, supporting search by filename or content. Use cases: find files by name, search by content keywords, filter by extension. Set include_content=true to search file contents."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -426,25 +426,25 @@ impl Tool for SearchFilesTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "搜索关键词（可选，仅按扩展名过滤时可省略）"
+                    "description": "Search keyword (optional, can be omitted when filtering by extension only)"
                 },
                 "directory": {
                     "type": "string",
-                    "description": "搜索的目录路径，默认为工作区根目录"
+                    "description": "Directory path to search, defaults to workspace root"
                 },
                 "extensions": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "限定文件扩展名，如 [\"docx\", \"pdf\"]"
+                    "description": "Restrict file extensions, e.g. [\"docx\", \"pdf\"]"
                 },
                 "include_content": {
                     "type": "boolean",
-                    "description": "是否搜索文件内容（仅对文本文件有效）",
+                    "description": "Whether to search file contents (only effective for text files)",
                     "default": false
                 },
                 "max_results": {
                     "type": "integer",
-                    "description": "最大结果数",
+                    "description": "Maximum number of results",
                     "default": 50
                 }
             },
@@ -472,7 +472,7 @@ impl Tool for SearchFilesTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("搜索关键词和文件扩展名不能同时为空，请至少提供一项".to_string()),
+                error: Some("Search keyword and file extensions cannot both be empty, please provide at least one".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -484,7 +484,7 @@ impl Tool for SearchFilesTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("目录不存在或不是目录: {}", directory)),
+                error: Some(format!("Directory does not exist or is not a directory: {}", directory)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -497,7 +497,7 @@ impl Tool for SearchFilesTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("目录路径无效: {}", directory)),
+                        error: Some(format!("Directory path is invalid: {}", directory)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -510,7 +510,7 @@ impl Tool for SearchFilesTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("工作区根目录路径无效".to_string()),
+                            error: Some("Workspace root directory path is invalid".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -520,7 +520,7 @@ impl Tool for SearchFilesTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("搜索目录不在工作区内，拒绝访问".to_string()),
+                    error: Some("Search directory is outside the workspace, access denied".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -554,7 +554,7 @@ impl Tool for SearchFilesTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("文件搜索任务执行失败: {}", join_err)),
+                    error: Some(format!("File search task failed: {}", join_err)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -766,7 +766,7 @@ impl Tool for ReadFileTool {
         "read"
     }
     fn description(&self) -> &str {
-        "读取纯文本文件内容（.txt/.md/.csv/.json/.xml等），自动添加行号（格式 `   123→内容`），含二进制检测保护。不依赖Sidecar，速度更快。支持按行号范围读取（start_line/end_line参数）。文件大小限制2MB。注意：仅适用于纯文本文件，读取Word/Excel/PPT/PDF等结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的read操作。"
+        "Read plain text file content (.txt/.md/.csv/.json/.xml etc.), automatically adding line numbers (format `   123→content`), with binary detection protection. Does not depend on Sidecar, faster. Supports reading by line range (start_line/end_line parameters). File size limit 2MB. Note: only for plain text files; use docx_handler/xlsx_handler/pptx_handler/pdf_handler read operations for structured documents like Word/Excel/PPT/PDF."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -777,25 +777,25 @@ impl Tool for ReadFileTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "start_line": {
                     "type": "integer",
-                    "description": "起始行号（1-based），默认 1",
+                    "description": "Start line number (1-based), default 1",
                     "default": 1
                 },
                 "end_line": {
                     "type": "integer",
-                    "description": "结束行号（1-based，包含在内），不填则到文件末尾"
+                    "description": "End line number (1-based, inclusive), if omitted reads to end of file"
                 },
                 "encoding": {
                     "type": "string",
-                    "description": "文件编码，默认utf-8",
+                    "description": "File encoding, default utf-8",
                     "default": "utf-8"
                 },
                 "max_size": {
                     "type": "integer",
-                    "description": "最大读取字节数，默认2MB",
+                    "description": "Maximum read bytes, default 2MB",
                     "default": 2097152
                 }
             },
@@ -817,7 +817,7 @@ impl Tool for ReadFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -833,7 +833,7 @@ impl Tool for ReadFileTool {
                     Ok(result) => result,
                     Err(e) => {
                         // 根据错误消息区分错误码：路径越界 vs 路径不存在
-                        let is_out_of_bounds = e.contains("路径不在工作区内");
+                        let is_out_of_bounds = e.contains("outside the workspace");
                         let error_code = if is_out_of_bounds {
                             Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                         } else {
@@ -863,7 +863,7 @@ impl Tool for ReadFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("文件不存在: {}", file_path)),
+                error: Some(format!("File does not exist: {}", file_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -874,7 +874,7 @@ impl Tool for ReadFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("路径不是文件: {}", file_path)),
+                error: Some(format!("Path is not a file: {}", file_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -892,7 +892,7 @@ impl Tool for ReadFileTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("获取文件信息失败: {}", e)),
+                    error: Some(format!("Failed to get file info: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -910,7 +910,7 @@ impl Tool for ReadFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "文件过大 ({}字节)，超过最大读取限制 ({}字节)",
+                    "File too large ({} bytes), exceeds maximum read limit ({} bytes)",
                     metadata.len(),
                     max_size
                 )),
@@ -929,8 +929,7 @@ impl Tool for ReadFileTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("文件 {} 检测为二进制文件（含 NUL 字节），无法以文本方式读取。请使用对应的 Handler（如 docx_handler/pdf_handler）处理结构化文档。", file_path)),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
+                        error: Some(format!("File {} is detected as a binary file (contains NUL bytes), cannot be read as text. Please use the corresponding Handler (e.g. docx_handler/pdf_handler) to process structured documents.", file_path)), duration_ms: start.elapsed().as_millis() as u64, error_code: None,
                     };
                 }
 
@@ -982,7 +981,7 @@ impl Tool for ReadFileTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("读取文件失败: {}", e)),
+                    error: Some(format!("Failed to read file: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -1248,7 +1247,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("缺少文件路径"));
+        assert!(result.error.unwrap().contains("Missing file path"));
     }
 
     #[tokio::test]
@@ -1545,7 +1544,7 @@ mod tests {
             .await;
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("找到 2 处匹配"));
+        assert!(result.error.unwrap().contains("Found 2 matches"));
 
         let _ = std::fs::remove_file(&abs_path);
         let _ = std::fs::remove_dir(&temp_dir);
@@ -1597,7 +1596,7 @@ mod tests {
             .await;
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("未找到匹配"));
+        assert!(result.error.unwrap().contains("No matching string found"));
 
         let _ = std::fs::remove_file(&abs_path);
         let _ = std::fs::remove_dir(&temp_dir);
@@ -2026,7 +2025,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("缺少目录路径"));
+        assert!(result.error.unwrap().contains("Missing directory path"));
     }
 
     #[tokio::test]
@@ -2066,7 +2065,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("缺少文件路径"));
+        assert!(result.error.unwrap().contains("Missing file path"));
     }
 
     #[tokio::test]
@@ -2105,7 +2104,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("缺少工作区根目录路径"));
+        assert!(result.error.unwrap().contains("Missing workspace root path"));
     }
 
     #[tokio::test]
@@ -2143,7 +2142,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("不能同时为空"));
+        assert!(result.error.unwrap().contains("cannot both be empty"));
     }
 
     #[tokio::test]
@@ -2182,7 +2181,7 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
-        assert!(result.error.unwrap().contains("缺少文件路径"));
+        assert!(result.error.unwrap().contains("Missing file path"));
     }
 
     /// 测试 encoding 参数：使用 GBK 编码写入中文内容，再用 GBK 编码读取
@@ -2683,7 +2682,7 @@ mod tests {
             .await;
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("缺少会话标识"));
+        assert!(result.error.unwrap().contains("missing session identifier"));
         assert_eq!(result.error_code, Some(crate::errors::TOOL_INVALID_PARAMS));
     }
 
@@ -2724,7 +2723,7 @@ mod tests {
             .await;
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("content 不能为空"));
+        assert!(result.error.unwrap().contains("content cannot be empty"));
     }
 
     /// 测试 Scratchpad 未知 action 返回错误
@@ -2763,7 +2762,7 @@ mod tests {
             .await;
 
         assert!(!result.success);
-        assert!(result.error.unwrap().contains("未知 action"));
+        assert!(result.error.unwrap().contains("Unknown action"));
     }
 
     /// 测试 Scratchpad 笔记长度限制（500 字符）
@@ -3067,7 +3066,7 @@ mod tests {
         assert!(!result.success, "写入 .py 文件应被拒绝");
         assert!(result.error.is_some());
         let error = result.error.unwrap();
-        assert!(error.contains("脚本文件"), "错误信息应提及脚本文件");
+        assert!(error.contains("script file"), "错误信息应提及脚本文件");
         assert!(
             error.contains("write_script"),
             "错误信息应引导使用 write_script 工具"
@@ -3113,7 +3112,7 @@ impl Tool for FileInfoTool {
         "file_info"
     }
     fn description(&self) -> &str {
-        "获取文件元数据（大小、修改时间、类型等）。使用场景：在读取文件前了解文件信息、检查文件类型、确认文件是否存在且可访问。不需要读取文件内容时优先使用此工具。"
+        "Get file metadata (size, modification time, type, etc.). Use cases: inspect file info before reading, check file type, verify file existence and accessibility. Prefer this tool when file content is not needed."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3124,7 +3123,7 @@ impl Tool for FileInfoTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 }
             },
             "required": ["path"]
@@ -3139,7 +3138,7 @@ impl Tool for FileInfoTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3151,7 +3150,7 @@ impl Tool for FileInfoTool {
         // 路径安全校验（使用统一的校验函数，包含词法归一化防线）
         if !workspace_root.is_empty() {
             if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
-                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let is_out_of_bounds = e.contains("outside the workspace");
                 let error_code = if is_out_of_bounds {
                     Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                 } else {
@@ -3178,7 +3177,7 @@ impl Tool for FileInfoTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("文件不存在: {}", file_path)),
+                error: Some(format!("File does not exist: {}", file_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -3191,7 +3190,7 @@ impl Tool for FileInfoTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("获取文件信息失败: {}", e)),
+                    error: Some(format!("Failed to get file info: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -3261,7 +3260,7 @@ impl Tool for FileExistsTool {
         "exists"
     }
     fn description(&self) -> &str {
-        "检查文件或目录是否存在。使用场景：在读取或修改文件前验证路径、避免对不存在的文件执行操作。比list_directory更轻量。"
+        "Check whether a file or directory exists. Use cases: validate paths before reading or modifying files, avoid operating on non-existent files. Lighter than list_directory."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3272,7 +3271,7 @@ impl Tool for FileExistsTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件或目录路径（相对于工作区）"
+                    "description": "File or directory path (relative to workspace)"
                 }
             },
             "required": ["path"]
@@ -3287,7 +3286,7 @@ impl Tool for FileExistsTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少路径".to_string()),
+                error: Some("Missing path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3302,7 +3301,7 @@ impl Tool for FileExistsTool {
             if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
                 // 路径不存在时 validate 会返回"路径不存在或无效"，但需要先检查是否越界
                 // validate 内部已先做词法归一化，越界会返回"路径不在工作区内"
-                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let is_out_of_bounds = e.contains("outside the workspace");
                 let error_code = if is_out_of_bounds {
                     Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                 } else {
@@ -3370,7 +3369,7 @@ impl Tool for DeleteFileTool {
         "remove"
     }
     fn description(&self) -> &str {
-        "删除指定文件，删除前可选创建备份。注意：此操作不可逆，会自动触发用户确认。建议在删除前先创建版本快照。"
+        "Delete the specified file, with optional backup before deletion. Note: this operation is irreversible and will automatically trigger user confirmation. Creating a version snapshot before deletion is recommended."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3381,11 +3380,11 @@ impl Tool for DeleteFileTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "要删除的文件路径（相对于工作区）"
+                    "description": "Path of the file to delete (relative to workspace)"
                 },
                 "create_backup": {
                     "type": "boolean",
-                    "description": "删除前是否创建备份文件",
+                    "description": "Whether to create a backup file before deletion",
                     "default": true
                 }
             },
@@ -3401,7 +3400,7 @@ impl Tool for DeleteFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3411,7 +3410,7 @@ impl Tool for DeleteFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少工作区根目录路径，无法进行安全校验".to_string()),
+                error: Some("Missing workspace root path, unable to perform security validation".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3424,7 +3423,7 @@ impl Tool for DeleteFileTool {
             match validate_existing_path_in_workspace(&resolved_path, workspace_root) {
                 Ok((canonical_file, _)) => canonical_file,
                 Err(e) => {
-                    let is_out_of_bounds = e.contains("路径不在工作区内");
+                    let is_out_of_bounds = e.contains("outside the workspace");
                     let error_code = if is_out_of_bounds {
                         Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                     } else {
@@ -3450,7 +3449,7 @@ impl Tool for DeleteFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("路径不是文件: {}", file_path)),
+                error: Some(format!("Path is not a file: {}", file_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -3475,7 +3474,7 @@ impl Tool for DeleteFileTool {
                         success: false,
                         output: None,
                         error: Some(format!(
-                            "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
+                            "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
                             e
                         )),
                         duration_ms: start.elapsed().as_millis() as u64, error_code: None,
@@ -3489,7 +3488,7 @@ impl Tool for DeleteFileTool {
                 log::info!("文件已删除: {}", safe_path);
                 let mut result = json!({
                     "path": file_path,
-                    "message": format!("文件已删除: {}", file_path),
+                    "message": format!("File deleted: {}", file_path),
                 });
                 if !backup_path_str.is_empty() {
                     result["backup_path"] = json!(backup_path_str);
@@ -3507,7 +3506,7 @@ impl Tool for DeleteFileTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("删除文件失败: {}", e)),
+                    error: Some(format!("Failed to delete file: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -3528,7 +3527,7 @@ impl Tool for CreateDirectoryTool {
         "mkdir"
     }
     fn description(&self) -> &str {
-        "创建目录（支持递归创建）。使用场景：在写入文件前确保目标目录存在、组织文件结构。默认递归创建父目录。"
+        "Create a directory (supports recursive creation). Use cases: ensure target directory exists before writing files, organize file structure. Parent directories are created recursively by default."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3539,11 +3538,11 @@ impl Tool for CreateDirectoryTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "目录路径（相对于工作区）"
+                    "description": "Directory path (relative to workspace)"
                 },
                 "recursive": {
                     "type": "boolean",
-                    "description": "是否递归创建父目录",
+                    "description": "Whether to recursively create parent directories",
                     "default": true
                 }
             },
@@ -3560,7 +3559,7 @@ impl Tool for CreateDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少目录路径".to_string()),
+                error: Some("Missing directory path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3579,7 +3578,7 @@ impl Tool for CreateDirectoryTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some(format!("路径无效: {}", dir_path)),
+                            error: Some(format!("Path is invalid: {}", dir_path)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -3594,7 +3593,7 @@ impl Tool for CreateDirectoryTool {
                             return ToolResult {
                                 success: false,
                                 output: None,
-                                error: Some(format!("父目录路径无效: {}", dir_path)),
+                                error: Some(format!("Parent directory path is invalid: {}", dir_path)),
                                 duration_ms: start.elapsed().as_millis() as u64,
                                 error_code: None,
                             };
@@ -3617,7 +3616,7 @@ impl Tool for CreateDirectoryTool {
                                     return ToolResult {
                                         success: false,
                                         output: None,
-                                        error: Some("目录路径不在工作区内，拒绝创建".to_string()),
+                                        error: Some("Directory path is outside the workspace, creation denied".to_string()),
                                         duration_ms: start.elapsed().as_millis() as u64,
                                         error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                                     };
@@ -3629,7 +3628,7 @@ impl Tool for CreateDirectoryTool {
                                 return ToolResult {
                                     success: false,
                                     output: None,
-                                    error: Some("工作区根目录路径无效".to_string()),
+                                    error: Some("Workspace root directory path is invalid".to_string()),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: None,
                                 };
@@ -3646,7 +3645,7 @@ impl Tool for CreateDirectoryTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("工作区根目录路径无效".to_string()),
+                            error: Some("Workspace root directory path is invalid".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -3656,7 +3655,7 @@ impl Tool for CreateDirectoryTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("目录路径不在工作区内，拒绝创建".to_string()),
+                    error: Some("Directory path is outside the workspace, creation denied".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -3668,7 +3667,7 @@ impl Tool for CreateDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("目录已存在: {}", dir_path)),
+                error: Some(format!("Directory already exists: {}", dir_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -3681,7 +3680,7 @@ impl Tool for CreateDirectoryTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
+                    error: Some("Workspace directory has been deleted, please remove this workspace and reselect".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -3713,7 +3712,7 @@ impl Tool for CreateDirectoryTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("创建目录失败: {}", e)),
+                    error: Some(format!("Failed to create directory: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -3745,7 +3744,7 @@ impl Tool for WriteTextFileTool {
         "write"
     }
     fn description(&self) -> &str {
-        "写入纯文本文件内容（.txt/.md/.csv/.json等），不依赖Sidecar。使用场景：创建纯文本文件、修改Markdown文件、保存JSON配置。支持追加模式。注意：仅适用于纯文本，生成结构化文档请使用docx_handler/xlsx_handler/pptx_handler/pdf_handler的generate操作。禁止写入脚本文件（.py/.sh/.bash/.ps1/.bat/.cmd等），脚本文件请使用write_script工具写入系统临时目录。内容大小限制4KB（约4000字符），超出可能触发LLM响应截断。"
+        "Write plain text file content (.txt/.md/.csv/.json etc.), does not depend on Sidecar. Use cases: create plain text files, modify Markdown files, save JSON configurations. Supports append mode. Note: only for plain text; use docx_handler/xlsx_handler/pptx_handler/pdf_handler generate operations for structured documents. Writing script files (.py/.sh/.bash/.ps1/.bat/.cmd etc.) is prohibited; use the write_script tool to write scripts to the system temporary directory instead. Content size limit 4KB (approximately 4000 characters); exceeding this may trigger LLM response truncation."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3756,20 +3755,20 @@ impl Tool for WriteTextFileTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "content": {
                     "type": "string",
-                    "description": "文件内容"
+                    "description": "File content"
                 },
                 "encoding": {
                     "type": "string",
-                    "description": "文件编码，默认utf-8",
+                    "description": "File encoding, default utf-8",
                     "default": "utf-8"
                 },
                 "append": {
                     "type": "boolean",
-                    "description": "是否追加写入",
+                    "description": "Whether to append to the file",
                     "default": false
                 }
             },
@@ -3789,7 +3788,7 @@ impl Tool for WriteTextFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -3803,7 +3802,7 @@ impl Tool for WriteTextFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "不允许通过 write_text_file 写入脚本文件: {}。请改用 write_script 工具将脚本写入系统临时目录，再通过 bash 工具执行",
+                    "Writing script files via write_text_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
                     file_path
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -3825,7 +3824,7 @@ impl Tool for WriteTextFileTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some(format!("路径无效: {}", file_path)),
+                            error: Some(format!("Path is invalid: {}", file_path)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -3840,7 +3839,7 @@ impl Tool for WriteTextFileTool {
                             return ToolResult {
                                 success: false,
                                 output: None,
-                                error: Some(format!("父目录路径无效: {}", file_path)),
+                                error: Some(format!("Parent directory path is invalid: {}", file_path)),
                                 duration_ms: start.elapsed().as_millis() as u64,
                                 error_code: None,
                             };
@@ -3861,7 +3860,7 @@ impl Tool for WriteTextFileTool {
                                     return ToolResult {
                                         success: false,
                                         output: None,
-                                        error: Some("文件路径不在工作区内，拒绝写入".to_string()),
+                                        error: Some("File path is outside the workspace, write denied".to_string()),
                                         duration_ms: start.elapsed().as_millis() as u64,
                                         error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                                     };
@@ -3872,7 +3871,7 @@ impl Tool for WriteTextFileTool {
                                 return ToolResult {
                                     success: false,
                                     output: None,
-                                    error: Some("工作区根目录路径无效".to_string()),
+                                    error: Some("Workspace root directory path is invalid".to_string()),
                                     duration_ms: start.elapsed().as_millis() as u64,
                                     error_code: None,
                                 };
@@ -3889,7 +3888,7 @@ impl Tool for WriteTextFileTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("工作区根目录路径无效".to_string()),
+                            error: Some("Workspace root directory path is invalid".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -3899,7 +3898,7 @@ impl Tool for WriteTextFileTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("文件路径不在工作区内，拒绝写入".to_string()),
+                    error: Some("File path is outside the workspace, write denied".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS),
                 };
@@ -3917,7 +3916,7 @@ impl Tool for WriteTextFileTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some("工作区目录已被删除，请移除该工作区后重新选择".to_string()),
+                            error: Some("Workspace directory has been deleted, please remove this workspace and reselect".to_string()),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -3927,7 +3926,7 @@ impl Tool for WriteTextFileTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("创建父目录失败: {}", e)),
+                        error: Some(format!("Failed to create parent directory: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -4001,7 +4000,7 @@ impl Tool for WriteTextFileTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("写入文件失败: {}", e)),
+                    error: Some(format!("Failed to write file: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4024,11 +4023,11 @@ fn validate_existing_path_in_workspace(
     workspace_root: &str,
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     if workspace_root.is_empty() {
-        return Err("缺少工作区根目录路径，无法进行安全校验".to_string());
+        return Err("Missing workspace root path, unable to perform security validation".to_string());
     }
 
     let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
-        .map_err(|_| format!("工作区根目录不存在或无效: {}", workspace_root))?;
+        .map_err(|_| format!("Workspace root directory does not exist or is invalid: {}", workspace_root))?;
 
     // 安全防线 1：词法归一化检查（不依赖文件系统）
     // 即使目标文件不存在（canonicalize 会失败），也能识别 `../` 越界并拒绝
@@ -4036,7 +4035,7 @@ fn validate_existing_path_in_workspace(
     let normalized_path = normalize_path_lexically(resolved_path, &canonical_root);
     if !normalized_path.starts_with(&canonical_root) {
         return Err(format!(
-            "路径不在工作区内，拒绝访问: {} (工作区: {})",
+            "Path is outside the workspace, access denied: {} (workspace: {})",
             resolved_path,
             canonical_root.display()
         ));
@@ -4044,13 +4043,13 @@ fn validate_existing_path_in_workspace(
 
     // 安全防线 2：canonicalize 确认路径真实存在
     let canonical_path = crate::utils::canonicalize(std::path::Path::new(resolved_path))
-        .map_err(|_| format!("路径不存在或无效: {}", resolved_path))?;
+        .map_err(|_| format!("Path does not exist or is invalid: {}", resolved_path))?;
 
     // 安全防线 3：组件级 starts_with 比较（避免字符串前缀匹配的绕过风险）
     // 防止符号链接等文件系统层面的绕过
     if !canonical_path.starts_with(&canonical_root) {
         return Err(format!(
-            "路径不在工作区内，拒绝访问: {} (工作区: {})",
+            "Path is outside the workspace, access denied: {} (workspace: {})",
             canonical_path.display(),
             canonical_root.display()
         ));
@@ -4110,17 +4109,17 @@ fn validate_target_path_in_workspace(
     workspace_root: &str,
 ) -> Result<std::path::PathBuf, String> {
     if workspace_root.is_empty() {
-        return Err("缺少工作区根目录路径，无法进行安全校验".to_string());
+        return Err("Missing workspace root path, unable to perform security validation".to_string());
     }
 
     let canonical_root = crate::utils::canonicalize(std::path::Path::new(workspace_root))
-        .map_err(|_| format!("工作区根目录不存在或无效: {}", workspace_root))?;
+        .map_err(|_| format!("Workspace root directory does not exist or is invalid: {}", workspace_root))?;
 
     let target_path = std::path::Path::new(resolved_target);
     // 目标路径可能不存在，规范化父目录
     let check_path = if target_path.exists() {
         crate::utils::canonicalize(target_path)
-            .map_err(|_| format!("目标路径无效: {}", resolved_target))?
+            .map_err(|_| format!("Target path is invalid: {}", resolved_target))?
     } else {
         // 父目录必须存在且在工作区内
         let parent = target_path.parent().unwrap_or(std::path::Path::new(""));
@@ -4129,13 +4128,13 @@ fn validate_target_path_in_workspace(
             canonical_root.clone()
         } else {
             crate::utils::canonicalize(parent)
-                .map_err(|_| format!("目标路径的父目录无效: {}", parent.display()))?
+                .map_err(|_| format!("Parent directory of target path is invalid: {}", parent.display()))?
         }
     };
 
     if !check_path.starts_with(&canonical_root) {
         return Err(format!(
-            "目标路径不在工作区内，拒绝访问: {} (工作区: {})",
+            "Target path is outside the workspace, access denied: {} (workspace: {})",
             resolved_target,
             canonical_root.display()
         ));
@@ -4156,7 +4155,7 @@ impl Tool for RenameFileTool {
         "rename"
     }
     fn description(&self) -> &str {
-        "重命名或移动文件。使用场景：整理文件结构、修改文件名。注意：跨文件系统移动可能失败，此操作不可逆。"
+        "Rename or move a file. Use cases: organize file structure, change file names. Note: cross-filesystem moves may fail; this operation is irreversible."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4167,11 +4166,11 @@ impl Tool for RenameFileTool {
             "properties": {
                 "source_path": {
                     "type": "string",
-                    "description": "源文件路径（相对于工作区）"
+                    "description": "Source file path (relative to workspace)"
                 },
                 "target_path": {
                     "type": "string",
-                    "description": "目标文件路径（相对于工作区）"
+                    "description": "Target file path (relative to workspace)"
                 }
             },
             "required": ["source_path", "target_path"]
@@ -4187,7 +4186,7 @@ impl Tool for RenameFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少源文件路径".to_string()),
+                error: Some("Missing source file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4196,7 +4195,7 @@ impl Tool for RenameFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少目标文件路径".to_string()),
+                error: Some("Missing target file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4246,7 +4245,7 @@ impl Tool for RenameFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "不允许通过 rename_file 将文件重命名为脚本文件: {}。请改用 write_script 工具将脚本写入系统临时目录，再通过 bash 工具执行",
+                    "Renaming files to script files via rename_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
                     target_path
                 )),
                 duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
@@ -4258,7 +4257,7 @@ impl Tool for RenameFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("源路径不是文件: {}", source_path)),
+                error: Some(format!("Source path is not a file: {}", source_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -4272,7 +4271,7 @@ impl Tool for RenameFileTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("创建目标父目录失败: {}", e)),
+                        error: Some(format!("Failed to create target parent directory: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -4306,7 +4305,7 @@ impl Tool for RenameFileTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("重命名文件失败: {}", e)),
+                    error: Some(format!("Failed to rename file: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4327,7 +4326,7 @@ impl Tool for CopyFileTool {
         "copy"
     }
     fn description(&self) -> &str {
-        "复制文件到新路径。使用场景：创建文件副本、备份文件、复制模板。支持二进制文件复制。"
+        "Copy a file to a new path. Use cases: create file copies, back up files, copy templates. Supports binary file copying."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4338,11 +4337,11 @@ impl Tool for CopyFileTool {
             "properties": {
                 "source_path": {
                     "type": "string",
-                    "description": "源文件路径（相对于工作区）"
+                    "description": "Source file path (relative to workspace)"
                 },
                 "target_path": {
                     "type": "string",
-                    "description": "目标文件路径（相对于工作区）"
+                    "description": "Target file path (relative to workspace)"
                 }
             },
             "required": ["source_path", "target_path"]
@@ -4358,7 +4357,7 @@ impl Tool for CopyFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少源文件路径".to_string()),
+                error: Some("Missing source file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4367,7 +4366,7 @@ impl Tool for CopyFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少目标文件路径".to_string()),
+                error: Some("Missing target file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4416,7 +4415,7 @@ impl Tool for CopyFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "不允许通过 copy_file 将文件复制为脚本文件: {}。请改用 write_script 工具将脚本写入系统临时目录，再通过 bash 工具执行",
+                    "Copying files to script files via copy_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
                     target_path
                 )),
                 duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
@@ -4428,7 +4427,7 @@ impl Tool for CopyFileTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("源路径不是文件: {}", source_path)),
+                error: Some(format!("Source path is not a file: {}", source_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -4442,7 +4441,7 @@ impl Tool for CopyFileTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("创建目标父目录失败: {}", e)),
+                        error: Some(format!("Failed to create target parent directory: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -4482,7 +4481,7 @@ impl Tool for CopyFileTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("复制文件失败: {}", e)),
+                    error: Some(format!("Failed to copy file: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4503,7 +4502,7 @@ impl Tool for DeleteDirectoryTool {
         "remove_dir"
     }
     fn description(&self) -> &str {
-        "递归删除目录及其所有内容。注意：此操作不可逆，会自动触发用户确认。建议在删除前确认目录内容。"
+        "Recursively delete a directory and all its contents. Note: this operation is irreversible and will automatically trigger user confirmation. Confirming directory contents before deletion is recommended."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4514,11 +4513,11 @@ impl Tool for DeleteDirectoryTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "要删除的目录路径（相对于工作区）"
+                    "description": "Directory path to delete (relative to workspace)"
                 },
                 "create_backup": {
                     "type": "boolean",
-                    "description": "删除前是否创建备份目录（复制到 .bak 后缀目录），默认 false（目录备份开销较大）",
+                    "description": "Whether to create a backup directory before deletion (copy to .bak suffix directory), default false (directory backup is expensive)",
                     "default": false
                 }
             },
@@ -4535,7 +4534,7 @@ impl Tool for DeleteDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少目录路径".to_string()),
+                error: Some("Missing directory path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4564,7 +4563,7 @@ impl Tool for DeleteDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("路径不是目录: {}", dir_path)),
+                error: Some(format!("Path is not a directory: {}", dir_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -4577,7 +4576,7 @@ impl Tool for DeleteDirectoryTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("禁止删除工作区根目录".to_string()),
+                error: Some("Deleting workspace root directory is prohibited".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -4600,7 +4599,7 @@ impl Tool for DeleteDirectoryTool {
                             success: false,
                             output: None,
                             error: Some(format!(
-                                "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
+                                "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
                                 e
                             )),
                             duration_ms: start.elapsed().as_millis() as u64, error_code: None,
@@ -4615,7 +4614,7 @@ impl Tool for DeleteDirectoryTool {
                         success: false,
                         output: None,
                         error: Some(format!(
-                            "创建备份失败: {}。如需跳过备份强制删除，请设置 create_backup=false 后重试",
+                            "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
                             e
                         )),
                         duration_ms: start.elapsed().as_millis() as u64, error_code: None,
@@ -4648,7 +4647,7 @@ impl Tool for DeleteDirectoryTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("删除目录失败: {}", e)),
+                    error: Some(format!("Failed to delete directory: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4700,7 +4699,7 @@ impl Tool for GetFileHashTool {
         "hash"
     }
     fn description(&self) -> &str {
-        "计算文件的 SHA-256 哈希值。使用场景：文件去重、完整性校验、变更检测。返回十六进制哈希字符串。"
+        "Compute the SHA-256 hash value of a file. Use cases: file deduplication, integrity verification, change detection. Returns a hexadecimal hash string."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4711,7 +4710,7 @@ impl Tool for GetFileHashTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 }
             },
             "required": ["path"]
@@ -4726,7 +4725,7 @@ impl Tool for GetFileHashTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4755,7 +4754,7 @@ impl Tool for GetFileHashTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("路径不是文件: {}", file_path)),
+                error: Some(format!("Path is not a file: {}", file_path)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -4800,7 +4799,7 @@ impl Tool for GetFileHashTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("计算文件哈希失败: {}", e)),
+                    error: Some(format!("Failed to compute file hash: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4810,7 +4809,7 @@ impl Tool for GetFileHashTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("计算文件哈希任务失败: {}", e)),
+                    error: Some(format!("File hash computation task failed: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -4851,7 +4850,7 @@ impl Tool for EditTool {
         "edit"
     }
     fn description(&self) -> &str {
-        "精确字符串替换工具。oldString 必须在文件中唯一匹配（0 匹配报错，多匹配报错，除非 replace_all=true）。当 oldString 为空且文件不存在时，创建新文件。生成 diff 摘要显示修改前后内容。"
+        "Precise string replacement tool. old_string must uniquely match in the file (0 matches raises an error, multiple matches raise an error, unless replace_all=true). When old_string is empty and the file does not exist, creates a new file. Generates a diff summary showing content before and after modification."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -4862,19 +4861,19 @@ impl Tool for EditTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "文件路径（相对于工作区）"
+                    "description": "File path (relative to workspace)"
                 },
                 "old_string": {
                     "type": "string",
-                    "description": "要替换的原字符串（必须唯一匹配，除非 replace_all=true）。为空且文件不存在时创建新文件"
+                    "description": "The original string to replace (must match uniquely, unless replace_all=true). When empty and file does not exist, creates a new file"
                 },
                 "new_string": {
                     "type": "string",
-                    "description": "替换后的新字符串"
+                    "description": "The new string to replace with"
                 },
                 "replace_all": {
                     "type": "boolean",
-                    "description": "是否替换所有匹配项（默认 false，仅替换第一个匹配）。设为 true 时替换所有匹配项，不要求唯一匹配",
+                    "description": "Whether to replace all matches (default false, only replaces the first match). When set to true, replaces all matches without requiring unique matching",
                     "default": false
                 }
             },
@@ -4894,7 +4893,7 @@ impl Tool for EditTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件路径".to_string()),
+                error: Some("Missing file path".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -4909,7 +4908,7 @@ impl Tool for EditTool {
             // 校验目标路径的父目录在工作区内
             if !workspace_root.is_empty() {
                 if let Err(e) = validate_target_path_in_workspace(&resolved_path, workspace_root) {
-                    let is_out_of_bounds = e.contains("不在工作区内");
+                    let is_out_of_bounds = e.contains("outside the workspace");
                     let error_code = if is_out_of_bounds {
                         Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                     } else {
@@ -4958,7 +4957,7 @@ impl Tool for EditTool {
                     ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("创建文件失败: {}", e)),
+                        error: Some(format!("Failed to create file: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     }
@@ -4974,7 +4973,7 @@ impl Tool for EditTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "文件 {} 不存在。若要创建新文件，请将 old_string 设为空字符串。",
+                    "File {} does not exist. To create a new file, set old_string to an empty string.",
                     file_path
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -4992,7 +4991,7 @@ impl Tool for EditTool {
                     success: false,
                     output: None,
                     error: Some(
-                        "文件已存在，old_string 不能为空（如需创建新文件请使用其他路径）"
+                        "File already exists, old_string cannot be empty (to create a new file, use a different path)"
                             .to_string(),
                     ),
                     duration_ms: start.elapsed().as_millis() as u64,
@@ -5004,7 +5003,7 @@ impl Tool for EditTool {
             if !workspace_root.is_empty() {
                 if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root)
                 {
-                    let is_out_of_bounds = e.contains("路径不在工作区内");
+                    let is_out_of_bounds = e.contains("outside the workspace");
                     let error_code = if is_out_of_bounds {
                         Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                     } else {
@@ -5034,7 +5033,7 @@ impl Tool for EditTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("读取文件失败: {}", e)),
+                        error: Some(format!("Failed to read file: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -5048,7 +5047,7 @@ impl Tool for EditTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some("未找到匹配的字符串，old_string 在文件中不存在".to_string()),
+                    error: Some("No matching string found, old_string does not exist in the file".to_string()),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 };
@@ -5064,7 +5063,7 @@ impl Tool for EditTool {
                     success: false,
                     output: None,
                     error: Some(format!(
-                        "找到 {} 处匹配，需要唯一匹配。如需替换所有匹配，请设置 replace_all=true",
+                        "Found {} matches, unique match required. To replace all matches, set replace_all=true",
                         match_count
                     )),
                     duration_ms: start.elapsed().as_millis() as u64,
@@ -5104,7 +5103,7 @@ impl Tool for EditTool {
                     ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("写回文件失败: {}", e)),
+                        error: Some(format!("Failed to write back file: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     }
@@ -5126,7 +5125,7 @@ impl Tool for GlobTool {
         "glob"
     }
     fn description(&self) -> &str {
-        "glob 模式匹配查找文件。基于 ignore crate，遵循 .gitignore 规则。支持 **/*.rs、{a,b}/*.ts 等模式。返回相对工作区的路径列表（最多 1000 条）。"
+        "Find files using glob pattern matching. Based on the ignore crate, follows .gitignore rules. Supports patterns like **/*.rs, {a,b}/*.ts. Returns a list of paths relative to the workspace (up to 1000 entries)."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -5137,16 +5136,16 @@ impl Tool for GlobTool {
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "glob 模式（如 **/*.rs、src/*.ts）"
+                    "description": "glob pattern (e.g. **/*.rs, src/*.ts)"
                 },
                 "path": {
                     "type": "string",
-                    "description": "搜索根目录（相对于工作区），默认 \".\"",
+                    "description": "Search root directory (relative to workspace), default \".\"",
                     "default": "."
                 },
                 "exclude_patterns": {
                     "type": "array",
-                    "description": "排除模式数组（如 [\"node_modules/**\", \"target/**\"]）",
+                    "description": "Exclude patterns array (e.g. [\"node_modules/**\", \"target/**\"])",
                     "default": []
                 }
             },
@@ -5174,7 +5173,7 @@ impl Tool for GlobTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少 glob 模式".to_string()),
+                error: Some("Missing glob pattern".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5185,7 +5184,7 @@ impl Tool for GlobTool {
         // 路径安全校验
         if !workspace_root.is_empty() {
             if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
-                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let is_out_of_bounds = e.contains("outside the workspace");
                 let error_code = if is_out_of_bounds {
                     Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                 } else {
@@ -5217,7 +5216,7 @@ impl Tool for GlobTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("无效的 glob 模式 '{}': {}", pattern, e)),
+                        error: Some(format!("Invalid glob pattern '{}': {}", pattern, e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                     };
@@ -5231,7 +5230,7 @@ impl Tool for GlobTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("构建 glob 匹配器失败: {}", e)),
+                        error: Some(format!("Failed to build glob matcher: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -5252,7 +5251,7 @@ impl Tool for GlobTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some(format!("无效的排除模式 '{}': {}", p, e)),
+                            error: Some(format!("Invalid exclude pattern '{}': {}", p, e)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                         };
@@ -5266,7 +5265,7 @@ impl Tool for GlobTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("构建排除匹配器失败: {}", e)),
+                        error: Some(format!("Failed to build exclude matcher: {}", e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: None,
                     };
@@ -5355,7 +5354,7 @@ impl Tool for GrepTool {
         "grep"
     }
     fn description(&self) -> &str {
-        "正则表达式搜索文件内容。基于 ignore crate，遵循 .gitignore。支持上下文行（context_before/context_after）、文件扩展名过滤（include）、大小写不敏感。返回匹配列表（含文件路径、行号、行内容、上下文行）。"
+        "Search file contents using regular expressions. Based on the ignore crate, follows .gitignore. Supports context lines (context_before/context_after), file extension filtering (include), and case insensitivity. Returns a list of matches (including file path, line number, line content, and context lines)."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -5366,35 +5365,35 @@ impl Tool for GrepTool {
             "properties": {
                 "pattern": {
                     "type": "string",
-                    "description": "正则表达式"
+                    "description": "Regular expression"
                 },
                 "path": {
                     "type": "string",
-                    "description": "搜索根目录（相对于工作区），默认 \".\"",
+                    "description": "Search root directory (relative to workspace), default \".\"",
                     "default": "."
                 },
                 "include": {
                     "type": "string",
-                    "description": "文件扩展名 glob（如 \"*.rs\"），仅搜索匹配的文件"
+                    "description": "File extension glob (e.g. \"*.rs\"), only searches matching files"
                 },
                 "case_insensitive": {
                     "type": "boolean",
-                    "description": "是否大小写不敏感，默认 false",
+                    "description": "Whether to perform case-insensitive matching, default false",
                     "default": false
                 },
                 "context_before": {
                     "type": "integer",
-                    "description": "匹配行前的上下文行数，默认 0",
+                    "description": "Number of context lines before the match, default 0",
                     "default": 0
                 },
                 "context_after": {
                     "type": "integer",
-                    "description": "匹配行后的上下文行数，默认 0",
+                    "description": "Number of context lines after the match, default 0",
                     "default": 0
                 },
                 "max_matches": {
                     "type": "integer",
-                    "description": "最大匹配数，默认 100",
+                    "description": "Maximum number of matches, default 100",
                     "default": 100
                 }
             },
@@ -5417,7 +5416,7 @@ impl Tool for GrepTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少正则表达式".to_string()),
+                error: Some("Missing regex pattern".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5428,7 +5427,7 @@ impl Tool for GrepTool {
         // 路径安全校验
         if !workspace_root.is_empty() {
             if let Err(e) = validate_existing_path_in_workspace(&resolved_path, workspace_root) {
-                let is_out_of_bounds = e.contains("路径不在工作区内");
+                let is_out_of_bounds = e.contains("outside the workspace");
                 let error_code = if is_out_of_bounds {
                     Some(crate::errors::TOOL_PATH_OUT_OF_BOUNDS)
                 } else {
@@ -5461,7 +5460,7 @@ impl Tool for GrepTool {
                 return ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("无效的正则表达式 '{}': {}", pattern, e)),
+                    error: Some(format!("Invalid regex '{}': {}", pattern, e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                 };
@@ -5478,7 +5477,7 @@ impl Tool for GrepTool {
                         return ToolResult {
                             success: false,
                             output: None,
-                            error: Some(format!("构建 include 匹配器失败: {}", e)),
+                            error: Some(format!("Failed to build include matcher: {}", e)),
                             duration_ms: start.elapsed().as_millis() as u64,
                             error_code: None,
                         };
@@ -5489,7 +5488,7 @@ impl Tool for GrepTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some(format!("无效的 include 模式 '{}': {}", inc, e)),
+                        error: Some(format!("Invalid include pattern '{}': {}", inc, e)),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                     };
@@ -5648,11 +5647,12 @@ impl Tool for ScratchpadTool {
     }
 
     fn description(&self) -> &str {
-        "智能体草稿本：记录或读取任务笔记，用于跨迭代轮次保持上下文。\
-         适用场景：复杂多步骤任务中记录关键决策、待办事项、文件路径、中间结果。\
-         建议在完成关键步骤后调用 action=add 记录要点；当任务上下文变长时，\
-         action=read 可回顾已有笔记；任务完成后 action=clear 清理。\
-         笔记内容会在后续迭代中自动注入到你的上下文，无需重复读取。"
+        "Agent scratchpad: record or read task notes to maintain context across iterations.\
+         Use cases: record key decisions, to-do items, file paths, and intermediate results in complex multi-step tasks.\
+         It is recommended to call action=add to record key points after completing important steps;\
+         when task context grows long, action=read can review existing notes;\
+         after task completion, action=clear cleans up notes.\
+         Note contents are automatically injected into your context in subsequent iterations, no need to read them repeatedly."
     }
 
     fn category(&self) -> &str {
@@ -5666,12 +5666,12 @@ impl Tool for ScratchpadTool {
                 "action": {
                     "type": "string",
                     "enum": ["add", "read", "clear"],
-                    "description": "操作类型：add=追加笔记；read=读取所有笔记；clear=清空笔记",
+                    "description": "Action type: add=append note; read=read all notes; clear=clear notes",
                     "default": "add"
                 },
                 "content": {
                     "type": "string",
-                    "description": "笔记内容（action=add 时必填）。建议简明扼要，每条不超过200字"
+                    "description": "Note content (required when action=add). Keep it concise, no more than 200 characters per entry"
                 }
             },
             "required": ["action"]
@@ -5689,7 +5689,7 @@ impl Tool for ScratchpadTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("内部错误：缺少会话标识".to_string()),
+                error: Some("Internal error: missing session identifier".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5705,7 +5705,7 @@ impl Tool for ScratchpadTool {
                     return ToolResult {
                         success: false,
                         output: None,
-                        error: Some("action=add 时 content 不能为空".to_string()),
+                        error: Some("content cannot be empty when action=add".to_string()),
                         duration_ms: start.elapsed().as_millis() as u64,
                         error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                     };
@@ -5801,7 +5801,7 @@ impl Tool for ScratchpadTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("未知 action: {}（支持 add/read/clear）", action)),
+                    error: Some(format!("Unknown action: {} (supported: add/read/clear)", action)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
                 }
@@ -5822,11 +5822,11 @@ pub fn format_scratchpad_summary(
         return None;
     }
 
-    let mut summary = String::from("<scratchpad>\n## 你的任务笔记\n\n以下是你之前记录的任务笔记，请基于这些笔记继续工作（无需重复读取）：\n\n");
+    let mut summary = String::from("<scratchpad>\n## Your Task Notes\n\nThe following are task notes you previously recorded. Please continue working based on these notes (no need to read them again):\n\n");
     for (i, entry) in state.iter().enumerate() {
         summary.push_str(&format!("{}. {}\n", i + 1, entry.content));
     }
-    summary.push_str("\n如需更新笔记，请调用 scratchpad 工具。\n</scratchpad>");
+    summary.push_str("\nTo update notes, please call the scratchpad tool.\n</scratchpad>");
     Some(summary)
 }
 
@@ -5851,10 +5851,10 @@ impl Tool for WriteScriptTool {
     }
 
     fn description(&self) -> &str {
-        "将脚本内容写入临时文件，供 bash 工具执行。\
-         支持编写 Python 或 Bash 脚本解决用户问题（文档处理、数据分析、自动化任务等）。\
-         脚本文件存放在系统临时目录，不污染工作区。\
-         返回脚本文件的绝对路径，可在 bash 中通过 'python <path>' 或 'bash <path>' 执行。"
+        "Write script content to a temporary file for execution by the bash tool.\
+         Supports writing Python or Bash scripts to solve user problems (document processing, data analysis, automation tasks, etc.).\
+         Script files are stored in the system temporary directory and do not pollute the workspace.\
+         Returns the absolute path of the script file, which can be executed in bash via 'python <path>' or 'bash <path>'."
     }
 
     fn category(&self) -> &str {
@@ -5867,16 +5867,16 @@ impl Tool for WriteScriptTool {
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "脚本文件名（含扩展名，如 'generate_report.py' 或 'process_data.sh'）"
+                    "description": "Script filename (including extension, e.g. 'generate_report.py' or 'process_data.sh')"
                 },
                 "language": {
                     "type": "string",
                     "enum": ["python", "bash"],
-                    "description": "脚本语言类型：python（.py）或 bash（.sh）。若 filename 已含扩展名，可省略此字段自动推断"
+                    "description": "Script language type: python (.py) or bash (.sh). If filename already has an extension, this field can be omitted and will be auto-inferred"
                 },
                 "content": {
                     "type": "string",
-                    "description": "脚本文件内容（完整源代码）"
+                    "description": "Script file content (complete source code)"
                 }
             },
             "required": ["filename", "content"]
@@ -5895,7 +5895,7 @@ impl Tool for WriteScriptTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少文件名参数".to_string()),
+                error: Some("Missing filename parameter".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5904,7 +5904,7 @@ impl Tool for WriteScriptTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("脚本内容不能为空".to_string()),
+                error: Some("Script content cannot be empty".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5915,7 +5915,7 @@ impl Tool for WriteScriptTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("文件名包含非法字符: {}", filename)),
+                error: Some(format!("Filename contains illegal characters: {}", filename)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -5931,7 +5931,7 @@ impl Tool for WriteScriptTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("创建脚本目录失败: {}", e)),
+                error: Some(format!("Failed to create script directory: {}", e)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             };
@@ -5966,7 +5966,7 @@ impl Tool for WriteScriptTool {
             Err(e) => ToolResult {
                 success: false,
                 output: None,
-                error: Some(format!("写入脚本文件失败: {}", e)),
+                error: Some(format!("Failed to write script file: {}", e)),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: None,
             },
@@ -6094,7 +6094,7 @@ fn truncate_safe(s: &str, max_chars: usize) -> String {
     while end > 0 && !s.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}...（截断，总 {} 字符）", &s[..end], s.chars().count())
+    format!("{}...(truncated, total {} chars)", &s[..end], s.chars().count())
 }
 
 #[async_trait]
@@ -6104,13 +6104,13 @@ impl Tool for RunCommandTool {
     }
 
     fn description(&self) -> &str {
-        "通过 Git Bash 执行 Shell 命令。可用于运行脚本文件、执行系统命令、处理文件等。\
-         工作目录默认为当前工作区，可通过 working_dir 参数指定其他目录。\
-         命令超时默认 60 秒，可通过 timeout 参数调整（最大 300 秒）。\
-         输出超过 6000 字符会被自动截断。\
-         高风险命令（含 rm/del/rmdir/format/shutdown/sudo/git push --force 等）会请求用户确认。\
-         返回 stdout、stderr、exit_code、success、duration_secs 字段。\
-         重要：禁止通过 cp/mv/重定向等方式将脚本文件（.py/.sh/.bash等）复制到工作区目录，脚本文件应只在系统临时目录中执行。"
+        "Execute Shell commands via Git Bash. Can be used to run script files, execute system commands, process files, etc.\
+         The working directory defaults to the current workspace, and can be specified via the working_dir parameter.\
+         Command timeout defaults to 60 seconds, adjustable via the timeout parameter (maximum 300 seconds).\
+         Output exceeding 6000 characters will be automatically truncated.\
+         High-risk commands (containing rm/del/rmdir/format/shutdown/sudo/git push --force, etc.) will request user confirmation.\
+         Returns stdout, stderr, exit_code, success, and duration_secs fields.\
+         Important: copying or moving script files (.py/.sh/.bash, etc.) to the workspace directory via cp/mv/redirection is prohibited; script files should only be executed in the system temporary directory."
     }
 
     fn category(&self) -> &str {
@@ -6123,15 +6123,15 @@ impl Tool for RunCommandTool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "要执行的 Shell 命令（将通过 bash -c 执行）。例如: 'python /tmp/docagent/scripts/script.py' 或 'ls -la'"
+                    "description": "Shell command to execute (will be executed via bash -c). For example: 'python /tmp/docagent/scripts/script.py' or 'ls -la'"
                 },
                 "working_dir": {
                     "type": "string",
-                    "description": "命令执行的工作目录（可选，默认为当前工作区根目录）"
+                    "description": "Working directory for command execution (optional, defaults to current workspace root)"
                 },
                 "timeout": {
                     "type": "integer",
-                    "description": "命令超时时间（秒），默认 60，最大 300",
+                    "description": "Command timeout in seconds, default 60, maximum 300",
                     "default": 60
                 }
             },
@@ -6158,7 +6158,7 @@ impl Tool for RunCommandTool {
             return ToolResult {
                 success: false,
                 output: None,
-                error: Some("缺少命令参数".to_string()),
+                error: Some("Missing command parameter".to_string()),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -6172,7 +6172,7 @@ impl Tool for RunCommandTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "检测到命令试图将脚本文件复制或移动到工作区目录，已拒绝执行。脚本文件应只在系统临时目录中创建和执行，请直接通过 'python <脚本路径>' 或 'bash <脚本路径>' 在临时目录中执行脚本。命令: {}",
+                    "Command detected attempting to copy or move script files to the workspace directory, execution denied. Script files should only be created and executed in the system temporary directory. Please execute scripts directly via 'python <script_path>' or 'bash <script_path>' in the temporary directory. Command: {}",
                     command
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -6267,7 +6267,7 @@ impl Tool for RunCommandTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("命令执行错误: {}", e)),
+                    error: Some(format!("Command execution error: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
@@ -6277,7 +6277,7 @@ impl Tool for RunCommandTool {
                 ToolResult {
                     success: false,
                     output: None,
-                    error: Some(format!("任务执行失败: {}", e)),
+                    error: Some(format!("Task execution failed: {}", e)),
                     duration_ms: start.elapsed().as_millis() as u64,
                     error_code: None,
                 }
