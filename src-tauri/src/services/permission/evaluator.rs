@@ -155,8 +155,41 @@ impl PermissionEvaluator {
     pub fn is_external_directory(path: &str, workspace_root: &str) -> bool {
         let normalized_path = normalize_path_for_match(path);
         let normalized_workspace = normalize_path_for_match(workspace_root);
-        !normalized_path.starts_with(&normalized_workspace)
+        // 相对路径解析:将相对路径 join 到工作区根目录后再比较
+        let final_path = if is_relative_path(&normalized_path) {
+            let joined = std::path::Path::new(&normalized_workspace).join(&normalized_path);
+            // join 后再次规范化(Windows 的 join 会使用反斜杠)
+            normalize_path_for_match(&joined.to_string_lossy())
+        } else {
+            normalized_path
+        };
+        !final_path.starts_with(&normalized_workspace)
     }
+}
+
+/// 判断路径是否为相对路径
+/// 相对路径:不以 / 开头、不以 ~ 开头、不以盘符(如 c:/d:)开头
+fn is_relative_path(path: &str) -> bool {
+    if path.is_empty() {
+        return true;
+    }
+    // 以 / 开头:Unix 绝对路径
+    if path.starts_with('/') {
+        return false;
+    }
+    // 以 ~ 开头:主目录路径
+    if path.starts_with('~') {
+        return false;
+    }
+    // 以盘符开头:Windows 绝对路径(不区分大小写)
+    let bytes = path.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' {
+        let drive = bytes[0].to_ascii_lowercase();
+        if drive.is_ascii_lowercase() {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -334,6 +367,42 @@ mod tests {
         assert!(!PermissionEvaluator::is_external_directory(
             "/home/user/project/src/main.rs",
             "/home/user/project"
+        ));
+    }
+
+    #[test]
+    fn test_is_external_directory_relative_path() {
+        // 相对路径不应误判为外部目录
+        assert!(!PermissionEvaluator::is_external_directory(
+            "output.md",
+            "d:/DeskTop/DocAgent"
+        ));
+    }
+
+    #[test]
+    fn test_is_external_directory_absolute_external() {
+        // 绝对路径的外部目录仍被识别
+        assert!(PermissionEvaluator::is_external_directory(
+            "c:/Windows/system32/test.txt",
+            "d:/DeskTop/DocAgent"
+        ));
+    }
+
+    #[test]
+    fn test_is_external_directory_subdir_relative() {
+        // 工作区内子目录相对路径不误判
+        assert!(!PermissionEvaluator::is_external_directory(
+            "subdir/report.md",
+            "d:/DeskTop/DocAgent"
+        ));
+    }
+
+    #[test]
+    fn test_is_external_directory_absolute_inside_workspace() {
+        // 工作区内绝对路径不误判
+        assert!(!PermissionEvaluator::is_external_directory(
+            "d:/DeskTop/DocAgent/src/main.rs",
+            "d:/DeskTop/DocAgent"
         ));
     }
 }

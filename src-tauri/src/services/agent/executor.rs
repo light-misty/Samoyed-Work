@@ -662,6 +662,29 @@ impl<R: Runtime> AgentExecutor<R> {
             decision.action
         };
 
+        // 9. 根据 confirmation_level 调整 Ask 行为
+        // Never/Always 级别:将 Ask 转为 Allow,避免权限系统弹窗(Never 由用户选择不确认,Always 由 needs_confirmation 统一处理)
+        // 保留 Deny 结果(.env 等安全保护仍生效)
+        let final_action = match (&self.confirmation_level, &final_action) {
+            (ConfirmationLevel::Never, PermissionAction::Ask) => {
+                log::debug!(
+                    "权限允许(confirmation_level=Never,跳过 Ask): session_id={}, tool={}",
+                    ctx.session_id,
+                    tool_name
+                );
+                PermissionAction::Allow
+            }
+            (ConfirmationLevel::Always, PermissionAction::Ask) => {
+                log::debug!(
+                    "权限允许(confirmation_level=Always,由 needs_confirmation 处理): session_id={}, tool={}",
+                    ctx.session_id,
+                    tool_name
+                );
+                PermissionAction::Allow
+            }
+            _ => final_action,
+        };
+
         match final_action {
             PermissionAction::Allow => {
                 log::debug!(
