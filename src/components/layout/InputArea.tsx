@@ -794,7 +794,7 @@ function ModeSelector({ dropdownUp = false }: { dropdownUp?: boolean }) {
                 </div>
                 <div className="mode-selector-item-info">
                   <span className="mode-selector-item-name">{m.label}</span>
-                  <span className="mode-selector-item-desc">{m.desc.includes("：") ? m.desc.split("：").slice(1).join("：") : m.desc}</span>
+                  <span className="mode-selector-item-desc">{m.desc}</span>
                 </div>
                 {m.key === mode && (
                   <Icon name="check" size={14} />

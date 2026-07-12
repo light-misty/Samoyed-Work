@@ -79,9 +79,9 @@
     "plan": "规划",
     "build": "构建",
     "document": "文档",
-    "planMode": "规划模式：只读分析，不执行修改操作",
-    "buildMode": "构建模式：完整编程执行能力",
-    "documentMode": "文档模式：生成和处理 Word/Excel/PPT/PDF 文档",
+    "planMode": "只读分析，不执行修改操作",
+    "buildMode": "完整编程执行能力",
+    "documentMode": "生成和处理 Word/Excel/PPT/PDF 文档",
     "switchGroup": "Agent 模式切换"
   },
   "confirmNode": {

@@ -79,9 +79,9 @@
     "plan": "Plan",
     "build": "Build",
     "document": "Document",
-    "planMode": "Plan mode: read-only analysis, no modifications",
-    "buildMode": "Build mode: full programming execution",
-    "documentMode": "Document mode: generate and process Word/Excel/PPT/PDF documents",
+    "planMode": "read-only analysis, no modifications",
+    "buildMode": "full programming execution",
+    "documentMode": "generate and process Word/Excel/PPT/PDF documents",
     "switchGroup": "Agent Mode Switch"
   },
   "confirmNode": {
