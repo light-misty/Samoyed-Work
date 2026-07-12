@@ -65,6 +65,8 @@
   },
   "workflow": {
     "startNewSession": "Work with DocAgent",
+    "startNewSessionPlan": "Plan with DocAgent",
+    "startNewSessionCode": "Code with DocAgent",
     "emptySession": "空会话",
     "timeline": "工作流时间线",
     "thinking": "思考过程"

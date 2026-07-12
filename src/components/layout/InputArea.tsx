@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, type KeyboardEvent as ReactKeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Icon } from "../common/Icon";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
@@ -85,7 +85,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   }, [text, disabled, onSend, attachments.length, clearAttachments, configReady]);
 
   const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       // 发送消息快捷键（从设置中读取）
       if (matchesShortcut(e, sendMessageShortcut)) {
         e.preventDefault();
@@ -316,7 +316,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               {centered && <WorkspaceSelector />}
             </div>
             <div className="input-inner-right">
-              <ModeSwitchButton />
+              <ModeSelector dropdownUp={!centered} />
               <ProviderSelector dropdownUp={!centered} />
               <div className="input-actions-right">
                 <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
@@ -694,21 +694,24 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 }
 
 /**
- * Agent 模式切换按钮组（Plan/Build/Document）
- * 模式切换仅通过前端按钮触发，不提供让 LLM 自主切换的工具
- * 按钮组样式与 ProviderSelector 对称，使用相同的 CSS 变量
+ * Agent 模式切换下拉框（Plan/Build/Document）
+ * 在已存在会话页面的输入框中为上拉列表（dropdownUp=true），
+ * 空会话页面为下拉列表（dropdownUp=false）。
  */
-function ModeSwitchButton() {
+function ModeSelector({ dropdownUp = false }: { dropdownUp?: boolean }) {
   const { t } = useTranslation();
   const mode = useAgentModeStore((s) => s.mode);
   const setMode = useAgentModeStore((s) => s.setMode);
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // 模式切换：立即更新前端状态（乐观更新），异步通知后端
   // 当前会话为空时仅更新前端状态，不调用后端
   const handleSwitch = async (newMode: 'plan' | 'build' | 'document') => {
     if (newMode === mode) return;
     setMode(newMode);
+    setOpen(false);
     if (currentSessionId) {
       try {
         await switchAgentMode(currentSessionId, newMode);
@@ -718,68 +721,216 @@ function ModeSwitchButton() {
     }
   };
 
-  // 三种模式定义：图标与标签
-  const modes: Array<{ key: 'plan' | 'build' | 'document'; label: string; icon: 'edit' | 'code' | 'file' }> = [
-    { key: 'plan', label: t('agentMode.plan'), icon: 'edit' },
-    { key: 'build', label: t('agentMode.build'), icon: 'code' },
-    { key: 'document', label: t('agentMode.document'), icon: 'file' },
+  // 点击外部关闭下拉框
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      setOpen(false);
+    }
+  }, []);
+
+  // 按 Escape 关闭下拉框
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener("keydown", handleKeyDown);
+      }, 0);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleKeyDown);
+      };
+    }
+  }, [open, handleClickOutside, handleKeyDown]);
+
+  // 三种模式定义：图标、标签、描述
+  const modes: Array<{ key: 'plan' | 'build' | 'document'; label: string; icon: 'edit' | 'code' | 'file'; desc: string }> = [
+    { key: 'plan', label: t('agentMode.plan'), icon: 'edit', desc: t('agentMode.planMode') },
+    { key: 'build', label: t('agentMode.build'), icon: 'code', desc: t('agentMode.buildMode') },
+    { key: 'document', label: t('agentMode.document'), icon: 'file', desc: t('agentMode.documentMode') },
   ];
 
+  const currentMode = modes.find((m) => m.key === mode) ?? modes[1];
+
   return (
-    <div className="mode-switch-group" role="group" aria-label={t('agentMode.switchGroup')}>
-      {modes.map((m) => (
-        <button
-          key={m.key}
-          className={`mode-switch-btn ${mode === m.key ? `mode-${m.key} active` : ''}`}
-          onClick={() => handleSwitch(m.key)}
-          title={t(`agentMode.${m.key}Mode`)}
-          aria-pressed={mode === m.key}
-          type="button"
-        >
-          <Icon name={m.icon} size={12} />
-          <span>{m.label}</span>
-        </button>
-      ))}
+    <div ref={containerRef} className="mode-selector-container">
+      <div
+        role="button"
+        aria-label={t('agentMode.switchGroup')}
+        tabIndex={0}
+        className={`mode-selector-trigger ${open ? "mode-selector-trigger-active" : ""}`}
+        onClick={() => setOpen((prev) => !prev)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((prev) => !prev);
+          }
+        }}
+      >
+        <Icon name={currentMode.icon} size={14} />
+        <span className="mode-selector-label">{currentMode.label}</span>
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={12} />
+      </div>
+
+      {open && (
+        <div className={`mode-selector-dropdown ${dropdownUp ? "mode-selector-dropdown-up" : ""}`}>
+          <div className="mode-selector-list">
+            {modes.map((m) => (
+              <div
+                key={m.key}
+                className={`mode-selector-item mode-${m.key} ${m.key === mode ? "mode-selector-item-active" : ""}`}
+                onClick={() => handleSwitch(m.key)}
+                role="option"
+                aria-selected={m.key === mode}
+              >
+                <div className="mode-selector-item-icon">
+                  <Icon name={m.icon} size={16} />
+                </div>
+                <div className="mode-selector-item-info">
+                  <span className="mode-selector-item-name">{m.label}</span>
+                  <span className="mode-selector-item-desc">{m.desc.includes("：") ? m.desc.split("：").slice(1).join("：") : m.desc}</span>
+                </div>
+                {m.key === mode && (
+                  <Icon name="check" size={14} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <style>{`
-        .mode-switch-group {
-          display: inline-flex;
-          align-items: center;
-          gap: 1px;
-          background: var(--color-bg-sub);
-          border-radius: var(--radius-sm);
-          padding: 2px;
+        .mode-selector-container {
+          position: relative;
         }
-        .mode-switch-btn {
-          display: inline-flex;
+        .mode-selector-trigger {
+          display: flex;
           align-items: center;
           gap: 4px;
           padding: 4px 8px;
-          border-radius: calc(var(--radius-sm) - 1px);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: background 0.15s;
           font-size: 12px;
           font-weight: 500;
-          color: var(--color-text-tertiary);
-          cursor: pointer;
-          transition: all 0.15s;
+          color: var(--color-text-secondary);
           white-space: nowrap;
           user-select: none;
         }
-        .mode-switch-btn:hover {
-          color: var(--color-text-secondary);
+        .mode-selector-trigger:hover {
+          background: var(--color-bg-sub);
+        }
+        .mode-selector-trigger-active {
+          background: var(--color-bg-sub);
+          color: var(--color-text-primary);
+        }
+        .mode-selector-label {
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .mode-selector-dropdown {
+          position: absolute;
+          right: 0;
+          top: calc(100% + 6px);
+          min-width: 200px;
+          max-width: 260px;
+          background: var(--color-bg-elevated);
+          border: 1px solid var(--color-border-light);
+          border-radius: var(--radius-md);
+          box-shadow: var(--shadow-lg);
+          z-index: 200;
+          animation: mode-dropdown-in 0.15s ease-out;
+          overflow: hidden;
+        }
+        .mode-selector-dropdown-up {
+          top: auto;
+          bottom: calc(100% + 6px);
+          animation-name: mode-dropdown-in-up;
+        }
+        @keyframes mode-dropdown-in {
+          from { opacity: 0; transform: scale(0.96) translateY(4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes mode-dropdown-in-up {
+          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .mode-selector-list {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          padding: 4px;
+        }
+        .mode-selector-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 10px;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+        }
+        .mode-selector-item:hover {
           background: var(--color-bg-hover);
         }
-        .mode-switch-btn.active {
-          color: var(--color-text-primary);
-          background: var(--color-bg);
-          box-shadow: var(--shadow-xs);
+        .mode-selector-item-active {
+          background: var(--color-bg-sub);
         }
-        .mode-switch-btn.mode-plan.active {
+        .mode-selector-item-icon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: var(--radius-sm);
+          flex-shrink: 0;
+          color: var(--color-text-tertiary);
+          transition: color 0.15s;
+        }
+        .mode-plan:hover .mode-selector-item-icon {
           color: var(--color-warning, #f59e0b);
         }
-        .mode-switch-btn.mode-build.active {
-          color: var(--color-accent);
+        .mode-build:hover .mode-selector-item-icon {
+          color: #3b82f6;
         }
-        .mode-switch-btn.mode-document.active {
+        .mode-document:hover .mode-selector-item-icon {
           color: var(--color-success, #10b981);
+        }
+        .mode-selector-item-active.mode-plan .mode-selector-item-icon {
+          color: var(--color-warning, #f59e0b);
+        }
+        .mode-selector-item-active.mode-build .mode-selector-item-icon {
+          color: #3b82f6;
+        }
+        .mode-selector-item-active.mode-document .mode-selector-item-icon {
+          color: var(--color-success, #10b981);
+        }
+        .mode-selector-item-info {
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          min-width: 0;
+          flex: 1;
+        }
+        .mode-selector-item-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--color-text-primary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .mode-selector-item-desc {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
       `}</style>
     </div>

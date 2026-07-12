@@ -11,7 +11,9 @@ export type IconName =
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "undo"
-  | "theme" | "moon" | "keyboard" | "info" | "image" | "book" | "more-vertical";
+  | "theme" | "moon" | "keyboard" | "info" | "image" | "book" | "more-vertical"
+  // 空会话标题专用：规划模式清单图标、构建模式双尖括号图标
+  | "plan-mode" | "code-brackets";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -419,6 +421,26 @@ const paths: Record<IconName, React.JSX.Element> = {
       <circle cx="12" cy="5" r="2" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
       <circle cx="12" cy="19" r="2" fill="currentColor" stroke="none" />
+    </g>
+  ),
+  // 规划模式图标：铅笔，末端方形带橡皮擦线条，加长笔身 + 笔芯
+  "plan-mode": (
+    <g key="plan-mode">
+      {/* 铅笔主体：末端方形（无圆角），底部尖头 */}
+      <path d="M15 4 L19 8 L9 18 L4 19 L5 14 Z" />
+      {/* 橡皮擦分隔线 */}
+      <line x1="12" y1="7" x2="16" y2="11" />
+    </g>
+  ),
+  // 构建模式图标：左尖括号 + 中间左斜杠 + 右尖括号，斜杠两侧与尖括号之间各留一空格距离 </>
+  "code-brackets": (
+    <g key="code-brackets">
+      {/* 左尖括号 < */}
+      <polyline points="7 6 1 12 7 18" />
+      {/* 右尖括号 > */}
+      <polyline points="17 6 23 12 17 18" />
+      {/* 中间左斜杠 \，与两侧尖括号各留约 1 单位空格距离 */}
+      <line x1="15" y1="4" x2="9" y2="20" />
     </g>
   ),
 };

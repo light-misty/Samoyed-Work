@@ -65,6 +65,8 @@
   },
   "workflow": {
     "startNewSession": "Work with DocAgent",
+    "startNewSessionPlan": "Plan with DocAgent",
+    "startNewSessionCode": "Code with DocAgent",
     "emptySession": "Empty Session",
     "timeline": "Workflow Timeline",
     "thinking": "Thinking"
