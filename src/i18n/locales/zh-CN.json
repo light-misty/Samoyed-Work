@@ -25,7 +25,7 @@
   },
   "inputArea": {
     "visionWarning": "当前模型不支持图片理解，图片内容将无法被识别。建议用文字描述图片内容。",
-    "placeholder": "输入指令，让Agent帮你处理文档...",
+    "placeholder": "输入需求，让 Agent 帮你规划或构建...",
     "attachFile": "附加文件",
     "stopExecution": "停止执行",
     "stopping": "正在停止...",

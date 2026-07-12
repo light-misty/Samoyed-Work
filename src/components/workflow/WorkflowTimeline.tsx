@@ -30,7 +30,12 @@ function TypewriterText({ text }: { text: string }) {
     return () => clearInterval(interval);
   }, [text]);
 
-  return <span>{displayedText}</span>;
+  return (
+    <span className="typewriter-text">
+      <span aria-hidden="true" className="typewriter-text-placeholder">{text}</span>
+      <span className="typewriter-text-visible">{displayedText}</span>
+    </span>
+  );
 }
 
 /**
@@ -182,7 +187,7 @@ const EMPTY_MODE_CONFIG: Record<AgentMode, { icon: IconName; textKey: string }> 
  * 空会话标题组件
  * 根据当前 Agent 模式显示对应图标和文字。
  * 图标直接显示（无动画），文字保持打字机效果（TypewriterText）。
- * 模式切换时通过 key={mode} 重挂载元素，触发 TypewriterText 重新打字。
+ * 模式切换时 TypewriterText 通过 text prop 变化自动重启打字动画。
  */
 function EmptySessionTitle({ typewriterVisible }: { typewriterVisible: boolean }) {
   const { t } = useTranslation();
@@ -193,7 +198,6 @@ function EmptySessionTitle({ typewriterVisible }: { typewriterVisible: boolean }
   return (
     <div className="wf-empty" role="status" aria-label={t('workflow.emptySession')}>
       <h3
-        key={mode}
         className={`wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon wf-empty-mode-title wf-empty-mode-${mode}`}
       >
         <Icon name={icon} size={42} className="wf-empty-book-icon wf-empty-mode-icon" />

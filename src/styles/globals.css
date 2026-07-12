@@ -322,6 +322,23 @@
   flex-shrink: 0;
 }
 
+/* 打字机效果——隐藏占位 + 绝对定位叠加，防止逐字渲染时宽度变化导致布局抖动 */
+.typewriter-text {
+  position: relative;
+  white-space: nowrap;
+  display: inline-flex;
+}
+.typewriter-text-placeholder {
+  visibility: hidden;
+  white-space: nowrap;
+}
+.typewriter-text-visible {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
 /* ===== 暗色模式 ===== */
 .dark {
   --color-bg: #191a1b;

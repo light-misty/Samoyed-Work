@@ -25,7 +25,7 @@
   },
   "inputArea": {
     "visionWarning": "The current model does not support image understanding. Image content cannot be recognized. It is recommended to describe the image content in text.",
-    "placeholder": "Enter instructions, let Agent help you process documents...",
+    "placeholder": "Describe your needs, let Agent plan or build...",
     "attachFile": "Attach file",
     "stopExecution": "Stop execution",
     "stopping": "Stopping...",
