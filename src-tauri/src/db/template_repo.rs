@@ -1,7 +1,7 @@
-use rusqlite::Connection;
-use chrono::Utc;
 use crate::errors::CommandError;
 use crate::models::PromptTemplate;
+use chrono::Utc;
+use rusqlite::Connection;
 
 /// 查询所有模板，按更新时间降序排列
 pub fn list_templates(conn: &Connection) -> Result<Vec<PromptTemplate>, CommandError> {
@@ -13,8 +13,7 @@ pub fn list_templates(conn: &Connection) -> Result<Vec<PromptTemplate>, CommandE
     let templates = stmt.query_map([], |row| {
         let is_builtin: i64 = row.get(5)?;
         let variables_str: Option<String> = row.get(6)?;
-        let variables = variables_str
-            .and_then(|s| serde_json::from_str(&s).ok());
+        let variables = variables_str.and_then(|s| serde_json::from_str(&s).ok());
 
         Ok(PromptTemplate {
             id: row.get(0)?,
@@ -146,7 +145,8 @@ pub fn update_template(
     param_values.push(Box::new(id.to_string()));
 
     // 构建 params 切片引用
-    let params: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
     conn.execute(&sql, params.as_slice())?;
 
     Ok(())
@@ -188,8 +188,7 @@ pub fn list_templates_by_category(
     let templates = stmt.query_map(rusqlite::params![category], |row| {
         let is_builtin: i64 = row.get(5)?;
         let variables_str: Option<String> = row.get(6)?;
-        let variables = variables_str
-            .and_then(|s| serde_json::from_str(&s).ok());
+        let variables = variables_str.and_then(|s| serde_json::from_str(&s).ok());
 
         Ok(PromptTemplate {
             id: row.get(0)?,

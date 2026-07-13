@@ -120,8 +120,8 @@ src-tauri/               Rust 后端
   src/
     lib.rs               入口, AppState定义 (含 network_monitor), 命令注册,
                            初始化流程
-    commands/            Tauri命令层 (11个模块): llm, session, workspace, document,
-                            handler, settings, agent, template, log, update (desktop)
+    commands/            Tauri命令层 (12个模块): llm, session, workspace, document,
+                            handler, settings, agent, template, log, lsp, update (desktop)
     services/
       agent/             Agent调度引擎: executor, context (对话上下文管理)
         prompts/         System Prompt: document_design, prompt_loader,
@@ -167,7 +167,7 @@ docs/                    详细开发文档
 ### 前后端通信
 - **`invoke()`**: 请求-响应式调用（查询数据、操作触发），命令名 `snake_case`
 - **`emit()/listen()`**: 事件推送（Agent流式输出、进度更新、需确认操作等），事件名 `namespace:action`
-- Agent 事件: `agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:network_retry`, `agent:done`, `agent:error`, `agent:stopped`
+- Agent 事件: `agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:network_retry`, `agent:done`, `agent:error`, `agent:stopped`, `agent:compaction_start`, `agent:compaction_done`, `agent:sub_agent_status`, `agent:sub_agent_tool_call`, `agent:question`
 - 系统事件: `session:updated`, `workspace:directory_deleted`, `file:change`, `llm:provider_switch`, `system:network_change`
 
 ### Agent 执行流程
@@ -178,6 +178,7 @@ docs/                    详细开发文档
 5. 每轮迭代后增量持久化消息到 SQLite，防止崩溃丢失
 6. Handler/Tool 执行时短暂持锁获取 Arc 引用后立即释放，避免阻塞注册表
 7. 支持用户手动停止（`stop_agent`），通过 `should_stop` 闭包检查；停止时状态流转变为 `stopping` → `cancelled`
+8. 子 Agent 委托（阶段 4）: 主 Agent 可通过 `task` 工具委托子任务给独立子 Agent 执行，子 Agent 拥有独立上下文窗口，继承父 Agent 的 AgentMode、系统提示词和工作区配置；子 Agent 嵌套深度限制为 3 层，默认不允许递归调用 Task 工具；子 Agent 工具执行受权限系统控制（Ask 视为 Allow，因子 Agent 无法与用户交互）
 
 ### LLM Provider 系统
 - **OpenAI 适配器**: 兼容 OpenAI API 格式的 Provider（含 Ollama、兼容第三方）
@@ -198,10 +199,10 @@ docs/                    详细开发文档
   - `pdf_handler`: PDF 文档处理（读取/转换/分析）
 - Handler 始终启用，前端 HandlersTab 仅展示信息
 
-### Tool 系统（文件系统操作，始终启用）
-- Tool 是轻量级、始终启用的基础文件系统操作，与 Handler 平行但不可禁用
+### Tool 系统（基础操作，始终启用）
+- Tool 是轻量级、始终启用的基础操作工具，与 Handler 平行但不可禁用
 - 每个 Tool 实现 `Tool` trait（与 Handler 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
-- 内置 16 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
+- 内置 24 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）（实验性开关开启时为 25 个）:
   - `list_directory`: 列出目录内容（支持深度控制、扩展名过滤、排序，含路径遍历安全校验）
   - `search_files`: 按文件名/内容搜索文件（支持扩展名过滤、内容预览）
   - `read_file`: 读取纯文本文件（.txt/.md/.csv/.json 等，1MB 上限，含路径校验）
@@ -214,12 +215,30 @@ docs/                    详细开发文档
   - `copy_file`: 复制文件
   - `delete_directory`: 删除目录（可选递归）
   - `get_file_hash`: 计算文件 SHA-256 哈希
-  - `read_file_lines`: 按行范围读取文件（支持行号范围，大文件）
+  - `edit`: 精确字符串替换工具（阶段 1 编程 Agent 改造，支持单次/全部替换）
+  - `glob`: glob 模式查找工具（阶段 1 编程 Agent 改造）
+  - `grep`: 正则表达式搜索工具（阶段 1 编程 Agent 改造，基于 ripgrep）
   - `scratchpad`: 智能体草稿本（按 session_id 隔离的笔记工具，支持写入/读取/清空/刷新摘要，每轮迭代自动注入摘要）
   - `write_script`: 将智能体生成的脚本写入系统临时目录 `<temp_dir>/docagent/scripts/`
   - `run_command`: 通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制（LLM 通过 timeout 参数自主控制，最大 300 秒）；高风险命令（rm -rf、format、shutdown 等）需用户确认；Git Bash 路径优先使用用户配置，为空时从 PATH 自动检测（先查找 bash.exe，再从 git.exe 推断 `<git_root>/bin/bash.exe`）
+  - `todo_write`: 结构化任务管理（按 session_id 隔离并持久化到数据库）
+  - `source_code`: 基于 tree-sitter 的代码语义搜索（支持按符号类型和名称通配符查询）
+  - `task`: 委托子任务给子 Agent 执行（阶段 4，支持 single/batch 模式，子 Agent 拥有独立上下文，继承父 Agent 配置；嵌套深度限制 3 层，默认禁止递归调用）
+  - `webfetch`: 获取 URL 内容并转为 Markdown（阶段 4，受权限系统控制，URL 验证拒绝内网地址和非 HTTP 协议）
+  - `websearch`: 网络搜索（阶段 4，支持 MCP/Tavily/SerpAPI 后端，受权限系统控制）
+  - `question`: 向用户提问并等待回答（阶段 4，通过 AGENT_QUESTION 事件推送问题，前端通过 submit_question_answer 命令回复，5 分钟超时）
+  - `lsp`: LSP 代码智能工具（实验性，需 `lsp.experimental_enabled=true` 开启），通过 `operation` 参数路由 8 种操作：
+    - `definition`: 跳转到符号定义
+    - `references`: 查找符号引用
+    - `hover`: 获取符号悬停信息（类型、文档）
+    - `diagnostics`: 获取文件诊断信息
+    - `document_symbol`: 获取文档符号列表
+    - `workspace_symbol`: 搜索工作区符号
+    - `implementation`: 跳转到实现
+    - `call_hierarchy`: 获取调用层级（direction=incoming|outgoing）
 - Tool 注册在 `ToolRegistry` 中，通过 `Arc<dyn Tool>` 共享访问
 - 共同路径安全机制：所有文件操作通过 executor 注入 `workspace_root`，拒绝路径遍历攻击
+- TaskTool 采用延迟注入模式：先注册不含 SubAgentExecutor 的实例，后续在 lib.rs setup 中通过 `set_sub_executor` 注入（解决 TaskTool ↔ SubAgentExecutor 循环依赖）
 
 ### Scratchpad 系统
 - 全局唯一 `SharedScratchpadStates`（`Arc<RwLock<HashMap<String, ScratchpadState>>>`），按 session_id 隔离
@@ -246,16 +265,27 @@ AppState {
     config: Arc<Mutex<ConfigManager>>,
     active_agents: Arc<Mutex<HashMap<String, bool>>>,
     confirm_channels: Arc<Mutex<HashMap<String, oneshot::Sender<ConfirmDecision>>>>,
+    permission_channels: Arc<Mutex<HashMap<String, oneshot::Sender<PermissionDecision>>>>,
+    question_channels: QuestionChannels,
+    permission_registry: Arc<PermissionRegistry>,
+    session_whitelist: Arc<SessionWhitelist>,
+    doom_loop_detector: Arc<DoomLoopDetector>,
+    agent_mode_manager: Arc<AgentModeManager>,
     doc_service: Arc<DocumentService>,
     llm_router: Arc<RwLock<Arc<LlmRouter>>>,
     tool_registry: Arc<ToolRegistry>,
+    sub_executor: Arc<SubAgentExecutor>,
     handler_registry: Arc<Mutex<HandlerRegistry>>,
     fs_watcher: Arc<FsWatcherService>,
     network_monitor: Arc<NetworkMonitor>,
+    scratchpad_states: SharedScratchpadStates,
+    skill_registry: Arc<SkillRegistry>,
+    lsp_manager: Arc<LspServerManager>,
 }
 ```
 - `tool_registry` 在运行时不变，无需 Mutex 保护；`handler_registry` 使用 Mutex 保护运行时注册访问
 - 锁获取原则：Handler 执行时短暂持锁获取 `Arc` 引用后立即释放，避免阻塞注册表
+- `sub_executor`（阶段 4）在 setup 中创建，通过延迟注入模式注入到 TaskTool（解决循环依赖）
 
 ### 前端组件要点
 - **懒加载**: PreviewOverlay、SettingsDialog 通过 `React.lazy` 延迟加载，减少首屏体积
@@ -424,5 +454,5 @@ AppState {
 - 版本历史: `VersionHistoryPanel` 组件展示文档版本快照列表，支持版本对比（diff）和回滚操作
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
 - 命令超时由 LLM 通过 run_command 的 `timeout` 参数自主控制，最大 300 秒（无全局超时配置）
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → Tool 注册表 + builtin tools（读取 `git_bash_path` 配置后传入 `register_builtin_tools`） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/session_whitelist/doom_loop_detector/agent_mode_manager）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置后传入 `register_builtin_tools`，含 task/webfetch/websearch/question 工具）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → Skill 注册表 → LSP 服务器管理器/路由器/缓存（阶段 5，读取 `lsp` 配置后初始化，注册服务器配置并传入 `register_builtin_tools`，仅在 `lsp.experimental_enabled=true` 时注册 LspTool；启动 LSP 健康检查后台任务） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控、LSP 按配置间隔）
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

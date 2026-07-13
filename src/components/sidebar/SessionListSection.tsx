@@ -80,6 +80,8 @@ export function SessionListSection({
   const [activeDropdownWsId, setActiveDropdownWsId] = useState<string | null>(null);
   const [clearSessionWsId, setClearSessionWsId] = useState<string | null>(null);
   const [clearSessionWsName, setClearSessionWsName] = useState("");
+  // 每个工作区已展开的会话数量（默认 10），用于"显示更多"分步加载
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
 
   // 按工作区分组并排序
   const grouped = useMemo(() => {
@@ -375,7 +377,7 @@ export function SessionListSection({
               return (
                 <div key={workspace.id} className="workspace-group">
                   <div
-                    className="workspace-header"
+                    className={`workspace-header${activeDropdownWsId === workspace.id ? " dropdown-open" : ""}`}
                     role="button"
                     aria-expanded={isExpanded}
                     onClick={() => toggleWorkspace(workspace.id)}
@@ -417,7 +419,7 @@ export function SessionListSection({
                         <Icon name="folder" size={13} />
                       </button>
                       <button
-                        className="workspace-action-btn"
+                        className={`workspace-action-btn${activeDropdownWsId === workspace.id ? " dropdown-open" : ""}`}
                         title={t("sessionList.moreActions")}
                         aria-label={t("sessionList.moreActions")}
                         data-dropdown-btn={workspace.id}
@@ -467,51 +469,75 @@ export function SessionListSection({
                       opacity: isExpanded ? 1 : 0,
                     }}
                   >
-                    {groupSessions.map((s) => (
-                      <div
-                        key={s.id}
-                        className={`session-item ${s.id === currentSessionId ? "active" : ""}`}
-                        role="listitem"
-                        aria-selected={s.id === currentSessionId}
-                        onClick={() => handleSessionClick(s)}
-                      >
-                        {editingId === s.id ? (
-                          <input
-                            ref={editInputRef}
-                            className="session-edit-input"
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            onKeyDown={handleRenameKeyDown}
-                            onBlur={confirmRename}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <>
-                            <div className="session-item-title" title={s.title}>
-                              {s.title}
+                    {(() => {
+                      const limit = visibleCounts[workspace.id] || 10;
+                      const shown = groupSessions.slice(0, limit);
+                      const remaining = groupSessions.length - limit;
+                      return (
+                        <>
+                          {shown.map((s) => (
+                            <div
+                              key={s.id}
+                              className={`session-item ${s.id === currentSessionId ? "active" : ""}`}
+                              role="listitem"
+                              aria-selected={s.id === currentSessionId}
+                              onClick={() => handleSessionClick(s)}
+                            >
+                              {editingId === s.id ? (
+                                <input
+                                  ref={editInputRef}
+                                  className="session-edit-input"
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  onKeyDown={handleRenameKeyDown}
+                                  onBlur={confirmRename}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              ) : (
+                                <>
+                                  <div className="session-item-title" title={s.title}>
+                                    {s.title}
+                                  </div>
+                                  <div className="session-item-actions">
+                                    <button
+                                      className="session-action-btn"
+                                      title={t("history.rename")}
+                                      aria-label={t("history.renameSession")}
+                                      onClick={(e) => handleStartRename(e, s)}
+                                    >
+                                      <Icon name="edit" size={12} />
+                                    </button>
+                                    <button
+                                      className="session-action-btn session-action-btn-danger"
+                                      title={t("history.deleteSession")}
+                                      aria-label={t("history.deleteSession")}
+                                      onClick={(e) => handleDeleteClick(e, s)}
+                                    >
+                                      <Icon name="trash" size={12} />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                            <div className="session-item-actions">
-                              <button
-                                className="session-action-btn"
-                                title={t("history.rename")}
-                                aria-label={t("history.renameSession")}
-                                onClick={(e) => handleStartRename(e, s)}
-                              >
-                                <Icon name="edit" size={12} />
-                              </button>
-                              <button
-                                className="session-action-btn session-action-btn-danger"
-                                title={t("history.deleteSession")}
-                                aria-label={t("history.deleteSession")}
-                                onClick={(e) => handleDeleteClick(e, s)}
-                              >
-                                <Icon name="trash" size={12} />
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                          ))}
+                          {remaining > 0 && (
+                            <button
+                              type="button"
+                              className="show-more-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setVisibleCounts((prev) => ({
+                                  ...prev,
+                                  [workspace.id]: (prev[workspace.id] || 10) + 10,
+                                }));
+                              }}
+                            >
+                              {t("sessionList.showMoreSessions", { count: remaining })}
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -671,6 +697,9 @@ export function SessionListSection({
         .workspace-header:hover .workspace-actions {
           opacity: 1;
         }
+        .workspace-header.dropdown-open .workspace-actions {
+          opacity: 1;
+        }
         .workspace-action-btn {
           width: 24px;
           height: 24px;
@@ -684,13 +713,17 @@ export function SessionListSection({
           cursor: pointer;
           transition: all 0.15s;
         }
-        .workspace-action-btn:hover {
+        .workspace-action-btn:hover,
+        .workspace-action-btn.dropdown-open {
           background: var(--color-bg-hover);
           color: var(--color-text-primary);
         }
         .workspace-sessions {
           overflow: hidden;
           transition: max-height 0.25s ease, opacity 0.2s ease;
+        }
+        .workspace-sessions .session-item:first-child {
+          margin-top: 1px;
         }
         .session-item {
           display: flex;
@@ -828,6 +861,23 @@ export function SessionListSection({
         .ws-dropdown-item-danger:hover .ws-dropdown-item-icon {
           background: var(--color-error-bg);
           color: var(--color-error);
+        }
+        .show-more-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          padding: 6px 8px;
+          border: none;
+          background: transparent;
+          color: var(--color-text-quaternary);
+          font-size: 12px;
+          cursor: pointer;
+          border-radius: var(--radius-sm);
+          transition: all 0.15s;
+        }
+        .show-more-btn:hover {
+          color: var(--color-text-secondary);
         }
       `}</style>
     </>

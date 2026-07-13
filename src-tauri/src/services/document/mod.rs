@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::{Mutex, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 use crate::errors::CommandError;
 use serde_json::{json, Value};
@@ -80,7 +80,11 @@ impl SidecarManager {
 
     /// 启动 Sidecar 进程并进行就绪检查
     pub async fn start(&self) -> Result<(), CommandError> {
-        log::info!("启动 Sidecar 进程: python={}, script={}", self.python_path, self.script_path);
+        log::info!(
+            "启动 Sidecar 进程: python={}, script={}",
+            self.python_path,
+            self.script_path
+        );
         let mut guard = self.running.lock().await;
         if guard.is_some() {
             log::warn!("Sidecar 进程已在运行, 跳过启动");
@@ -106,11 +110,10 @@ impl SidecarManager {
             cmd.creation_flags(CREATE_NO_WINDOW);
         }
 
-        let mut child = cmd.spawn()
-            .map_err(|e| {
-                log::error!("启动 Sidecar 失败: {}", e);
-                CommandError::doc(3010, format!("启动 Sidecar 失败: {}", e))
-            })?;
+        let mut child = cmd.spawn().map_err(|e| {
+            log::error!("启动 Sidecar 失败: {}", e);
+            CommandError::doc(3010, format!("启动 Sidecar 失败: {}", e))
+        })?;
 
         // 取出 stderr 并启动后台任务读取日志
         if let Some(stderr) = child.stderr.take() {
@@ -147,10 +150,11 @@ impl SidecarManager {
         });
 
         let ping_str = serde_json::to_string(&ping_request).unwrap_or_default();
-        let readiness_result = tokio::time::timeout(
-            Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
-            async {
-                stdin.write_all(format!("{}\n", ping_str).as_bytes()).await?;
+        let readiness_result =
+            tokio::time::timeout(Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS), async {
+                stdin
+                    .write_all(format!("{}\n", ping_str).as_bytes())
+                    .await?;
                 stdin.flush().await?;
 
                 let mut response_line = String::new();
@@ -170,8 +174,8 @@ impl SidecarManager {
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
                 Ok(())
-            },
-        ).await;
+            })
+            .await;
 
         match readiness_result {
             Ok(Ok(())) => {
@@ -203,18 +207,25 @@ impl SidecarManager {
                 log::error!("Sidecar 就绪检查失败: {}，清理进程", e);
                 // 就绪检查失败，终止进程
                 let _ = child.kill().await;
-                Err(CommandError::doc(3010, format!(
-                    "Sidecar 启动后就绪检查失败（可能 Python 环境缺失或脚本路径错误）: {}", e
-                )))
+                Err(CommandError::doc(
+                    3010,
+                    format!(
+                        "Sidecar 启动后就绪检查失败（可能 Python 环境缺失或脚本路径错误）: {}",
+                        e
+                    ),
+                ))
             }
             Err(_) => {
                 log::error!("Sidecar 就绪检查超时，清理进程");
                 // 就绪检查超时，终止进程
                 let _ = child.kill().await;
-                Err(CommandError::doc(3010, format!(
-                    "Sidecar 启动后就绪检查超时（{}秒）（可能 Python 环境缺失或脚本路径错误）",
-                    HEALTH_CHECK_TIMEOUT_SECS
-                )))
+                Err(CommandError::doc(
+                    3010,
+                    format!(
+                        "Sidecar 启动后就绪检查超时（{}秒）（可能 Python 环境缺失或脚本路径错误）",
+                        HEALTH_CHECK_TIMEOUT_SECS
+                    ),
+                ))
             }
         }
     }
@@ -286,7 +297,8 @@ impl SidecarManager {
         let result = tokio::time::timeout(
             self.request_timeout,
             self.send_request_inner(request.clone()),
-        ).await;
+        )
+        .await;
 
         match result {
             Ok(Ok(response)) => Ok(response),
@@ -296,15 +308,21 @@ impl SidecarManager {
                 let _ = self.stop().await;
                 if self.start().await.is_ok() {
                     // 重启成功后重试一次（带超时保护）
-                    tokio::time::timeout(
-                        self.request_timeout,
-                        self.send_request_inner(request),
-                    ).await.map_err(|_| {
-                        log::error!("Sidecar 重试请求超时（{}秒）", self.request_timeout.as_secs());
-                        CommandError::doc(3010, format!(
-                            "Sidecar 重试请求超时（{}秒）", self.request_timeout.as_secs()
-                        ))
-                    })?
+                    tokio::time::timeout(self.request_timeout, self.send_request_inner(request))
+                        .await
+                        .map_err(|_| {
+                            log::error!(
+                                "Sidecar 重试请求超时（{}秒）",
+                                self.request_timeout.as_secs()
+                            );
+                            CommandError::doc(
+                                3010,
+                                format!(
+                                    "Sidecar 重试请求超时（{}秒）",
+                                    self.request_timeout.as_secs()
+                                ),
+                            )
+                        })?
                 } else {
                     Err(e)
                 }
@@ -314,9 +332,10 @@ impl SidecarManager {
                 log::error!("Sidecar 请求超时（{}秒）", self.request_timeout.as_secs());
                 // 超时后重启 Sidecar
                 let _ = self.stop().await;
-                Err(CommandError::doc(3010, format!(
-                    "Sidecar 请求超时（{}秒）", self.request_timeout.as_secs()
-                )))
+                Err(CommandError::doc(
+                    3010,
+                    format!("Sidecar 请求超时（{}秒）", self.request_timeout.as_secs()),
+                ))
             }
         }
     }
@@ -332,13 +351,18 @@ impl SidecarManager {
         })?;
 
         let (response_tx, response_rx) = oneshot::channel();
-        tx.send(SidecarRequest { request, response_tx }).await
-            .map_err(|_| CommandError::doc(3010, "Sidecar 请求队列已关闭".to_string()))?;
+        tx.send(SidecarRequest {
+            request,
+            response_tx,
+        })
+        .await
+        .map_err(|_| CommandError::doc(3010, "Sidecar 请求队列已关闭".to_string()))?;
 
         // 等待后台处理器返回响应
         // 注意：send_request 通过 tokio::time::timeout 包裹本方法实现超时
         // 超时后 response_rx 被 drop，后台处理器的 response_tx.send 会失败（忽略）
-        response_rx.await
+        response_rx
+            .await
             .map_err(|_| CommandError::doc(3010, "Sidecar 响应通道已关闭".to_string()))?
     }
 
@@ -352,22 +376,30 @@ impl SidecarManager {
     ) {
         log::info!("Sidecar 请求处理器已启动");
         while let Some(req) = request_rx.recv().await {
-            let SidecarRequest { request, response_tx } = req;
+            let SidecarRequest {
+                request,
+                response_tx,
+            } = req;
 
             // 带超时执行 I/O，防止 Sidecar 无响应时锁被永久持有
             let result = tokio::time::timeout(
                 request_timeout,
                 Self::process_single_request(&running, request.clone()),
-            ).await;
+            )
+            .await;
 
             let response = match result {
                 Ok(Ok(response)) => Ok(response),
                 Ok(Err(e)) => Err(e),
                 Err(_) => {
-                    log::error!("Sidecar I/O 超时（{}秒），可能需要重启", request_timeout.as_secs());
-                    Err(CommandError::doc(3010, format!(
-                        "Sidecar I/O 超时（{}秒）", request_timeout.as_secs()
-                    )))
+                    log::error!(
+                        "Sidecar I/O 超时（{}秒），可能需要重启",
+                        request_timeout.as_secs()
+                    );
+                    Err(CommandError::doc(
+                        3010,
+                        format!("Sidecar I/O 超时（{}秒）", request_timeout.as_secs()),
+                    ))
                 }
             };
 
@@ -391,10 +423,14 @@ impl SidecarManager {
 
         // 写入请求
         let request_str = serde_json::to_string(&request).unwrap_or_default();
-        running_state.stdin.write_all(format!("{}\n", request_str).as_bytes()).await.map_err(|e| {
-            log::error!("写入 Sidecar 失败: {}", e);
-            CommandError::doc(3010, format!("写入 Sidecar 失败: {}", e))
-        })?;
+        running_state
+            .stdin
+            .write_all(format!("{}\n", request_str).as_bytes())
+            .await
+            .map_err(|e| {
+                log::error!("写入 Sidecar 失败: {}", e);
+                CommandError::doc(3010, format!("写入 Sidecar 失败: {}", e))
+            })?;
         running_state.stdin.flush().await.map_err(|e| {
             log::error!("刷新 Sidecar stdin 失败: {}", e);
             CommandError::doc(3010, format!("刷新 Sidecar stdin 失败: {}", e))
@@ -403,15 +439,22 @@ impl SidecarManager {
 
         // 读取响应
         let mut response_line = String::new();
-        let bytes_read = running_state.stdout_reader.read_line(&mut response_line).await.map_err(|e| {
-            log::error!("读取 Sidecar 响应失败: {}", e);
-            CommandError::doc(3010, format!("读取 Sidecar 响应失败: {}", e))
-        })?;
+        let bytes_read = running_state
+            .stdout_reader
+            .read_line(&mut response_line)
+            .await
+            .map_err(|e| {
+                log::error!("读取 Sidecar 响应失败: {}", e);
+                CommandError::doc(3010, format!("读取 Sidecar 响应失败: {}", e))
+            })?;
 
         // EOF 检查：read_line 返回 0 表示流已关闭（Sidecar 进程已退出）
         if bytes_read == 0 {
             log::error!("Sidecar 进程已退出，未返回响应（可能运行时崩溃）");
-            return Err(CommandError::doc(3010, "Sidecar 进程已退出，未返回响应（可能运行时崩溃）".to_string()));
+            return Err(CommandError::doc(
+                3010,
+                "Sidecar 进程已退出，未返回响应（可能运行时崩溃）".to_string(),
+            ));
         }
 
         let trimmed = response_line.trim();
@@ -423,7 +466,10 @@ impl SidecarManager {
             CommandError::doc(3010, format!("解析 Sidecar 响应失败: {}", e))
         })?;
 
-        log::debug!("收到 Sidecar 响应: success={}", response["success"].as_bool().unwrap_or(false));
+        log::debug!(
+            "收到 Sidecar 响应: success={}",
+            response["success"].as_bool().unwrap_or(false)
+        );
         Ok(response)
     }
 }
@@ -462,7 +508,12 @@ impl DocumentService {
             Ok(response["data"].clone())
         } else {
             let error = response["error"].as_str().unwrap_or("未知错误");
-            log::error!("文档处理失败: action={}, doc_type={}, 错误: {}", action, doc_type, error);
+            log::error!(
+                "文档处理失败: action={}, doc_type={}, 错误: {}",
+                action,
+                doc_type,
+                error
+            );
             Err(CommandError::doc(3010, error.to_string()))
         }
     }
@@ -501,7 +552,8 @@ impl DocumentService {
         let result = tokio::time::timeout(
             Duration::from_secs(HEALTH_CHECK_TIMEOUT_SECS),
             self.sidecar.send_request_inner(request),
-        ).await;
+        )
+        .await;
 
         let mut failures = self.sidecar.health_check_failures.lock().await;
 
@@ -521,7 +573,11 @@ impl DocumentService {
             }
             Ok(Err(e)) => {
                 *failures += 1;
-                log::warn!("Sidecar 健康检查: 请求失败 {} (连续失败 {} 次)", e.message, *failures);
+                log::warn!(
+                    "Sidecar 健康检查: 请求失败 {} (连续失败 {} 次)",
+                    e.message,
+                    *failures
+                );
                 if *failures >= 3 {
                     log::warn!("Sidecar 连续 {} 次健康检查失败，尝试重启", *failures);
                     *failures = 0;

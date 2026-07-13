@@ -1,14 +1,14 @@
-﻿use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
 use serde_json::{json, Value};
+use std::time::Duration;
 use tokio::sync::mpsc;
 
+use super::provider::LlmProvider;
 use crate::config::llm_config::AdvancedConfig;
 use crate::errors::CommandError;
 use crate::models::llm::*;
-use super::provider::LlmProvider;
 
 /// Anthropic Claude Messages API 适配器
 /// 实现 Anthropic 原生 Messages API 协议，与 OpenAI 格式存在以下关键差异：
@@ -104,8 +104,8 @@ impl AnthropicAdapter {
                     if let Some(tool_calls) = &msg.tool_calls {
                         for tc in tool_calls {
                             // Anthropic 的 input 是 JSON 对象，需要解析 arguments 字符串
-                            let input: Value = serde_json::from_str(&tc.arguments)
-                                .unwrap_or(json!({}));
+                            let input: Value =
+                                serde_json::from_str(&tc.arguments).unwrap_or(json!({}));
                             content_blocks.push(json!({
                                 "type": "tool_use",
                                 "id": tc.id,
@@ -142,10 +142,7 @@ impl AnthropicAdapter {
                     let should_merge = anthropic_messages
                         .last()
                         .map(|last| {
-                            last["role"] == "user"
-                                && last
-                                    .get("_merged_tool_results")
-                                    .is_some()
+                            last["role"] == "user" && last.get("_merged_tool_results").is_some()
                         })
                         .unwrap_or(false);
 
@@ -251,13 +248,16 @@ impl AnthropicAdapter {
         // 添加工具定义
         // Anthropic 使用 input_schema 而非 parameters，且不需要外层 function 包装
         if !tools.is_empty() {
-            body["tools"] = json!(tools.iter().map(|t| {
-                json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "input_schema": t.parameters,
+            body["tools"] = json!(tools
+                .iter()
+                .map(|t| {
+                    json!({
+                        "name": t.name,
+                        "description": t.description,
+                        "input_schema": t.parameters,
+                    })
                 })
-            }).collect::<Vec<_>>());
+                .collect::<Vec<_>>());
         }
 
         body["temperature"] = json!(self.advanced.temperature);
@@ -294,7 +294,8 @@ impl AnthropicAdapter {
         url: &str,
         body: &Value,
     ) -> Result<reqwest::Response, CommandError> {
-        self.send_with_retry_internal(url, body, &self.streaming_client).await
+        self.send_with_retry_internal(url, body, &self.streaming_client)
+            .await
     }
 
     /// 内部发送请求实现，带重试逻辑
@@ -325,7 +326,12 @@ impl AnthropicAdapter {
                 } else {
                     Duration::from_millis(500 * 2u64.pow(total_attempt.saturating_sub(2)))
                 };
-                log::warn!("请求重试, model={}, 第{}次重试, 延迟{}ms", self.model, total_attempt - 1, delay.as_millis());
+                log::warn!(
+                    "请求重试, model={}, 第{}次重试, 延迟{}ms",
+                    self.model,
+                    total_attempt - 1,
+                    delay.as_millis()
+                );
                 tokio::time::sleep(delay).await;
             }
 
@@ -355,45 +361,68 @@ impl AnthropicAdapter {
                     if status.as_u16() == 429 {
                         if total_attempt <= max_retries {
                             log::warn!("请求频率受限(429), model={}, 准备重试", self.model);
-                            _last_error = Some(CommandError::llm(1003, "请求频率受限，正在重试".to_string()));
+                            _last_error = Some(CommandError::llm(
+                                1003,
+                                "请求频率受限，正在重试".to_string(),
+                            ));
                             is_dns_failure = false;
                             continue;
                         }
-                        return Err(CommandError::llm(1003, format!("请求频率受限: {}", error_body)));
+                        return Err(CommandError::llm(
+                            1003,
+                            format!("请求频率受限: {}", error_body),
+                        ));
                     }
                     if status.as_u16() == 404 {
                         log::error!("模型不存在(404), model={}", self.model);
-                        return Err(CommandError::llm(1005, format!("模型不存在: {}", error_body)));
+                        return Err(CommandError::llm(
+                            1005,
+                            format!("模型不存在: {}", error_body),
+                        ));
                     }
                     if status.as_u16() == 400 {
                         log::error!("请求参数错误(400), model={}", self.model);
-                        return Err(CommandError::llm(1007, format!("请求参数错误: {}", error_body)));
+                        return Err(CommandError::llm(
+                            1007,
+                            format!("请求参数错误: {}", error_body),
+                        ));
                     }
                     // Anthropic 特有的过载错误码 529
                     if status.as_u16() == 529 {
                         if total_attempt <= max_retries {
                             log::warn!("API 过载(529), model={}, 准备重试", self.model);
-                            _last_error = Some(CommandError::llm(1003, "API 过载，正在重试".to_string()));
+                            _last_error =
+                                Some(CommandError::llm(1003, "API 过载，正在重试".to_string()));
                             is_dns_failure = false;
                             continue;
                         }
                         return Err(CommandError::llm(1003, format!("API 过载: {}", error_body)));
                     }
                     // 5xx 服务端错误，可重试
-                    if status.as_u16() >= 500 && status.as_u16() != 529 && total_attempt <= max_retries {
+                    if status.as_u16() >= 500
+                        && status.as_u16() != 529
+                        && total_attempt <= max_retries
+                    {
                         log::warn!("服务端错误({}), model={}, 准备重试", status, self.model);
-                        _last_error = Some(CommandError::llm(1001, format!("服务端错误 ({}), 正在重试", status)));
+                        _last_error = Some(CommandError::llm(
+                            1001,
+                            format!("服务端错误 ({}), 正在重试", status),
+                        ));
                         is_dns_failure = false;
                         continue;
                     }
 
-                    _last_error = Some(CommandError::llm(1000, format!("API 请求失败 ({}): {}", status, error_body)));
+                    _last_error = Some(CommandError::llm(
+                        1000,
+                        format!("API 请求失败 ({}): {}", status, error_body),
+                    ));
                 }
                 Err(e) => {
                     if e.is_timeout() {
                         if total_attempt <= max_retries {
                             log::warn!("请求超时, model={}, 准备重试", self.model);
-                            _last_error = Some(CommandError::llm(1006, "请求超时，正在重试".to_string()));
+                            _last_error =
+                                Some(CommandError::llm(1006, "请求超时，正在重试".to_string()));
                             is_dns_failure = false;
                             continue;
                         }
@@ -426,7 +455,11 @@ impl AnthropicAdapter {
         }
 
         let err = _last_error.unwrap_or_else(|| CommandError::llm(1000, "未知错误".to_string()));
-        log::error!("请求最终失败, model={}, 重试耗尽, 错误: {}", self.model, err.message);
+        log::error!(
+            "请求最终失败, model={}, 重试耗尽, 错误: {}",
+            self.model,
+            err.message
+        );
         Err(err)
     }
 
@@ -519,6 +552,7 @@ impl AnthropicAdapter {
                     tool_call_id: None,
                     reasoning_content,
                     attachments: None,
+                    metadata: None,
                 },
                 finish_reason,
             }],
@@ -532,22 +566,30 @@ impl AnthropicAdapter {
 /// - Anthropic: cache_read_input_tokens
 /// - DeepSeek:  prompt_cache_hit_tokens / prompt_cache_miss_tokens
 fn extract_cache_fields(u: &serde_json::Map<String, serde_json::Value>) -> (u64, u64, u64) {
-    let cache_hit = u.get("cache_read_input_tokens")
+    let cache_hit = u
+        .get("cache_read_input_tokens")
         .and_then(|v| v.as_u64())
         .unwrap_or(0)
-        .max(u.get("prompt_cache_hit_tokens")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0));
+        .max(
+            u.get("prompt_cache_hit_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0),
+        );
 
-    let cache_miss = u.get("prompt_cache_miss_tokens")
+    let cache_miss = u
+        .get("prompt_cache_miss_tokens")
         .and_then(|v| v.as_u64())
         .unwrap_or_else(|| {
             let input = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let read = u.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let read = u
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
             input.saturating_sub(read)
         });
 
-    let creation = u.get("cache_creation_input_tokens")
+    let creation = u
+        .get("cache_creation_input_tokens")
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
 
@@ -570,7 +612,11 @@ impl LlmProvider for AnthropicAdapter {
         let body = self.build_request_body(messages, tools, false, None);
         let response = self.send_with_retry(&url, &body).await?;
         let value: Value = response.json().await.map_err(|e| {
-            log::error!("解析 Anthropic 非流式响应失败, model={}, 错误: {}", self.model, e);
+            log::error!(
+                "解析 Anthropic 非流式响应失败, model={}, 错误: {}",
+                self.model,
+                e
+            );
             CommandError::llm(1000, format!("解析响应失败: {}", e))
         })?;
         log::info!("Anthropic 非流式请求完成, model={}", self.model);
@@ -625,8 +671,17 @@ impl LlmProvider for AnthropicAdapter {
                             let data: Value = match serde_json::from_str(&data_line) {
                                 Ok(v) => v,
                                 Err(e) => {
-                                    log::error!("解析 Anthropic SSE 数据失败, model={}, 错误: {}", model_name, e);
-                                    let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                    log::error!(
+                                        "解析 Anthropic SSE 数据失败, model={}, 错误: {}",
+                                        model_name,
+                                        e
+                                    );
+                                    let _ = tx
+                                        .send(Err(CommandError::llm(
+                                            1000,
+                                            format!("解析 SSE 数据失败: {}", e),
+                                        )))
+                                        .await;
                                     continue;
                                 }
                             };
@@ -637,14 +692,13 @@ impl LlmProvider for AnthropicAdapter {
                             match msg_type {
                                 "message_start" => {
                                     // 消息开始，提取 message id 和 role，以及 usage（含缓存字段）
-                                    let msg_id = data["message"]["id"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string();
+                                    let msg_id =
+                                        data["message"]["id"].as_str().unwrap_or("").to_string();
 
                                     // 捕获输入 usage（含 cache 字段，兼容 Anthropic 和 DeepSeek 命名）
                                     if let Some(u) = data["message"]["usage"].as_object() {
-                                        let (cache_hit, cache_miss, cache_creation) = extract_cache_fields(u);
+                                        let (cache_hit, cache_miss, cache_creation) =
+                                            extract_cache_fields(u);
                                         input_usage = Some(ChatUsage {
                                             prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
                                             completion_tokens: 0,
@@ -652,7 +706,9 @@ impl LlmProvider for AnthropicAdapter {
                                             prompt_cache_hit_tokens: cache_hit,
                                             prompt_cache_miss_tokens: cache_miss,
                                             cache_creation_input_tokens: cache_creation,
-                                            cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
+                                            cache_read_input_tokens: u["cache_read_input_tokens"]
+                                                .as_u64()
+                                                .unwrap_or(0),
                                             cached_content_token_count: 0,
                                         });
                                     }
@@ -669,8 +725,8 @@ impl LlmProvider for AnthropicAdapter {
                                             },
                                             finish_reason: None,
                                         }],
-                                    usage: None,
-                                };
+                                        usage: None,
+                                    };
                                     if tx.send(Ok(chunk)).await.is_err() {
                                         return;
                                     }
@@ -709,16 +765,14 @@ impl LlmProvider for AnthropicAdapter {
                                                     },
                                                     finish_reason: None,
                                                 }],
-                                            usage: None,
-                                        };
+                                                usage: None,
+                                            };
                                             if tx.send(Ok(chunk)).await.is_err() {
                                                 return;
                                             }
                                         }
-                                        "text" => {
-                                        }
-                                        "thinking" => {
-                                        }
+                                        "text" => {}
+                                        "thinking" => {}
                                         _ => {}
                                     }
                                 }
@@ -741,16 +795,15 @@ impl LlmProvider for AnthropicAdapter {
                                                     },
                                                     finish_reason: None,
                                                 }],
-                                            usage: None,
-                                        };
+                                                usage: None,
+                                            };
                                             if tx.send(Ok(chunk)).await.is_err() {
                                                 return;
                                             }
                                         }
                                         "input_json_delta" => {
-                                            let partial_json = delta["partial_json"]
-                                                .as_str()
-                                                .unwrap_or("");
+                                            let partial_json =
+                                                delta["partial_json"].as_str().unwrap_or("");
                                             let current_tool_index = if tool_call_counter > 0 {
                                                 tool_call_counter - 1
                                             } else {
@@ -773,14 +826,15 @@ impl LlmProvider for AnthropicAdapter {
                                                     },
                                                     finish_reason: None,
                                                 }],
-                                            usage: None,
-                                        };
+                                                usage: None,
+                                            };
                                             if tx.send(Ok(chunk)).await.is_err() {
                                                 return;
                                             }
                                         }
                                         "thinking_delta" => {
-                                            let thinking_text = delta["thinking"].as_str().unwrap_or("");
+                                            let thinking_text =
+                                                delta["thinking"].as_str().unwrap_or("");
                                             let chunk = StreamChunk {
                                                 id: String::new(),
                                                 choices: vec![StreamChoice {
@@ -788,13 +842,15 @@ impl LlmProvider for AnthropicAdapter {
                                                     delta: StreamDelta {
                                                         role: None,
                                                         content: None,
-                                                        reasoning_content: Some(thinking_text.to_string()),
+                                                        reasoning_content: Some(
+                                                            thinking_text.to_string(),
+                                                        ),
                                                         tool_calls: None,
                                                     },
                                                     finish_reason: None,
                                                 }],
-                                            usage: None,
-                                        };
+                                                usage: None,
+                                            };
                                             if tx.send(Ok(chunk)).await.is_err() {
                                                 return;
                                             }
@@ -802,13 +858,11 @@ impl LlmProvider for AnthropicAdapter {
                                         _ => {}
                                     }
                                 }
-                                "content_block_stop" => {
-                                }
+                                "content_block_stop" => {}
                                 "message_delta" => {
                                     // 消息级别更新，包含 stop_reason 和 usage（output_tokens）
-                                    let stop_reason = data["delta"]["stop_reason"]
-                                        .as_str()
-                                        .map(|r| match r {
+                                    let stop_reason =
+                                        data["delta"]["stop_reason"].as_str().map(|r| match r {
                                             "end_turn" => "stop".to_string(),
                                             "tool_use" => "tool_calls".to_string(),
                                             "max_tokens" => "length".to_string(),
@@ -817,26 +871,37 @@ impl LlmProvider for AnthropicAdapter {
                                         });
 
                                     // 从 message_delta 提取 output 用量，与 input_usage 合并
-                                    let usage = data.get("usage").and_then(|u| u.as_object()).map(|u| {
-                                        let output_tokens = u["output_tokens"].as_u64().unwrap_or(0);
-                                        let total_input = input_usage.as_ref()
-                                            .map(|i| i.prompt_tokens)
-                                            .unwrap_or(0);
-                                        ChatUsage {
-                                            prompt_tokens: total_input,
-                                            completion_tokens: output_tokens,
-                                            total_tokens: total_input + output_tokens,
-                                            prompt_cache_hit_tokens: input_usage.as_ref()
-                                                .map(|i| i.prompt_cache_hit_tokens).unwrap_or(0),
-                                            prompt_cache_miss_tokens: input_usage.as_ref()
-                                                .map(|i| i.prompt_cache_miss_tokens).unwrap_or(0),
-                                            cache_creation_input_tokens: input_usage.as_ref()
-                                                .map(|i| i.cache_creation_input_tokens).unwrap_or(0),
-                                            cache_read_input_tokens: input_usage.as_ref()
-                                                .map(|i| i.cache_read_input_tokens).unwrap_or(0),
-                                            cached_content_token_count: 0,
-                                        }
-                                    });
+                                    let usage =
+                                        data.get("usage").and_then(|u| u.as_object()).map(|u| {
+                                            let output_tokens =
+                                                u["output_tokens"].as_u64().unwrap_or(0);
+                                            let total_input = input_usage
+                                                .as_ref()
+                                                .map(|i| i.prompt_tokens)
+                                                .unwrap_or(0);
+                                            ChatUsage {
+                                                prompt_tokens: total_input,
+                                                completion_tokens: output_tokens,
+                                                total_tokens: total_input + output_tokens,
+                                                prompt_cache_hit_tokens: input_usage
+                                                    .as_ref()
+                                                    .map(|i| i.prompt_cache_hit_tokens)
+                                                    .unwrap_or(0),
+                                                prompt_cache_miss_tokens: input_usage
+                                                    .as_ref()
+                                                    .map(|i| i.prompt_cache_miss_tokens)
+                                                    .unwrap_or(0),
+                                                cache_creation_input_tokens: input_usage
+                                                    .as_ref()
+                                                    .map(|i| i.cache_creation_input_tokens)
+                                                    .unwrap_or(0),
+                                                cache_read_input_tokens: input_usage
+                                                    .as_ref()
+                                                    .map(|i| i.cache_read_input_tokens)
+                                                    .unwrap_or(0),
+                                                cached_content_token_count: 0,
+                                            }
+                                        });
 
                                     let chunk = StreamChunk {
                                         id: String::new(),
@@ -850,8 +915,8 @@ impl LlmProvider for AnthropicAdapter {
                                             },
                                             finish_reason: stop_reason,
                                         }],
-                                    usage,
-                                };
+                                        usage,
+                                    };
                                     if tx.send(Ok(chunk)).await.is_err() {
                                         return;
                                     }
@@ -865,11 +930,19 @@ impl LlmProvider for AnthropicAdapter {
                                 }
                                 "error" => {
                                     // 流式错误事件
-                                    let error_msg = data["error"]["message"]
-                                        .as_str()
-                                        .unwrap_or("未知错误");
-                                    log::error!("Anthropic 流式错误, model={}, 错误: {}", model_name, error_msg);
-                                    let _ = tx.send(Err(CommandError::llm(1000, format!("Anthropic 流式错误: {}", error_msg)))).await;
+                                    let error_msg =
+                                        data["error"]["message"].as_str().unwrap_or("未知错误");
+                                    log::error!(
+                                        "Anthropic 流式错误, model={}, 错误: {}",
+                                        model_name,
+                                        error_msg
+                                    );
+                                    let _ = tx
+                                        .send(Err(CommandError::llm(
+                                            1000,
+                                            format!("Anthropic 流式错误: {}", error_msg),
+                                        )))
+                                        .await;
                                     return;
                                 }
                                 _ => {
@@ -880,7 +953,9 @@ impl LlmProvider for AnthropicAdapter {
                     }
                     Err(e) => {
                         log::error!("流读取错误, model={}, 错误: {}", model_name, e);
-                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        let _ = tx
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
+                            .await;
                         return;
                     }
                 }
@@ -898,7 +973,11 @@ impl LlmProvider for AnthropicAdapter {
         tools: &[ToolDefinition],
         max_tokens_override: u32,
     ) -> Result<mpsc::Receiver<Result<StreamChunk, CommandError>>, CommandError> {
-        log::info!("发送 Anthropic 流式请求 (max_tokens={}), model={}", max_tokens_override, self.model);
+        log::info!(
+            "发送 Anthropic 流式请求 (max_tokens={}), model={}",
+            max_tokens_override,
+            self.model
+        );
         let url = self.build_api_url();
         let body = self.build_request_body(messages, tools, true, Some(max_tokens_override));
         // 使用流式专用客户端（禁用压缩），避免 bytes_stream 解码错误
@@ -948,8 +1027,17 @@ impl LlmProvider for AnthropicAdapter {
                             let value: Value = match serde_json::from_str(data) {
                                 Ok(v) => v,
                                 Err(e) => {
-                                    log::error!("解析 Anthropic SSE 数据失败, model={}, 错误: {}", model_name, e);
-                                    let _ = tx.send(Err(CommandError::llm(1000, format!("解析 SSE 数据失败: {}", e)))).await;
+                                    log::error!(
+                                        "解析 Anthropic SSE 数据失败, model={}, 错误: {}",
+                                        model_name,
+                                        e
+                                    );
+                                    let _ = tx
+                                        .send(Err(CommandError::llm(
+                                            1000,
+                                            format!("解析 SSE 数据失败: {}", e),
+                                        )))
+                                        .await;
                                     continue;
                                 }
                             };
@@ -957,11 +1045,13 @@ impl LlmProvider for AnthropicAdapter {
                             match event_type.as_str() {
                                 "message_start" => {
                                     // 消息开始，提取 message id 和 usage（含缓存字段）
-                                    let _ = value["message"]["id"].as_str().unwrap_or("").to_string();
+                                    let _ =
+                                        value["message"]["id"].as_str().unwrap_or("").to_string();
 
                                     // 捕获输入 usage（含 cache 字段，兼容 Anthropic 和 DeepSeek 命名）
                                     if let Some(u) = value["message"]["usage"].as_object() {
-                                        let (cache_hit, cache_miss, cache_creation) = extract_cache_fields(u);
+                                        let (cache_hit, cache_miss, cache_creation) =
+                                            extract_cache_fields(u);
                                         input_usage = Some(ChatUsage {
                                             prompt_tokens: u["input_tokens"].as_u64().unwrap_or(0),
                                             completion_tokens: 0,
@@ -969,7 +1059,9 @@ impl LlmProvider for AnthropicAdapter {
                                             prompt_cache_hit_tokens: cache_hit,
                                             prompt_cache_miss_tokens: cache_miss,
                                             cache_creation_input_tokens: cache_creation,
-                                            cache_read_input_tokens: u["cache_read_input_tokens"].as_u64().unwrap_or(0),
+                                            cache_read_input_tokens: u["cache_read_input_tokens"]
+                                                .as_u64()
+                                                .unwrap_or(0),
                                             cached_content_token_count: 0,
                                         });
                                     }
@@ -979,8 +1071,14 @@ impl LlmProvider for AnthropicAdapter {
                                     if let Some(content_block) = value.get("content_block") {
                                         if content_block["type"] == "tool_use" {
                                             // tool_use 块开始，提前发射 tool_call 事件
-                                            let tool_name = content_block["name"].as_str().unwrap_or("").to_string();
-                                            let tool_id = content_block["id"].as_str().unwrap_or("").to_string();
+                                            let tool_name = content_block["name"]
+                                                .as_str()
+                                                .unwrap_or("")
+                                                .to_string();
+                                            let tool_id = content_block["id"]
+                                                .as_str()
+                                                .unwrap_or("")
+                                                .to_string();
                                             let index = tool_call_counter;
                                             tool_call_counter += 1;
 
@@ -1001,8 +1099,8 @@ impl LlmProvider for AnthropicAdapter {
                                                     },
                                                     finish_reason: None,
                                                 }],
-                                            usage: None,
-                                        };
+                                                usage: None,
+                                            };
                                             if tx.send(Ok(chunk)).await.is_err() {
                                                 return;
                                             }
@@ -1030,15 +1128,16 @@ impl LlmProvider for AnthropicAdapter {
                                                         },
                                                         finish_reason: None,
                                                     }],
-                                                usage: None,
-                                            };
+                                                    usage: None,
+                                                };
                                                 if tx.send(Ok(chunk)).await.is_err() {
                                                     return;
                                                 }
                                             }
                                             "thinking_delta" => {
                                                 // 思考增量（Extended Thinking）
-                                                let thought = delta["thinking"].as_str().unwrap_or("");
+                                                let thought =
+                                                    delta["thinking"].as_str().unwrap_or("");
                                                 let chunk = StreamChunk {
                                                     id: String::new(),
                                                     choices: vec![StreamChoice {
@@ -1046,20 +1145,23 @@ impl LlmProvider for AnthropicAdapter {
                                                         delta: StreamDelta {
                                                             role: None,
                                                             content: None,
-                                                            reasoning_content: Some(thought.to_string()),
+                                                            reasoning_content: Some(
+                                                                thought.to_string(),
+                                                            ),
                                                             tool_calls: None,
                                                         },
                                                         finish_reason: None,
                                                     }],
-                                                usage: None,
-                                            };
+                                                    usage: None,
+                                                };
                                                 if tx.send(Ok(chunk)).await.is_err() {
                                                     return;
                                                 }
                                             }
                                             "input_json_delta" => {
                                                 // tool_use 参数增量
-                                                let partial_json = delta["partial_json"].as_str().unwrap_or("");
+                                                let partial_json =
+                                                    delta["partial_json"].as_str().unwrap_or("");
                                                 // 找到当前 tool_call 的索引（最后一个）
                                                 let index = tool_call_counter.saturating_sub(1);
                                                 let chunk = StreamChunk {
@@ -1079,8 +1181,8 @@ impl LlmProvider for AnthropicAdapter {
                                                         },
                                                         finish_reason: None,
                                                     }],
-                                                usage: None,
-                                            };
+                                                    usage: None,
+                                                };
                                                 if tx.send(Ok(chunk)).await.is_err() {
                                                     return;
                                                 }
@@ -1095,35 +1197,49 @@ impl LlmProvider for AnthropicAdapter {
                                 "message_delta" => {
                                     // 消息级增量（包含 stop_reason 和 usage）
                                     if let Some(delta) = value.get("delta") {
-                                        let stop_reason = delta["stop_reason"].as_str().map(|r| match r {
-                                            "end_turn" => "stop".to_string(),
-                                            "tool_use" => "tool_calls".to_string(),
-                                            "max_tokens" => "length".to_string(),
-                                            "stop_sequence" => "stop".to_string(),
-                                            other => other.to_string(),
-                                        });
+                                        let stop_reason =
+                                            delta["stop_reason"].as_str().map(|r| match r {
+                                                "end_turn" => "stop".to_string(),
+                                                "tool_use" => "tool_calls".to_string(),
+                                                "max_tokens" => "length".to_string(),
+                                                "stop_sequence" => "stop".to_string(),
+                                                other => other.to_string(),
+                                            });
 
                                         // 从 message_delta 提取 output 用量，与 input_usage 合并
-                                        let usage = value.get("usage").and_then(|u| u.as_object()).map(|u| {
-                                            let output_tokens = u["output_tokens"].as_u64().unwrap_or(0);
-                                            let total_input = input_usage.as_ref()
-                                                .map(|i| i.prompt_tokens)
-                                                .unwrap_or(0);
-                                            ChatUsage {
-                                                prompt_tokens: total_input,
-                                                completion_tokens: output_tokens,
-                                                total_tokens: total_input + output_tokens,
-                                                prompt_cache_hit_tokens: input_usage.as_ref()
-                                                    .map(|i| i.prompt_cache_hit_tokens).unwrap_or(0),
-                                                prompt_cache_miss_tokens: input_usage.as_ref()
-                                                    .map(|i| i.prompt_cache_miss_tokens).unwrap_or(0),
-                                                cache_creation_input_tokens: input_usage.as_ref()
-                                                    .map(|i| i.cache_creation_input_tokens).unwrap_or(0),
-                                                cache_read_input_tokens: input_usage.as_ref()
-                                                    .map(|i| i.cache_read_input_tokens).unwrap_or(0),
-                                                cached_content_token_count: 0,
-                                            }
-                                        });
+                                        let usage = value
+                                            .get("usage")
+                                            .and_then(|u| u.as_object())
+                                            .map(|u| {
+                                                let output_tokens =
+                                                    u["output_tokens"].as_u64().unwrap_or(0);
+                                                let total_input = input_usage
+                                                    .as_ref()
+                                                    .map(|i| i.prompt_tokens)
+                                                    .unwrap_or(0);
+                                                ChatUsage {
+                                                    prompt_tokens: total_input,
+                                                    completion_tokens: output_tokens,
+                                                    total_tokens: total_input + output_tokens,
+                                                    prompt_cache_hit_tokens: input_usage
+                                                        .as_ref()
+                                                        .map(|i| i.prompt_cache_hit_tokens)
+                                                        .unwrap_or(0),
+                                                    prompt_cache_miss_tokens: input_usage
+                                                        .as_ref()
+                                                        .map(|i| i.prompt_cache_miss_tokens)
+                                                        .unwrap_or(0),
+                                                    cache_creation_input_tokens: input_usage
+                                                        .as_ref()
+                                                        .map(|i| i.cache_creation_input_tokens)
+                                                        .unwrap_or(0),
+                                                    cache_read_input_tokens: input_usage
+                                                        .as_ref()
+                                                        .map(|i| i.cache_read_input_tokens)
+                                                        .unwrap_or(0),
+                                                    cached_content_token_count: 0,
+                                                }
+                                            });
 
                                         let chunk = StreamChunk {
                                             id: String::new(),
@@ -1152,9 +1268,19 @@ impl LlmProvider for AnthropicAdapter {
                                     // 心跳，忽略
                                 }
                                 "error" => {
-                                    let error_msg = value["error"]["message"].as_str().unwrap_or("未知错误");
-                                    log::error!("Anthropic SSE 错误事件, model={}, 错误: {}", model_name, error_msg);
-                                    let _ = tx.send(Err(CommandError::llm(1000, format!("API 错误: {}", error_msg)))).await;
+                                    let error_msg =
+                                        value["error"]["message"].as_str().unwrap_or("未知错误");
+                                    log::error!(
+                                        "Anthropic SSE 错误事件, model={}, 错误: {}",
+                                        model_name,
+                                        error_msg
+                                    );
+                                    let _ = tx
+                                        .send(Err(CommandError::llm(
+                                            1000,
+                                            format!("API 错误: {}", error_msg),
+                                        )))
+                                        .await;
                                     return;
                                 }
                                 _ => {
@@ -1165,7 +1291,9 @@ impl LlmProvider for AnthropicAdapter {
                     }
                     Err(e) => {
                         log::error!("流读取错误, model={}, 错误: {}", model_name, e);
-                        let _ = tx.send(Err(CommandError::llm(1000, format!("流读取错误: {}", e)))).await;
+                        let _ = tx
+                            .send(Err(CommandError::llm(1000, format!("流读取错误: {}", e))))
+                            .await;
                         return;
                     }
                 }
@@ -1186,6 +1314,7 @@ impl LlmProvider for AnthropicAdapter {
             tool_call_id: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
         }];
         let url = self.build_api_url();
         let body = self.build_request_body(&test_messages, &[], false, None);
@@ -1195,7 +1324,11 @@ impl LlmProvider for AnthropicAdapter {
                 let latency_ms = start.elapsed().as_millis() as u64;
                 let value: Value = response.json().await.unwrap_or_default();
                 let model_name = value["model"].as_str().unwrap_or(&self.model).to_string();
-                log::info!("Anthropic 连接测试成功, model={}, 延迟={}ms", model_name, latency_ms);
+                log::info!(
+                    "Anthropic 连接测试成功, model={}, 延迟={}ms",
+                    model_name,
+                    latency_ms
+                );
                 Ok(ConnectionResult {
                     success: true,
                     provider_id: None,
@@ -1207,7 +1340,11 @@ impl LlmProvider for AnthropicAdapter {
                 })
             }
             Err(e) => {
-                log::error!("Anthropic 连接测试失败, model={}, 错误: {}", self.model, e.message);
+                log::error!(
+                    "Anthropic 连接测试失败, model={}, 错误: {}",
+                    self.model,
+                    e.message
+                );
                 Ok(ConnectionResult {
                     success: false,
                     provider_id: None,
@@ -1250,7 +1387,8 @@ impl LlmProvider for AnthropicAdapter {
         let start = std::time::Instant::now();
         let url = self.build_api_url();
 
-        let result = self.client
+        let result = self
+            .client
             .head(&url)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -1266,7 +1404,10 @@ impl LlmProvider for AnthropicAdapter {
                 let reachable = status < 500;
                 log::info!(
                     "轻量级健康检查, model={}, status={}, 可达={}, 延迟={}ms",
-                    self.model, status, reachable, latency_ms
+                    self.model,
+                    status,
+                    reachable,
+                    latency_ms
                 );
                 Ok(ConnectionResult {
                     success: reachable,
@@ -1274,7 +1415,11 @@ impl LlmProvider for AnthropicAdapter {
                     latency_ms,
                     model_info: None,
                     model: None,
-                    error_message: if reachable { None } else { Some(format!("服务端错误 ({})", status)) },
+                    error_message: if reachable {
+                        None
+                    } else {
+                        Some(format!("服务端错误 ({})", status))
+                    },
                     error: None,
                 })
             }

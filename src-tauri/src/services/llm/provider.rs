@@ -1,13 +1,18 @@
+use crate::errors::{CommandError, LLM_CONNECTION_REFUSED, LLM_NETWORK_UNREACHABLE, LLM_SSL_ERROR};
+use crate::models::llm::{
+    ChatMessage, ChatResponse, ConnectionResult, StreamChunk, ToolDefinition,
+};
 use async_trait::async_trait;
-use crate::errors::{CommandError, LLM_CONNECTION_REFUSED, LLM_SSL_ERROR, LLM_NETWORK_UNREACHABLE};
-use crate::models::llm::{ChatMessage, ChatResponse, StreamChunk, ToolDefinition, ConnectionResult};
 
 /// 检测 reqwest 错误是否为 DNS 解析失败
 /// DNS 失败通常是网络切换后的瞬时问题，应更积极地重试
 pub fn is_dns_error(e: &reqwest::Error) -> bool {
     let msg = e.to_string().to_lowercase();
-    msg.contains("dns") || msg.contains("resolve") || msg.contains("name resolution")
-        || msg.contains("getaddrinfo") || msg.contains("nodename")
+    msg.contains("dns")
+        || msg.contains("resolve")
+        || msg.contains("name resolution")
+        || msg.contains("getaddrinfo")
+        || msg.contains("nodename")
 }
 
 /// 检测 reqwest 错误是否为连接被拒绝
@@ -21,7 +26,9 @@ pub fn is_connection_refused_error(e: &reqwest::Error) -> bool {
 /// 通常由系统时间不正确或证书问题导致
 pub fn is_ssl_error(e: &reqwest::Error) -> bool {
     let msg = e.to_string().to_lowercase();
-    msg.contains("ssl") || msg.contains("tls") || msg.contains("certificate")
+    msg.contains("ssl")
+        || msg.contains("tls")
+        || msg.contains("certificate")
         || msg.contains("handshake")
 }
 
@@ -29,7 +36,8 @@ pub fn is_ssl_error(e: &reqwest::Error) -> bool {
 /// 通常表示没有可用的网络接口
 pub fn is_network_unreachable_error(e: &reqwest::Error) -> bool {
     let msg = e.to_string().to_lowercase();
-    msg.contains("network unreachable") || msg.contains("unreachable")
+    msg.contains("network unreachable")
+        || msg.contains("unreachable")
         || msg.contains("no route to host")
 }
 
@@ -37,7 +45,10 @@ pub fn is_network_unreachable_error(e: &reqwest::Error) -> bool {
 /// 优先级：DNS > 连接被拒绝 > SSL > 网络不可达 > 通用连接失败
 pub fn classify_connection_error(e: &reqwest::Error) -> (u32, String) {
     if is_dns_error(e) {
-        (crate::errors::LLM_DNS_RESOLVE_FAILED, format!("DNS解析失败: {}", e))
+        (
+            crate::errors::LLM_DNS_RESOLVE_FAILED,
+            format!("DNS解析失败: {}", e),
+        )
     } else if is_connection_refused_error(e) {
         (LLM_CONNECTION_REFUSED, format!("AI服务拒绝连接: {}", e))
     } else if is_ssl_error(e) {
@@ -45,7 +56,10 @@ pub fn classify_connection_error(e: &reqwest::Error) -> (u32, String) {
     } else if is_network_unreachable_error(e) {
         (LLM_NETWORK_UNREACHABLE, format!("网络不可达: {}", e))
     } else {
-        (crate::errors::LLM_CONNECTION_FAILED, format!("网络错误: {}", e))
+        (
+            crate::errors::LLM_CONNECTION_FAILED,
+            format!("网络错误: {}", e),
+        )
     }
 }
 

@@ -7,14 +7,9 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     /// 文本部分
-    Text {
-        text: String,
-    },
+    Text { text: String },
     /// 图片部分 (base64)
-    Image {
-        mime_type: String,
-        data: String,
-    },
+    Image { mime_type: String, data: String },
 }
 
 /// supports_vision 默认值：true（默认支持视觉）
@@ -87,7 +82,6 @@ pub struct ContextUsageInfo {
     pub total_message_count: usize,
 
     // --- 新增缓存统计字段 ---
-
     /// 本轮请求的缓存命中 tokens（来自 API 响应）
     #[serde(default)]
     pub cache_hit_tokens: u64,
@@ -161,6 +155,9 @@ pub struct ChatMessage {
     /// 附件元信息 (用于持久化，不发送给 LLM)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<crate::models::message::AttachmentMeta>>,
+    /// 工作流节点扩展信息 (用于持久化，不发送给 LLM)
+    #[serde(skip)]
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// LLM 聊天请求
@@ -202,7 +199,6 @@ pub struct ChatUsage {
     pub total_tokens: u64,
 
     // --- 新增缓存字段 ---
-
     /// DeepSeek: 命中缓存的输入 tokens
     #[serde(default)]
     pub prompt_cache_hit_tokens: u64,

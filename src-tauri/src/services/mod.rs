@@ -1,8 +1,13 @@
-pub mod llm;
-pub mod handler;
-pub mod tool;
 pub mod agent;
+pub mod attachment;
+pub mod code;
 pub mod document;
 pub mod fs_watcher;
-pub mod attachment;
+pub mod handler;
+pub mod llm;
+pub mod lsp;
 pub mod network_monitor;
+pub mod permission;
+pub mod skill;
+pub mod tool;
+pub mod web;

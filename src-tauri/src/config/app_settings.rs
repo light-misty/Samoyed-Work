@@ -67,8 +67,39 @@ impl Default for AppearanceSettings {
     }
 }
 
-/// 通用设置
+/// SessionCompaction 配置（上下文压缩）
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactionConfig {
+    /// 是否启用上下文压缩
+    pub enabled: bool,
+    /// 触发压缩的 token 阈值（占上下文窗口的百分比，如 0.8 表示 80%）
+    pub trigger_threshold: f32,
+    /// 压缩后保留的最近消息数
+    pub keep_recent_messages: usize,
+    /// 压缩时保留的系统提示词 token 数
+    pub keep_system_tokens: usize,
+    /// 是否压缩工具输出（旧工具输出会被 prune）
+    pub compact_tool_outputs: bool,
+    /// 工具输出保留的最大字符数（超过则截断）
+    pub tool_output_max_chars: usize,
+}
+
+impl Default for CompactionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 2000,
+        }
+    }
+}
+
+/// 通用设置
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneralSettings {
     #[serde(default)]
@@ -81,17 +112,9 @@ pub struct GeneralSettings {
     pub author_company: String,
     #[serde(default)]
     pub confirmation_level: ConfirmationLevel,
-}
-
-impl Default for GeneralSettings {
-    fn default() -> Self {
-        Self {
-            author_name: String::new(),
-            author_email: String::new(),
-            author_company: String::new(),
-            confirmation_level: ConfirmationLevel::default(),
-        }
-    }
+    /// 上下文压缩配置
+    #[serde(default)]
+    pub compaction: CompactionConfig,
 }
 
 /// 版本快照设置
@@ -197,6 +220,211 @@ impl Default for UpdateSettings {
     }
 }
 
+/// WebSearch 配置（网页搜索）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WebSearchConfig {
+    /// 是否启用网页搜索
+    pub enabled: bool,
+    /// 搜索后端类型（如 "mcp"）
+    pub backend: String,
+    /// MCP 端点地址
+    pub mcp_endpoint: String,
+    /// API 密钥（序列化时跳过，避免泄露到配置文件；反序列化缺失时使用默认空字符串）
+    #[serde(default, skip_serializing)]
+    pub api_key: String,
+    /// 单次搜索返回的最大结果数
+    pub max_results: usize,
+    /// 请求超时时间（秒）
+    pub timeout_seconds: u64,
+}
+
+/// WebSearch 默认是否启用
+fn default_web_search_enabled() -> bool {
+    true
+}
+
+/// WebSearch 默认后端
+fn default_web_search_backend() -> String {
+    "mcp".to_string()
+}
+
+/// WebSearch 默认 MCP 端点
+fn default_web_search_mcp_endpoint() -> String {
+    "https://mcp.exa.ai".to_string()
+}
+
+/// WebSearch 默认最大结果数
+fn default_web_search_max_results() -> usize {
+    5
+}
+
+/// WebSearch 默认超时时间（秒）
+fn default_web_search_timeout_seconds() -> u64 {
+    30
+}
+
+impl Default for WebSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_web_search_enabled(),
+            backend: default_web_search_backend(),
+            mcp_endpoint: default_web_search_mcp_endpoint(),
+            api_key: String::new(),
+            max_results: default_web_search_max_results(),
+            timeout_seconds: default_web_search_timeout_seconds(),
+        }
+    }
+}
+
+/// LSP 集成配置
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LspConfig {
+    /// 是否启用 LSP 集成
+    #[serde(default = "default_lsp_enabled")]
+    pub enabled: bool,
+    /// 实验性开关：控制是否将 LSP 工具暴露给 Agent（默认 false）
+    #[serde(default)]
+    pub experimental_enabled: bool,
+    /// LSP 服务器配置列表
+    #[serde(default = "default_lsp_servers")]
+    pub servers: Vec<LspServerConfigEntry>,
+    /// 缓存配置
+    #[serde(default)]
+    pub cache: LspCacheConfig,
+    /// 请求超时时间（秒）
+    #[serde(default = "default_lsp_request_timeout")]
+    pub request_timeout_seconds: u64,
+    /// 健康检查间隔（秒，0 表示禁用）
+    #[serde(default = "default_lsp_health_check_interval")]
+    pub health_check_interval_seconds: u64,
+}
+
+/// LSP 服务器配置项（用于配置文件）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LspServerConfigEntry {
+    /// 语言名称
+    pub language: String,
+    /// 启动命令
+    pub command: Vec<String>,
+    /// 根目录标识文件
+    #[serde(default)]
+    pub root_patterns: Vec<String>,
+    /// 初始化选项
+    #[serde(default)]
+    pub initialization_options: Option<serde_json::Value>,
+    /// 是否启用
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+/// LSP 缓存配置
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LspCacheConfig {
+    /// 是否启用缓存
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// 缓存 TTL（秒）
+    #[serde(default = "default_lsp_cache_ttl")]
+    pub ttl_seconds: u64,
+    /// 最大缓存条目数
+    #[serde(default = "default_lsp_cache_max_entries")]
+    pub max_entries: usize,
+}
+
+/// LSP 默认是否启用
+fn default_lsp_enabled() -> bool {
+    false
+}
+
+/// LSP 默认请求超时时间（秒）
+fn default_lsp_request_timeout() -> u64 {
+    30
+}
+
+/// LSP 默认健康检查间隔（秒）
+fn default_lsp_health_check_interval() -> u64 {
+    60
+}
+
+/// LSP 缓存默认 TTL（秒）
+fn default_lsp_cache_ttl() -> u64 {
+    300
+}
+
+/// LSP 缓存默认最大条目数
+fn default_lsp_cache_max_entries() -> usize {
+    500
+}
+
+/// LSP 默认服务器配置列表
+fn default_lsp_servers() -> Vec<LspServerConfigEntry> {
+    vec![
+        LspServerConfigEntry {
+            language: "rust".to_string(),
+            command: vec!["rust-analyzer".to_string()],
+            root_patterns: vec!["Cargo.toml".to_string()],
+            initialization_options: None,
+            enabled: true,
+        },
+        LspServerConfigEntry {
+            language: "python".to_string(),
+            command: vec!["pylsp".to_string()],
+            root_patterns: vec!["pyproject.toml".to_string(), "setup.py".to_string()],
+            initialization_options: None,
+            enabled: true,
+        },
+        LspServerConfigEntry {
+            language: "typescript".to_string(),
+            command: vec![
+                "typescript-language-server".to_string(),
+                "--stdio".to_string(),
+            ],
+            root_patterns: vec!["tsconfig.json".to_string(), "package.json".to_string()],
+            initialization_options: None,
+            enabled: true,
+        },
+        LspServerConfigEntry {
+            language: "go".to_string(),
+            command: vec!["gopls".to_string()],
+            root_patterns: vec!["go.mod".to_string()],
+            initialization_options: None,
+            enabled: true,
+        },
+    ]
+}
+
+/// 通用默认值：true
+fn default_true() -> bool {
+    true
+}
+
+impl Default for LspConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_lsp_enabled(),
+            experimental_enabled: false,
+            servers: default_lsp_servers(),
+            cache: LspCacheConfig::default(),
+            request_timeout_seconds: default_lsp_request_timeout(),
+            health_check_interval_seconds: default_lsp_health_check_interval(),
+        }
+    }
+}
+
+impl Default for LspCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_true(),
+            ttl_seconds: default_lsp_cache_ttl(),
+            max_entries: default_lsp_cache_max_entries(),
+        }
+    }
+}
+
 /// 应用设置，包含所有可配置项
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -222,9 +450,15 @@ pub struct AppSettings {
     #[serde(default)]
     pub preferred_provider_id: Option<String>,
     /// Git Bash 可执行文件路径（空字符串表示从 PATH 环境变量自动检测）
-    /// 用于 run_command 工具执行 Shell 命令
+    /// 用于 bash 工具执行 Shell 命令
     #[serde(default)]
     pub git_bash_path: String,
+    /// WebSearch 配置
+    #[serde(default)]
+    pub web_search: WebSearchConfig,
+    /// LSP 配置
+    #[serde(default)]
+    pub lsp: LspConfig,
 }
 
 /// Sidecar 默认请求超时时间（秒）
@@ -285,6 +519,8 @@ pub fn merge_with_defaults(
                 user_settings.general.author_company.clone()
             },
             confirmation_level: user_settings.general.confirmation_level.clone(),
+            // 上下文压缩配置直接保留用户设置（serde 反序列化时已用默认值填充缺失字段）
+            compaction: user_settings.general.compaction.clone(),
         },
         appearance: AppearanceSettings {
             theme_mode: user_settings.appearance.theme_mode.clone(),
@@ -355,5 +591,9 @@ pub fn merge_with_defaults(
         preferred_provider_id: user_settings.preferred_provider_id.clone(),
         // Git Bash 路径直接保留用户设置（空字符串表示自动检测）
         git_bash_path: user_settings.git_bash_path.clone(),
+        // WebSearch 配置直接保留用户设置（serde 反序列化时已用默认值填充缺失字段）
+        web_search: user_settings.web_search.clone(),
+        // LSP 配置直接保留用户设置（serde 反序列化时已用默认值填充缺失字段）
+        lsp: user_settings.lsp.clone(),
     }
 }

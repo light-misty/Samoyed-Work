@@ -1,7 +1,9 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
-import { Icon } from "../common/Icon";
+import { useAgentModeStore } from "../../stores/useAgentModeStore";
+import type { AgentMode } from "../../stores/useAgentModeStore";
+import { Icon, type IconName } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
 
 interface WorkflowTimelineProps {
@@ -28,7 +30,12 @@ function TypewriterText({ text }: { text: string }) {
     return () => clearInterval(interval);
   }, [text]);
 
-  return <span>{displayedText}</span>;
+  return (
+    <span className="typewriter-text">
+      <span aria-hidden="true" className="typewriter-text-placeholder">{text}</span>
+      <span className="typewriter-text-visible">{displayedText}</span>
+    </span>
+  );
 }
 
 /**
@@ -81,9 +88,11 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = requestAnimationFrame(() => {
         if (!scrollRef.current) return;
+        const el = scrollRef.current;
+        // 元素隐藏时（display: none）跳过滚动，避免 scrollHeight=0 导致 scrollTop 被重置
+        if (el.offsetParent === null && el.getClientRects().length === 0) return;
 
         isProgrammaticScrollRef.current = true;
-        const el = scrollRef.current;
 
         // 判断是否为会话切换：节点数减少或一次性增加超过1个
         // 节点数减少永远是会话切换（正常流程不会删除节点）
@@ -142,16 +151,7 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
 
   if (nodes.length === 0) {
     return (
-      <div className="wf-empty" role="status" aria-label={t('workflow.emptySession')}>
-        <h3 className="wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon">
-          <Icon name="book" size={42} className="wf-empty-book-icon" />
-          {typewriterVisible ? (
-            <TypewriterText text={t('workflow.startNewSession')} />
-          ) : (
-            t('workflow.startNewSession')
-          )}
-        </h3>
-      </div>
+      <EmptySessionTitle typewriterVisible={typewriterVisible} />
     );
   }
 
@@ -167,6 +167,46 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
       {nodes.map((node) => (
         <WorkflowNodeRenderer key={node.id} node={node} onRetry={onRetryError} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * 空会话标题配置：根据当前 Agent 模式选择对应的图标和文案
+ * - plan: 铅笔图标（plan-mode） + "Plan with DocAgent"
+ * - build: 代码括号图标 </>（code-brackets） + "Code with DocAgent"
+ * - document: 书本图标（book） + "Work with DocAgent"（原始样式）
+ */
+const EMPTY_MODE_CONFIG: Record<AgentMode, { icon: IconName; textKey: string }> = {
+  plan: { icon: 'plan-mode', textKey: 'workflow.startNewSessionPlan' },
+  build: { icon: 'code-brackets', textKey: 'workflow.startNewSessionCode' },
+  document: { icon: 'book', textKey: 'workflow.startNewSession' },
+};
+
+/**
+ * 空会话标题组件
+ * 根据当前 Agent 模式显示对应图标和文字。
+ * 图标直接显示（无动画），文字保持打字机效果（TypewriterText）。
+ * 模式切换时 TypewriterText 通过 text prop 变化自动重启打字动画。
+ */
+function EmptySessionTitle({ typewriterVisible }: { typewriterVisible: boolean }) {
+  const { t } = useTranslation();
+  const mode = useAgentModeStore((s) => s.mode);
+  const { icon, textKey } = EMPTY_MODE_CONFIG[mode];
+  const titleText = t(textKey);
+
+  return (
+    <div className="wf-empty" role="status" aria-label={t('workflow.emptySession')}>
+      <h3
+        className={`wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon wf-empty-mode-title wf-empty-mode-${mode}`}
+      >
+        <Icon name={icon} size={42} className="wf-empty-book-icon wf-empty-mode-icon" />
+        {typewriterVisible ? (
+          <TypewriterText text={titleText} />
+        ) : (
+          titleText
+        )}
+      </h3>
     </div>
   );
 }

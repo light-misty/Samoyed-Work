@@ -66,34 +66,34 @@ export function generateToolBrief(toolName: string, input: Record<string, unknow
     analyze: i18n.t('toolBrief.analyze'),
   };
   const formatMap: Record<string, string> = {
-    docx_handler: "Word",
-    xlsx_handler: "Excel",
-    pptx_handler: "PPT",
-    pdf_handler: "PDF",
+    docx: "Word",
+    xlsx: "Excel",
+    pptx: "PPT",
+    pdf: "PDF",
   };
   const action = actionMap[f("action")] || "";
   const format = formatMap[toolName] || "";
   switch (toolName) {
-    case "docx_handler":
-    case "xlsx_handler":
-    case "pptx_handler":
-    case "pdf_handler":
+    case "docx":
+    case "xlsx":
+    case "pptx":
+    case "pdf":
       // 流式阶段提前发射时参数可能为空，此时只显示格式名称
       if (action) {
         return `${action} ${format} ${f("path") || i18n.t('toolBrief.document')}`;
       }
       return `${format} ${f("path") || i18n.t('toolBrief.document')}`;
-    case "delete_file":
+    case "remove":
       return `${i18n.t('toolBrief.delete')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "search_files":
+    case "search":
       return `${i18n.t('toolBrief.search')} ${f("query") ? `"${f("query")}"` : i18n.t('toolBrief.file')}`;
-    case "list_directory":
+    case "list":
       return i18n.t('toolBrief.listDirectory');
-    case "read_file":
+    case "read":
       return `${i18n.t('toolBrief.read')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "write_text_file":
+    case "write":
       return `${i18n.t('toolBrief.write')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "run_command":
+    case "bash":
       return i18n.t('toolBrief.runCommand');
     case "write_script":
       // 显示脚本语言和文件名

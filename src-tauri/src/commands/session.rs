@@ -1,10 +1,10 @@
 use tauri::{AppHandle, State};
 
-use crate::db::session_repo;
 use crate::db::message_repo;
+use crate::db::session_repo;
 use crate::errors::CommandError;
-use crate::events::AgentEmitter;
 use crate::events::types;
+use crate::events::AgentEmitter;
 use crate::models::session::{
     CreateSessionParams, Session, SessionDetail, SessionFilter, SessionSummary,
 };
@@ -17,24 +17,26 @@ pub async fn create_session(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Session, CommandError> {
-    log::info!("create_session 请求: title={:?}, workspace_id={:?}, provider_id={:?}", params.title, params.workspace_id, params.provider_id);
+    log::info!(
+        "create_session 请求: title={:?}, workspace_id={:?}, provider_id={:?}",
+        params.title,
+        params.workspace_id,
+        params.provider_id
+    );
     let id = uuid::Uuid::new_v4().to_string();
     let title = params.title.unwrap_or_else(|| "新会话".to_string());
     let workspace_id = params.workspace_id.unwrap_or_default();
     let provider_id = params.provider_id.unwrap_or_default();
 
     let conn = state.db.conn()?;
-    session_repo::create_session(
-        &conn,
-        &id,
-        &workspace_id,
-        &title,
-        &provider_id,
-        "",
-    )?;
+    session_repo::create_session(&conn, &id, &workspace_id, &title, &provider_id, "")?;
 
     let session = session_repo::get_session(&conn, &id)?;
-    log::info!("create_session 成功: session_id={}, title={}", session.id, session.title);
+    log::info!(
+        "create_session 成功: session_id={}, title={}",
+        session.id,
+        session.title
+    );
 
     // 发射会话更新事件
     let emitter = AgentEmitter::new(app_handle);
@@ -62,7 +64,14 @@ pub async fn list_sessions(
     let limit = filter.as_ref().and_then(|f| f.limit).unwrap_or(50);
     let offset = filter.as_ref().and_then(|f| f.offset).unwrap_or(0);
 
-    log::debug!("list_sessions 查询条件: workspace_id={:?}, status={:?}, search={:?}, limit={}, offset={}", workspace_id, status, search, limit, offset);
+    log::debug!(
+        "list_sessions 查询条件: workspace_id={:?}, status={:?}, search={:?}, limit={}, offset={}",
+        workspace_id,
+        status,
+        search,
+        limit,
+        offset
+    );
     let result = session_repo::list_sessions(&conn, workspace_id, status, search, limit, offset);
     log::info!("list_sessions 成功: 返回 {} 条记录", result.len());
     Ok(result)
@@ -79,11 +88,12 @@ pub async fn get_session(
     let session = session_repo::get_session(&conn, &session_id)?;
     let messages = message_repo::list_messages(&conn, &session_id);
 
-    log::info!("get_session 成功: session_id={}, 消息数={}", session_id, messages.len());
-    Ok(SessionDetail {
-        session,
-        messages,
-    })
+    log::info!(
+        "get_session 成功: session_id={}, 消息数={}",
+        session_id,
+        messages.len()
+    );
+    Ok(SessionDetail { session, messages })
 }
 
 /// 删除会话
@@ -99,7 +109,10 @@ pub async fn delete_session(
     {
         let active = state.active_agents.lock().await;
         if active.contains_key(&session_id) {
-            log::warn!("delete_session 失败: 会话 '{}' 的 Agent 正在运行", session_id);
+            log::warn!(
+                "delete_session 失败: 会话 '{}' 的 Agent 正在运行",
+                session_id
+            );
             return Err(CommandError::agent(
                 crate::errors::AGENT_ALREADY_RUNNING,
                 format!("会话 '{}' 的 Agent 正在运行，无法删除", session_id),
@@ -130,10 +143,18 @@ pub async fn update_session_title(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("update_session_title 请求: session_id={}, title={}", session_id, title);
+    log::info!(
+        "update_session_title 请求: session_id={}, title={}",
+        session_id,
+        title
+    );
     let conn = state.db.conn()?;
     session_repo::update_session_title(&conn, &session_id, &title)?;
-    log::info!("update_session_title 成功: session_id={}, title={}", session_id, title);
+    log::info!(
+        "update_session_title 成功: session_id={}, title={}",
+        session_id,
+        title
+    );
 
     // 发射会话更新事件
     let emitter = AgentEmitter::new(app_handle);
@@ -153,11 +174,18 @@ pub async fn clear_workspace_sessions(
     app_handle: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<u64, CommandError> {
-    log::info!("clear_workspace_sessions 请求: workspace_id={}", workspace_id);
+    log::info!(
+        "clear_workspace_sessions 请求: workspace_id={}",
+        workspace_id
+    );
     let conn = state.db.conn()?;
     let session_ids = session_repo::delete_sessions_by_workspace(&conn, &workspace_id)?;
     let count = session_ids.len() as u64;
-    log::info!("clear_workspace_sessions 成功: workspace_id={}, 已删除 {} 条会话", workspace_id, count);
+    log::info!(
+        "clear_workspace_sessions 成功: workspace_id={}, 已删除 {} 条会话",
+        workspace_id,
+        count
+    );
 
     // 发射会话更新事件，通知前端刷新列表
     let emitter = AgentEmitter::new(app_handle);
@@ -201,9 +229,17 @@ pub async fn update_session_workspace(
     workspace_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("update_session_workspace 请求: session_id={}, workspace_id={}", session_id, workspace_id);
+    log::info!(
+        "update_session_workspace 请求: session_id={}, workspace_id={}",
+        session_id,
+        workspace_id
+    );
     let conn = state.db.conn()?;
     session_repo::update_session_workspace(&conn, &session_id, &workspace_id)?;
-    log::info!("update_session_workspace 成功: session_id={}, workspace_id={}", session_id, workspace_id);
+    log::info!(
+        "update_session_workspace 成功: session_id={}, workspace_id={}",
+        session_id,
+        workspace_id
+    );
     Ok(())
 }

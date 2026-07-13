@@ -6,9 +6,7 @@ use crate::AppState;
 
 /// 获取应用设置
 #[tauri::command]
-pub async fn get_settings(
-    state: State<'_, AppState>,
-) -> Result<AppSettings, CommandError> {
+pub async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, CommandError> {
     log::info!("获取应用设置");
     let config = state.config.lock().await;
     let settings = config.load_app_settings().map_err(|e| {
@@ -65,4 +63,3 @@ fn json_merge(target: &mut serde_json::Value, source: &serde_json::Value) {
         }
     }
 }
-

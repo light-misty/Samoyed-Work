@@ -5,7 +5,10 @@ use serde_json::json;
 use tauri::State;
 
 use crate::db::snapshot_repo;
-use crate::errors::{CommandError, DOC_FILE_NOT_FOUND, DOC_FORMAT_UNSUPPORTED, DOC_VERSION_NOT_FOUND, FS_PATH_NOT_FOUND, FS_ALREADY_EXISTS};
+use crate::errors::{
+    CommandError, DOC_FILE_NOT_FOUND, DOC_FORMAT_UNSUPPORTED, DOC_VERSION_NOT_FOUND,
+    FS_ALREADY_EXISTS, FS_PATH_NOT_FOUND,
+};
 use crate::models::document::{PreviewContent, VersionInfo};
 use crate::AppState;
 
@@ -17,7 +20,11 @@ pub async fn preview_document(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<PreviewContent, CommandError> {
-    log::info!("preview_document: 预览文档, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "preview_document: 预览文档, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -59,7 +66,7 @@ pub async fn preview_document(
             return Err(CommandError::doc(
                 DOC_FORMAT_UNSUPPORTED,
                 format!("不支持的文件格式: .{}", extension),
-            ))
+            ));
         }
     };
 
@@ -77,11 +84,23 @@ pub async fn preview_document(
                     "include_formatting": false,
                 },
             });
-            match state.doc_service.process("read", file_type, sidecar_params).await {
-                Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "[预览] 文档内容解析失败".to_string()),
+            match state
+                .doc_service
+                .process("read", file_type, sidecar_params)
+                .await
+            {
+                Ok(data) => serde_json::to_string_pretty(&data)
+                    .unwrap_or_else(|_| "[预览] 文档内容解析失败".to_string()),
                 Err(e) => {
-                    log::warn!("preview_document: Sidecar 解析失败, 降级为占位提示: {}", e.message);
-                    format!("[预览] {} 格式文件解析失败: {}", extension.to_uppercase(), e.message)
+                    log::warn!(
+                        "preview_document: Sidecar 解析失败, 降级为占位提示: {}",
+                        e.message
+                    );
+                    format!(
+                        "[预览] {} 格式文件解析失败: {}",
+                        extension.to_uppercase(),
+                        e.message
+                    )
                 }
             }
         }
@@ -105,7 +124,11 @@ pub async fn get_document_versions(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<VersionInfo>, CommandError> {
-    log::info!("get_document_versions: 查询版本历史, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "get_document_versions: 查询版本历史, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let conn = state.db.conn()?;
 
     let versions = snapshot_repo::list_snapshots(&conn, Some(&workspace_id), Some(&path));
@@ -121,7 +144,12 @@ pub async fn rollback_version(
     version_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("rollback_version: 回滚版本, workspace_id={}, path={}, version_id={}", workspace_id, path, version_id);
+    log::info!(
+        "rollback_version: 回滚版本, workspace_id={}, path={}, version_id={}",
+        workspace_id,
+        path,
+        version_id
+    );
     let config = state.config.lock().await;
     let ws_config = config.load_workspaces()?;
 
@@ -180,7 +208,11 @@ pub async fn rollback_version(
         "rollback",
     )?;
 
-    log::info!("rollback_version: 回滚成功, version_id={}, rollback_id={}", version_id, rollback_id);
+    log::info!(
+        "rollback_version: 回滚成功, version_id={}, rollback_id={}",
+        version_id,
+        rollback_id
+    );
     Ok(())
 }
 
@@ -216,7 +248,11 @@ pub async fn create_file(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("create_file: 创建文件, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "create_file: 创建文件, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let (_, abs_path) = resolve_workspace_path(&workspace_id, &path, &state).await?;
 
     if abs_path.exists() {
@@ -244,7 +280,11 @@ pub async fn create_directory(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("create_directory: 创建目录, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "create_directory: 创建目录, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let (_, abs_path) = resolve_workspace_path(&workspace_id, &path, &state).await?;
 
     if abs_path.exists() {
@@ -268,7 +308,12 @@ pub async fn rename_file(
     new_path: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("rename_file: 重命名, workspace_id={}, old_path={}, new_path={}", workspace_id, old_path, new_path);
+    log::info!(
+        "rename_file: 重命名, workspace_id={}, old_path={}, new_path={}",
+        workspace_id,
+        old_path,
+        new_path
+    );
     let (_, abs_old) = resolve_workspace_path(&workspace_id, &old_path, &state).await?;
     let (_, abs_new) = resolve_workspace_path(&workspace_id, &new_path, &state).await?;
 
@@ -294,7 +339,11 @@ pub async fn rename_file(
     }
 
     std::fs::rename(&abs_old, &abs_new)?;
-    log::info!("rename_file: 重命名成功, old_path={} -> new_path={}", old_path, new_path);
+    log::info!(
+        "rename_file: 重命名成功, old_path={} -> new_path={}",
+        old_path,
+        new_path
+    );
     Ok(())
 }
 
@@ -305,7 +354,11 @@ pub async fn delete_file(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("delete_file: 删除, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "delete_file: 删除, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let (_, abs_path) = resolve_workspace_path(&workspace_id, &path, &state).await?;
 
     if !abs_path.exists() {
@@ -333,7 +386,11 @@ pub async fn show_in_file_manager(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), CommandError> {
-    log::info!("show_in_file_manager: 在文件管理器中显示, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "show_in_file_manager: 在文件管理器中显示, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let (_, abs_path) = resolve_workspace_path(&workspace_id, &path, &state).await?;
 
     if !abs_path.exists() {
@@ -374,9 +431,7 @@ pub async fn show_in_file_manager(
         } else {
             abs_path.parent().unwrap_or(&abs_path).to_path_buf()
         };
-        std::process::Command::new("xdg-open")
-            .arg(&dir)
-            .spawn()?;
+        std::process::Command::new("xdg-open").arg(&dir).spawn()?;
     }
 
     log::info!("show_in_file_manager: 已打开文件管理器, path={}", path);
@@ -391,7 +446,12 @@ pub async fn get_version_content(
     version_id: String,
     state: State<'_, AppState>,
 ) -> Result<PreviewContent, CommandError> {
-    log::info!("get_version_content: 获取版本内容, workspace_id={}, path={}, version_id={}", workspace_id, path, version_id);
+    log::info!(
+        "get_version_content: 获取版本内容, workspace_id={}, path={}, version_id={}",
+        workspace_id,
+        path,
+        version_id
+    );
 
     // 查找快照记录（在块结束时释放 conn，避免跨 await 持有导致 Send 问题）
     let snapshot_path_str = {
@@ -462,11 +522,23 @@ pub async fn get_version_content(
                     "include_formatting": false,
                 },
             });
-            match state.doc_service.process("read", file_type, sidecar_params).await {
-                Ok(data) => serde_json::to_string_pretty(&data).unwrap_or_else(|_| "[版本预览] 文档内容解析失败".to_string()),
+            match state
+                .doc_service
+                .process("read", file_type, sidecar_params)
+                .await
+            {
+                Ok(data) => serde_json::to_string_pretty(&data)
+                    .unwrap_or_else(|_| "[版本预览] 文档内容解析失败".to_string()),
                 Err(e) => {
-                    log::warn!("get_version_content: Sidecar 解析失败, 降级为占位提示: {}", e.message);
-                    format!("[版本预览] {} 格式文件解析失败: {}", extension.to_uppercase(), e.message)
+                    log::warn!(
+                        "get_version_content: Sidecar 解析失败, 降级为占位提示: {}",
+                        e.message
+                    );
+                    format!(
+                        "[版本预览] {} 格式文件解析失败: {}",
+                        extension.to_uppercase(),
+                        e.message
+                    )
                 }
             }
         }
@@ -490,7 +562,11 @@ pub async fn get_pdf_data(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<String, CommandError> {
-    log::info!("get_pdf_data: 获取PDF数据, workspace_id={}, path={}", workspace_id, path);
+    log::info!(
+        "get_pdf_data: 获取PDF数据, workspace_id={}, path={}",
+        workspace_id,
+        path
+    );
     let (_, abs_path) = resolve_workspace_path(&workspace_id, &path, &state).await?;
 
     if !abs_path.exists() {

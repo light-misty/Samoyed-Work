@@ -6,6 +6,7 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
 import { InputArea } from "./components/layout/InputArea";
 import { WorkflowTimeline } from "./components/workflow/WorkflowTimeline";
+import { WorkspaceGitStatus } from "./components/layout/WorkspaceGitStatus";
 import { LeftSidebar } from "./components/layout/LeftSidebar";
 
 import { ToastContainer } from "./components/common/Toast";
@@ -39,6 +40,10 @@ const VersionHistoryPanel = lazy(() =>
 const UpdateNotification = lazy(() =>
   import("./components/common/UpdateNotification").then((m) => ({ default: m.UpdateNotification }))
 );
+// 子 Agent 工作流详情页：体积较大且仅在用户查看子 Agent 详情时才需要，延迟加载
+const SubAgentWorkflowPage = lazy(() =>
+  import("./components/workflow/SubAgentWorkflowPage").then((m) => ({ default: m.SubAgentWorkflowPage }))
+);
 
 /** 懒加载组件的通用加载占位符 */
 function LazyFallback() {
@@ -69,7 +74,9 @@ export default function App() {
   const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
   const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setConfirmHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes } = useWorkflowStore();
+  // 子 Agent 工作流详情页：当前查看的子 Agent ID，非空时切换到详情页替代主工作流
+  const currentSubAgentId = useWorkflowStore((s) => s.currentSubAgentId);
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes, clearSubAgentWorkflow } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession, currentSessionId, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
@@ -89,7 +96,7 @@ export default function App() {
     networkRetry,
     sendMessage,
     stopAgent,
-    confirmOperation,
+    respondPermission,
     reset: resetAgent,
     setSessionId: setAgentSessionId,
     sessionId: agentSessionId,
@@ -108,6 +115,8 @@ export default function App() {
   const lastClosedStreamingNodeIdRef = useRef<string | null>(null);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
+  // 标记新会话创建过程中（loadSessions 尚未完成），避免失效检测误清空
+  const creatingNewSessionRef = useRef(false);
   // 保存最后一次发送的文本，用于错误重试
   const lastSentTextRef = useRef<string | null>(null);
   // 保存最后一次发送的选项，用于错误重试
@@ -216,15 +225,13 @@ export default function App() {
   // 失效时清空工作流和 Agent 状态，避免 UI 残留已删除会话的内容
   useEffect(() => {
     if (!currentSessionId) return;
-    // sessions 为空时不触发（避免初始化阶段误清空）
-    if (sessions.length === 0) return;
-    const stillExists = sessions.some((s) => s.id === currentSessionId);
+    // sessions 为空时视为会话已失效（初始化阶段 currentSessionId 为 null，已有上一行守卫保护）
+    const stillExists = sessions.length > 0 && sessions.some((s) => s.id === currentSessionId);
     if (stillExists) return;
 
-    // 跳过刚创建的新会话：agentSessionId 由 useAgent 管理，
-    // 新会话创建后 sessions 可能因 loadSessions 失败或时序问题短暂不包含该会话，
-    // 此时不应误判为失效。仅当 currentSessionId 与 agentSessionId 不同时才视为真正失效。
-    if (currentSessionId === agentSessionId) return;
+    // 新会话创建过程中（loadSessions 尚未完成），sessions 可能短暂不包含新会话 ID
+    // 此时不应误判为失效，由 creatingNewSessionRef 精确标记该窗口
+    if (creatingNewSessionRef.current) return;
 
     // 当前会话已不在列表中，说明已被外部删除（如工作区删除）
     console.warn("[App] 当前会话已失效，清空状态:", currentSessionId);
@@ -233,7 +240,7 @@ export default function App() {
     clearContextUsage();
     clearCurrentSession();
     resetRefs();
-  }, [currentSessionId, sessions, agentSessionId, clearNodes, resetAgent, clearContextUsage, clearCurrentSession]);
+  }, [currentSessionId, sessions, clearNodes, resetAgent, clearContextUsage, clearCurrentSession]);
 
   // 监听会话标题自动更新事件（后端生成标题后通知前端）
   useEffect(() => {
@@ -297,13 +304,16 @@ export default function App() {
   // 当 Agent 创建新会话时，同步刷新 session store 并选中新会话
   // 必须先 await loadSessions() 确保 sessions 列表已包含新会话，
   // 再调用 switchSession() 更新 currentSessionId。
-  // 否则会触发"当前会话失效" useEffect（line ~216）的竞态：
+  // 否则会触发"当前会话失效" useEffect 的竞态：
   // currentSessionId 已更新但 sessions 还未包含新会话，导致误判会话失效并 clearNodes()。
+  // 使用 creatingNewSessionRef 精确标记新会话创建窗口，避免失效检测误清空
   useEffect(() => {
     if (agentSessionId && !prevAgentSessionIdRef.current) {
+      creatingNewSessionRef.current = true;
       (async () => {
         await loadSessions();
         switchSession(agentSessionId);
+        creatingNewSessionRef.current = false;
       })();
     }
     prevAgentSessionIdRef.current = agentSessionId;
@@ -448,7 +458,7 @@ export default function App() {
             ...existingData,
             success: lastToolResult.success,
             error: lastToolResult.success ? undefined : (lastToolResult.error || t('toolNode.executionFailed')),
-            // 保存工具执行结果（如 run_command 的 stdout/stderr/exit_code），用于 UI 展示
+            // 保存工具执行结果（如 bash 的 stdout/stderr/exit_code），用于 UI 展示
             result: lastToolResult.success && lastToolResult.result
               ? (lastToolResult.result as Record<string, unknown>)
               : existingData.result,
@@ -565,24 +575,29 @@ export default function App() {
         description: pendingConfirmation.description,
         confirmLabel: t('confirmNode.confirmExecute'),
         cancelLabel: t('confirmNode.cancelOperation'),
-        confirmed: null,
+        confirmed: null as boolean | null,
+        // 风险等级与权限回复字段，供 ConfirmNode 渲染双态按钮与风险徽标
+        riskLevel: pendingConfirmation.riskLevel,
+        permissionResponse: null as 'once' | 'reject' | null,
       };
       const nodeId = addNode("confirm", confirmData, "running");
       confirmNodeIdRef.current = nodeId;
 
-      setConfirmHandler(async (approved: boolean, feedback?: string) => {
+      // 优先使用 permissionHandler（双态权限系统），与 setConfirmHandler 并存以保持向后兼容
+      setPermissionHandler(async (response: 'once' | 'reject', feedback?: string) => {
+        const approved = response !== 'reject';
         if (confirmNodeIdRef.current) {
           updateNode(confirmNodeIdRef.current, {
-            data: { ...confirmData, confirmed: approved, feedback },
+            data: { ...confirmData, confirmed: approved, permissionResponse: response, feedback },
             status: approved ? "completed" : "cancelled",
           });
           confirmNodeIdRef.current = null;
         }
-        await confirmOperation(pendingConfirmation.operationId, approved, feedback);
-        setConfirmHandler(null);
+        await respondPermission(pendingConfirmation.operationId, response, feedback);
+        setPermissionHandler(null);
       });
     }
-  }, [pendingConfirmation, addNode, updateNode, confirmOperation, setConfirmHandler]);
+  }, [pendingConfirmation, addNode, updateNode, respondPermission, setPermissionHandler]);
 
   // 发送用户消息
   const handleSend = useCallback(async (text: string) => {
@@ -689,6 +704,8 @@ export default function App() {
     // 会直接覆盖 nodes/contextUsage，避免中间 nodes=[] 导致空页面闪烁。
     resetAgent();
     resetRefs();
+    // 退出子 Agent 工作流页面，确保侧边栏切换会话时回到主工作流视图
+    clearSubAgentWorkflow();
 
     // 更新 session store 中的当前会话 ID
     switchSession(sessionId);
@@ -740,7 +757,7 @@ export default function App() {
     if (hasMessages) {
       loadContextUsage(sessionId);
     }
-  }, [clearNodes, resetAgent, clearContextUsage, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
+  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
 
   // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
   // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
@@ -771,6 +788,8 @@ export default function App() {
 
     resetAgent();
     resetRefs();
+    // 退出子 Agent 工作流页面，避免删除会话后残留子 Agent 视图
+    clearSubAgentWorkflow();
 
     if (nextSessionId) {
       // 切换到下一个可用会话（不下 clearNodes，restoreSessionFromCache 会直接覆盖）
@@ -818,7 +837,7 @@ export default function App() {
       clearNodes();
       clearContextUsage();
     }
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
+  }, [clearNodes, resetAgent, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
 
   // 打开文档预览：从后端获取文档内容并显示预览浮层
   const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {
@@ -955,18 +974,31 @@ export default function App() {
 
       <MainLayout
         mainArea={
-          <MainArea
-            isEmpty={nodes.length === 0}
-            workflow={<WorkflowTimeline onRetryError={handleRetryError} typewriterVisible={typewriterVisible} />}
-            inputArea={
-              <InputArea
-                onSend={handleSend}
-                executionStatus={executionStatus}
-                onStop={handleStop}
-                centered={nodes.length === 0}
+          // 主工作流始终挂载以保留滚动位置；子 Agent 详情页通过 display 叠加显示
+          <>
+            <div style={{ display: currentSubAgentId ? 'none' : 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
+              {nodes.length === 0 && <WorkspaceGitStatus pageLevel />}
+              <MainArea
+                isEmpty={nodes.length === 0}
+                workflow={<WorkflowTimeline onRetryError={handleRetryError} typewriterVisible={typewriterVisible} />}
+                inputArea={
+                  <InputArea
+                    onSend={handleSend}
+                    executionStatus={executionStatus}
+                    onStop={handleStop}
+                    centered={nodes.length === 0}
+                  />
+                }
               />
-            }
-          />
+            </div>
+            {currentSubAgentId && (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                <Suspense fallback={<LazyFallback />}>
+                  <SubAgentWorkflowPage agentId={currentSubAgentId} />
+                </Suspense>
+              </div>
+            )}
+          </>
         }
         sidebarVisible={sidebarVisible}
         sidebar={

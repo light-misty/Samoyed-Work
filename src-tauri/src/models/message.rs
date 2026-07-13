@@ -57,6 +57,9 @@ pub struct Message {
     /// 附件元信息列表 (JSON 序列化存储)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachments: Option<Vec<AttachmentMeta>>,
+    /// 工作流节点扩展信息 (JSON 格式，用于持久化 question/confirm/error 节点详情)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub created_at: String,
 }
 
@@ -74,6 +77,12 @@ impl Message {
     /// 将数据库消息模型转换为 LLM ChatMessage
     /// 用于从历史消息恢复 Agent 上下文
     pub fn to_chat_message(&self) -> Option<crate::models::llm::ChatMessage> {
+        // 跳过错误节点消息（不发送给 LLM）
+        if let Some(ref meta) = self.metadata {
+            if meta.get("nodeType").and_then(|v| v.as_str()) == Some("error") {
+                return None;
+            }
+        }
         match self.role {
             MessageRole::User => Some(crate::models::llm::ChatMessage {
                 role: "user".to_string(),
@@ -83,26 +92,32 @@ impl Message {
                 tool_call_id: None,
                 reasoning_content: None,
                 attachments: None,
+                metadata: None,
             }),
             MessageRole::Assistant => {
                 // 将数据库 ToolCall 转换为 LlmToolCall
                 let llm_tool_calls = self.tool_calls.as_ref().map(|calls| {
-                    calls.iter().map(|tc| {
-                        crate::models::llm::LlmToolCall {
-                            index: 0,
-                            id: tc.id.clone(),
-                            name: tc.name.clone(),
-                            // 数据库中 arguments 是 serde_json::Value，需要转为 JSON 字符串
-                            arguments: serde_json::to_string(&tc.arguments)
-                                .unwrap_or_default(),
-                        }
-                    }).collect::<Vec<_>>()
+                    calls
+                        .iter()
+                        .map(|tc| {
+                            crate::models::llm::LlmToolCall {
+                                index: 0,
+                                id: tc.id.clone(),
+                                name: tc.name.clone(),
+                                // 数据库中 arguments 是 serde_json::Value，需要转为 JSON 字符串
+                                arguments: serde_json::to_string(&tc.arguments).unwrap_or_default(),
+                            }
+                        })
+                        .collect::<Vec<_>>()
                 });
 
                 // 如果有 tool_calls 但全部转换失败，则跳过此消息
                 if let Some(ref calls) = llm_tool_calls {
                     if calls.is_empty() {
-                        log::warn!("助手消息的 tool_calls 转换结果为空，跳过: msg_id={}", self.id);
+                        log::warn!(
+                            "助手消息的 tool_calls 转换结果为空，跳过: msg_id={}",
+                            self.id
+                        );
                         return None;
                     }
                 }
@@ -115,12 +130,15 @@ impl Message {
                     tool_call_id: None,
                     reasoning_content: self.reasoning_content.clone(),
                     attachments: None,
+                    metadata: None,
                 })
             }
             MessageRole::Tool => {
                 // tool 消息需要从 ToolCall 中提取 call_id
                 // 数据库中 tool 消息的 tool_calls 字段存储了对应的 ToolCall 信息
-                let call_id = self.tool_calls.as_ref()
+                let call_id = self
+                    .tool_calls
+                    .as_ref()
                     .and_then(|calls| calls.first())
                     .map(|tc| tc.id.clone())
                     .unwrap_or_default();
@@ -138,6 +156,7 @@ impl Message {
                     tool_call_id: Some(call_id),
                     reasoning_content: None,
                     attachments: None,
+                    metadata: None,
                 })
             }
             MessageRole::System => {
@@ -162,6 +181,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -182,6 +202,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: Some("思考中...".to_string()),
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:01Z".to_string(),
         };
 
@@ -199,16 +220,15 @@ mod tests {
             id: "msg_3".to_string(),
             role: MessageRole::Assistant,
             content: "".to_string(),
-            tool_calls: Some(vec![
-                ToolCall {
-                    id: "call_1".to_string(),
-                    name: "write_text_file".to_string(),
-                    arguments: serde_json::json!({"path": "周报.md", "content": "# 项目周报"}),
-                    result: None,
-                },
-            ]),
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "write_text_file".to_string(),
+                arguments: serde_json::json!({"path": "周报.md", "content": "# 项目周报"}),
+                result: None,
+            }]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:02Z".to_string(),
         };
 
@@ -230,16 +250,15 @@ mod tests {
             id: "msg_4".to_string(),
             role: MessageRole::Tool,
             content: "文档已生成".to_string(),
-            tool_calls: Some(vec![
-                ToolCall {
-                    id: "call_1".to_string(),
-                    name: "docx_handler".to_string(),
-                    arguments: serde_json::json!({}),
-                    result: Some(serde_json::json!({"success": true})),
-                },
-            ]),
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "docx_handler".to_string(),
+                arguments: serde_json::json!({}),
+                result: Some(serde_json::json!({"success": true})),
+            }]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:03Z".to_string(),
         };
 
@@ -260,6 +279,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
         };
 
@@ -276,6 +296,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:04Z".to_string(),
         };
 
@@ -305,6 +326,7 @@ mod tests {
             ]),
             reasoning_content: None,
             attachments: None,
+            metadata: None,
             created_at: "2026-01-01T00:00:05Z".to_string(),
         };
 

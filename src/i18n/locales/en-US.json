@@ -25,7 +25,7 @@
   },
   "inputArea": {
     "visionWarning": "The current model does not support image understanding. Image content cannot be recognized. It is recommended to describe the image content in text.",
-    "placeholder": "Enter instructions, let Agent help you process documents...",
+    "placeholder": "Describe your needs, let Agent plan or build...",
     "attachFile": "Attach file",
     "stopExecution": "Stop execution",
     "stopping": "Stopping...",
@@ -65,6 +65,8 @@
   },
   "workflow": {
     "startNewSession": "Work with DocAgent",
+    "startNewSessionPlan": "Plan with DocAgent",
+    "startNewSessionCode": "Code with DocAgent",
     "emptySession": "Empty Session",
     "timeline": "Workflow Timeline",
     "thinking": "Thinking"
@@ -73,12 +75,78 @@
     "selectModel": "Select Model",
     "configureModel": "Configure Model"
   },
+  "agentMode": {
+    "plan": "Plan",
+    "build": "Build",
+    "document": "Document",
+    "planMode": "read-only analysis, no modifications",
+    "buildMode": "full programming execution",
+    "documentMode": "generate and process Word/Excel/PPT/PDF documents",
+    "switchGroup": "Agent Mode Switch"
+  },
   "confirmNode": {
     "userConfirmed": "✓ User confirmed execution",
     "userCancelled": "✗ User cancelled operation",
     "confirmExecute": "Confirm Execution",
     "cancelOperation": "Cancel Operation",
     "feedbackPlaceholder": "Enter reason (optional)…"
+  },
+  "permission": {
+    "once": "Confirm",
+    "reject": "Reject",
+    "onceAllowed": "✓ Confirmed",
+    "rejected": "✗ Rejected",
+    "feedbackPlaceholder": "Enter reason (optional)…",
+    "tabTitle": "Permission Rules Management",
+    "title": "Permission Rules",
+    "addRule": "Add Rule",
+    "editRule": "Edit Rule",
+    "refresh": "Refresh",
+    "confirmDelete": "Are you sure you want to delete this permission rule?",
+    "noRules": "No custom rules",
+    "noDefaults": "No default rules",
+    "scope": "Scope",
+    "type": "Type",
+    "pattern": "Pattern",
+    "action": "Action",
+    "description": "Description",
+    "enabled": "Enabled",
+    "defaultRules": "Default Rules",
+    "userRules": "Custom Rules",
+    "defaultBadge": "Default",
+    "scopeOptions": {
+      "global": "Global",
+      "project": "Project",
+      "session": "Session"
+    },
+    "actionOptions": {
+      "allow": "Allow",
+      "deny": "Deny",
+      "ask": "Ask"
+    },
+    "typeOptions": {
+      "wildcard": "Wildcard",
+      "read": "Read",
+      "edit": "Edit",
+      "glob": "Glob",
+      "grep": "Grep",
+      "list": "List",
+      "bash": "Bash",
+      "write_script": "Write Script",
+      "task": "Task",
+      "skill": "Skill",
+      "lsp": "LSP",
+      "web_fetch": "Web Fetch",
+      "web_search": "Web Search",
+      "external_directory": "External Directory",
+      "doom_loop": "Doom Loop",
+      "document": "Document",
+      "question": "Question"
+    },
+    "patternPlaceholder": "e.g. src/**/*.ts, git *, *.env",
+    "descriptionPlaceholder": "Optional: rule description",
+    "save": "Save",
+    "cancel": "Cancel"
   },
   "errorNode": {
     "errorDetails": "Error Details",
@@ -91,6 +159,31 @@
     "executionFailed": "Execution failed",
     "expandError": "Show details",
     "collapseError": "Hide details"
+  },
+  "compactionNode": {
+    "compressing": "Compressing context ({{tokens}} tokens)...",
+    "completed": "Context compacted: {{before}} -> {{after}} tokens",
+    "failed": "Context compaction failed",
+    "failedWithError": "Context compaction failed: {{error}}"
+  },
+  "subAgentNode": {
+    "running": "Sub-agent running",
+    "completed": "Sub-agent completed",
+    "failed": "Sub-agent failed",
+    "cancelled": "Sub-agent cancelled",
+    "error": "Error: {{message}}"
+  },
+  "subAgentWorkflow": {
+    "title": "Sub Agent Workflow",
+    "back": "Back",
+    "loading": "Loading...",
+    "empty": "No workflow data"
+  },
+  "questionNode": {
+    "title": "Agent Question",
+    "submit": "Submit Answer",
+    "answered": "Answered",
+    "selectRequired": "Please select at least one option"
   },
   "fileTree": {
     "sectionTitle": "Workspace Files",
@@ -150,10 +243,12 @@
       "workspace": "Workspace",
       "handler": "Tools & Handlers",
       "template": "Prompt Templates",
+      "permission": "Permission Rules",
       "appearance": "Appearance",
       "shortcuts": "Shortcuts",
       "general": "General",
-      "help": "Help"
+      "help": "Help",
+      "lsp": "LSP Language Servers"
     },
     "general": {
       "sectionTitle": "General Settings",
@@ -313,11 +408,11 @@
       "handlerBadge": "Handler",
       "alwaysEnabled": "Always Enabled",
       "descriptions": {
-        "docx_handler": "Word document (.docx) handler, supports three operations: read, format conversion, and analysis. Conversion supports md/txt/pdf formats (consistent with sidecar word_handler.convert actual support).",
-        "xlsx_handler": "Excel document (.xlsx) handler, supports three operations: read, format conversion, and analysis. Conversion supports csv/pdf/html/txt formats (consistent with sidecar excel_handler.convert actual support).",
-        "pptx_handler": "PowerPoint presentation (.pptx) handler, supports two operations: read and analysis.",
-        "pdf_handler": "PDF document (.pdf) handler, supports three operations: read, format conversion, and analysis. Conversion supports txt/md/html formats (consistent with sidecar pdf_handler.convert actual support).",
-        "validator_handler": "Document quality validator, detects common document quality issues and returns a list of warnings. Supports six types: docx/xlsx/pptx/pdf/md/txt. Markdown detects unclosed code blocks / heading level jumps / trailing whitespace / consecutive blank lines; plain text detects mixed line endings / mixed indentation / overlong lines / consecutive blank lines. Returns {valid, warnings, stats}."
+        "docx": "Word document (.docx) handler, supports three operations: read, format conversion, and analysis. Conversion supports md/txt/pdf formats (consistent with sidecar word_handler.convert actual support).",
+        "xlsx": "Excel document (.xlsx) handler, supports three operations: read, format conversion, and analysis. Conversion supports csv/pdf/html/txt formats (consistent with sidecar excel_handler.convert actual support).",
+        "pptx": "PowerPoint presentation (.pptx) handler, supports two operations: read and analysis.",
+        "pdf": "PDF document (.pdf) handler, supports three operations: read, format conversion, and analysis. Conversion supports txt/md/html formats (consistent with sidecar pdf_handler.convert actual support).",
+        "validator": "Document quality validator, detects common document quality issues and returns a list of warnings. Supports six types: docx/xlsx/pptx/pdf/md/txt. Markdown detects unclosed code blocks / heading level jumps / trailing whitespace / consecutive blank lines; plain text detects mixed line endings / mixed indentation / overlong lines / consecutive blank lines. Returns {valid, warnings, stats}."
       }
     },
     "tools": {
@@ -326,20 +421,20 @@
       "alwaysEnabled": "Always Enabled",
       "noTools": "No Tools",
       "descriptions": {
-        "list_directory": "List files and subdirectories in a specified directory. Use cases: browse workspace contents, locate files, understand directory hierarchy. Supports depth control and extension filtering.",
-        "search_files": "Search files in a specified directory, supporting search by filename or content. Use cases: find files by name, search by content keywords, filter by extension. Set include_content=true to search file contents.",
-        "read_file": "Read plain text file contents (.txt/.md/.csv/.json/.xml, etc.), does not depend on Sidecar, faster. Note: only for plain text files; for reading structured documents like Word/Excel/PPT/PDF, use the read operation of docx_handler/xlsx_handler/pptx_handler/pdf_handler. File size limit 1MB.",
+        "list": "List files and subdirectories in a specified directory. Use cases: browse workspace contents, locate files, understand directory hierarchy. Supports depth control and extension filtering.",
+        "search": "Search files in a specified directory, supporting search by filename or content. Use cases: find files by name, search by content keywords, filter by extension. Set include_content=true to search file contents.",
+        "read": "Read plain text file contents (.txt/.md/.csv/.json/.xml, etc.), does not depend on Sidecar, faster. Note: only for plain text files; for reading structured documents like Word/Excel/PPT/PDF, use the read operation of docx/xlsx/pptx/pdf. File size limit 1MB.",
         "file_info": "Get file metadata (size, modification time, type, etc.). Use cases: understand file information before reading, check file type, confirm file exists and is accessible. Prefer this tool when file contents are not needed.",
-        "file_exists": "Check whether a file or directory exists. Use cases: verify paths before reading or modifying files, avoid operating on non-existent files. Lighter than list_directory.",
-        "delete_file": "Delete a specified file, optionally creating a backup before deletion. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend creating a version snapshot before deletion.",
-        "create_directory": "Create a directory (supports recursive creation). Use cases: ensure target directory exists before writing files, organize file structure. Creates parent directories recursively by default.",
-        "write_text_file": "Write plain text file contents (.txt/.md/.csv/.json, etc.), does not depend on Sidecar. Use cases: create plain text files, modify Markdown files, save JSON configurations. Supports append mode. Note: only for plain text; for generating structured documents, use the generate operation of docx_handler/xlsx_handler/pptx_handler/pdf_handler. Content size limit 4KB (about 4000 characters); exceeding this may trigger LLM response truncation.",
-        "rename_file": "Rename or move a file. Use cases: organize file structure, modify filenames. Note: cross-filesystem moves may fail; this operation is irreversible.",
-        "copy_file": "Copy a file to a new path. Use cases: create file copies, backup files, copy templates. Supports binary file copying.",
-        "delete_directory": "Recursively delete a directory and all its contents. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend confirming directory contents before deletion.",
-        "get_file_hash": "Compute the SHA-256 hash value of a file. Use cases: file deduplication, integrity verification, change detection. Returns a hexadecimal hash string.",
+        "exists": "Check whether a file or directory exists. Use cases: verify paths before reading or modifying files, avoid operating on non-existent files. Lighter than list.",
+        "remove": "Delete a specified file, optionally creating a backup before deletion. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend creating a version snapshot before deletion.",
+        "mkdir": "Create a directory (supports recursive creation). Use cases: ensure target directory exists before writing files, organize file structure. Creates parent directories recursively by default.",
+        "write": "Write plain text file contents (.txt/.md/.csv/.json, etc.), does not depend on Sidecar. Use cases: create plain text files, modify Markdown files, save JSON configurations. Supports append mode. Note: only for plain text; for generating structured documents, use the generate operation of docx/xlsx/pptx/pdf. Content size limit 4KB (about 4000 characters); exceeding this may trigger LLM response truncation.",
+        "rename": "Rename or move a file. Use cases: organize file structure, modify filenames. Note: cross-filesystem moves may fail; this operation is irreversible.",
+        "copy": "Copy a file to a new path. Use cases: create file copies, backup files, copy templates. Supports binary file copying.",
+        "remove_dir": "Recursively delete a directory and all its contents. Note: this operation is irreversible and will automatically trigger user confirmation. Recommend confirming directory contents before deletion.",
+        "hash": "Compute the SHA-256 hash value of a file. Use cases: file deduplication, integrity verification, change detection. Returns a hexadecimal hash string.",
         "read_file_lines": "Read a plain text file line by line, supporting offset and line count limits. Use cases: read specific portions of large files, paginate reads, view the tail of log files. Recommended for paginated reading of large files.",
-        "update_notes": "Agent scratchpad: record or read task notes to maintain context across iteration rounds. Use cases: record key decisions, to-do items, file paths, and intermediate results in complex multi-step tasks. Recommend calling action=add to record key points after completing critical steps; when task context grows long, action=read can review existing notes; after task completion, action=clear cleans up. Note contents are automatically injected into your context in subsequent iterations, no need to read repeatedly."
+        "scratchpad": "Agent scratchpad: record or read task notes to maintain context across iteration rounds. Use cases: record key decisions, to-do items, file paths, and intermediate results in complex multi-step tasks. Recommend calling action=add to record key points after completing critical steps; when task context grows long, action=read can review existing notes; after task completion, action=clear cleans up. Note contents are automatically injected into your context in subsequent iterations, no need to read repeatedly."
       }
     },
     "templates": {
@@ -361,17 +456,17 @@
         "builtin-weekly-report": {
           "name": "Weekly Report",
           "description": "Automatically generate a structured weekly report document from this week's work",
-          "content": "Please generate a professional weekly report Word document (.docx) with clear structure and traceable data.\n\n## Content Structure\n1. Summary Table — task name, priority (High/Mid/Low), status (Done/In Progress/Not Started), completion %, remarks\n2. Key Progress — highlight 2-3 core milestone achievements, use data where applicable\n3. Issues Encountered — table: issue description, impact scope, severity, current status (Resolved/In Progress/Pending)\n4. Risks & Mitigation — identify key risks, mitigation measures, owners\n5. Next Week Plan — prioritized detailed plan with deliverables and deadlines\n\n## Document Format\n- Title: Arial 18pt bold centered; H1: Arial 14pt bold; H2: Arial 12pt bold\n- Body: Times New Roman 10.5pt, 1.25 line spacing\n- Tables: styled with bold header row, light gray fill\n- Margins: 1 inch all sides (Word default)\n- Page size: Letter\n\n## Output\n- Save to workspace, filename format: Weekly_Report_YYYY-MM-DD.docx\n- Run validator_handler to verify document quality after generation\n\nWork content:\n{{content}}"
+          "content": "Please generate a professional weekly report Word document (.docx) with clear structure and traceable data.\n\n## Content Structure\n1. Summary Table — task name, priority (High/Mid/Low), status (Done/In Progress/Not Started), completion %, remarks\n2. Key Progress — highlight 2-3 core milestone achievements, use data where applicable\n3. Issues Encountered — table: issue description, impact scope, severity, current status (Resolved/In Progress/Pending)\n4. Risks & Mitigation — identify key risks, mitigation measures, owners\n5. Next Week Plan — prioritized detailed plan with deliverables and deadlines\n\n## Document Format\n- Title: Arial 18pt bold centered; H1: Arial 14pt bold; H2: Arial 12pt bold\n- Body: Times New Roman 10.5pt, 1.25 line spacing\n- Tables: styled with bold header row, light gray fill\n- Margins: 1 inch all sides (Word default)\n- Page size: Letter\n\n## Output\n- Save to workspace, filename format: Weekly_Report_YYYY-MM-DD.docx\n- Run validator to verify document quality after generation\n\nWork content:\n{{content}}"
         },
         "builtin-meeting-minutes": {
           "name": "Meeting Minutes",
           "description": "Generate a standardized meeting minutes document from meeting information",
-          "content": "Please generate a professional meeting minutes Word document (.docx) with complete information, traceable decisions, and trackable action items.\n\n## Content Structure\n1. Basic Info — meeting topic, time, location, chair, minutes taker, attendees, absentees\n2. Agenda — list of topics covered\n3. Discussion — per topic: topic name, discussion points,各方观点, conclusions\n4. Resolutions — list all resolutions (ID, content, voting result)\n5. Action Items Table — ID, description, owner, priority (High/Mid/Low), due date, status\n6. Next Meeting — time, location, proposed topics (if any)\n\n## Document Format\n- Title: Arial 18pt bold centered; H1: Arial 14pt bold; H2: Arial 12pt bold\n- Body: Times New Roman 10.5pt, 1.25 line spacing\n- Action items table should include auto-numbering column\n- Margins: Word default standard\n\n## Output\n- Save to workspace, filename format: Meeting_Minutes_YYYY-MM-DD_Topic.docx\n- Run validator_handler to verify document quality after generation\n\nMeeting information:\n{{content}}"
+          "content": "Please generate a professional meeting minutes Word document (.docx) with complete information, traceable decisions, and trackable action items.\n\n## Content Structure\n1. Basic Info — meeting topic, time, location, chair, minutes taker, attendees, absentees\n2. Agenda — list of topics covered\n3. Discussion — per topic: topic name, discussion points,各方观点, conclusions\n4. Resolutions — list all resolutions (ID, content, voting result)\n5. Action Items Table — ID, description, owner, priority (High/Mid/Low), due date, status\n6. Next Meeting — time, location, proposed topics (if any)\n\n## Document Format\n- Title: Arial 18pt bold centered; H1: Arial 14pt bold; H2: Arial 12pt bold\n- Body: Times New Roman 10.5pt, 1.25 line spacing\n- Action items table should include auto-numbering column\n- Margins: Word default standard\n\n## Output\n- Save to workspace, filename format: Meeting_Minutes_YYYY-MM-DD_Topic.docx\n- Run validator to verify document quality after generation\n\nMeeting information:\n{{content}}"
         },
         "builtin-data-analysis": {
           "name": "Data Analysis",
           "description": "Perform statistical analysis on data and generate an analysis report",
-          "content": "Please perform a professional statistical analysis on the specified data file and generate a complete data analysis report.\n\n## Analysis Workflow\n1. Data Overview — rows, columns, data types, missing values, descriptive statistics\n2. Data Cleaning — document any missing value handling, outlier treatment, transformations\n3. Key Metrics — compute core statistics (mean, median, std dev, quartiles, growth rates) based on analysis focus\n4. Trend Analysis — identify trends, cycles, seasonality; use appropriate charts\n5. Comparative Analysis — group comparisons, before/after, or benchmark comparisons\n6. Anomaly Detection — flag outliers, analyze potential causes and impact\n7. Conclusions & Recommendations — actionable insights based on data\n\n## Document Format\n- Cover page (title, date, analyst), table of contents, body, appendix\n- Charts must have figure numbers and captions (e.g., Figure 1: Quarterly Sales Trend)\n- Font: Heading bold, body 10.5pt, 1.25 line spacing\n- Reference statistical methods in appendix\n\n## Output\n- Save as Word document to workspace\n- Filename format: Data_Analysis_Report_YYYY-MM-DD.docx\n- Use matplotlib for visualizations, embed charts in docx\n- Run validator_handler to verify quality\n\nFile path: {{filePath}}\nAnalysis focus: {{focus}}"
+          "content": "Please perform a professional statistical analysis on the specified data file and generate a complete data analysis report.\n\n## Analysis Workflow\n1. Data Overview — rows, columns, data types, missing values, descriptive statistics\n2. Data Cleaning — document any missing value handling, outlier treatment, transformations\n3. Key Metrics — compute core statistics (mean, median, std dev, quartiles, growth rates) based on analysis focus\n4. Trend Analysis — identify trends, cycles, seasonality; use appropriate charts\n5. Comparative Analysis — group comparisons, before/after, or benchmark comparisons\n6. Anomaly Detection — flag outliers, analyze potential causes and impact\n7. Conclusions & Recommendations — actionable insights based on data\n\n## Document Format\n- Cover page (title, date, analyst), table of contents, body, appendix\n- Charts must have figure numbers and captions (e.g., Figure 1: Quarterly Sales Trend)\n- Font: Heading bold, body 10.5pt, 1.25 line spacing\n- Reference statistical methods in appendix\n\n## Output\n- Save as Word document to workspace\n- Filename format: Data_Analysis_Report_YYYY-MM-DD.docx\n- Use matplotlib for visualizations, embed charts in docx\n- Run validator to verify quality\n\nFile path: {{filePath}}\nAnalysis focus: {{focus}}"
         },
         "builtin-format-convert": {
           "name": "Format Conversion",
@@ -386,22 +481,22 @@
         "builtin-ppt-outline": {
           "name": "PPT Outline Generation",
           "description": "Generate a PPT outline and content based on a topic",
-          "content": "Please generate a professional PowerPoint presentation (.pptx) based on the topic below, with substantial content, professional visuals, suitable for formal presentation.\n\n## Content Structure\n1. Title slide — title, subtitle (optional), date, presenter\n2. Table of Contents — list of sections\n3. Content slides — each with title, 3-5 bullet points, optional diagrams or tables\n4. Section divider slides — before each major section\n5. Summary slide — key takeaways, next steps\n6. Appendix slides (optional) — supporting data, references\n\n## Design Guidelines\n- Consistent color scheme and font style throughout\n- Title font size >= 28pt, body font size >= 18pt\n- Keep slides uncluttered, follow \"less is more\" principle\n- Use charts for data rather than text tables\n- Add speaker notes for key slides\n\n## Output\n- Save as PPTX to workspace\n- Filename format: Presentation_Topic.pptx\n- Run validator_handler to verify quality\n\nTopic: {{topic}}\nTarget slide count: about {{pageCount}} pages"
+          "content": "Please generate a professional PowerPoint presentation (.pptx) based on the topic below, with substantial content, professional visuals, suitable for formal presentation.\n\n## Content Structure\n1. Title slide — title, subtitle (optional), date, presenter\n2. Table of Contents — list of sections\n3. Content slides — each with title, 3-5 bullet points, optional diagrams or tables\n4. Section divider slides — before each major section\n5. Summary slide — key takeaways, next steps\n6. Appendix slides (optional) — supporting data, references\n\n## Design Guidelines\n- Consistent color scheme and font style throughout\n- Title font size >= 28pt, body font size >= 18pt\n- Keep slides uncluttered, follow \"less is more\" principle\n- Use charts for data rather than text tables\n- Add speaker notes for key slides\n\n## Output\n- Save as PPTX to workspace\n- Filename format: Presentation_Topic.pptx\n- Run validator to verify quality\n\nTopic: {{topic}}\nTarget slide count: about {{pageCount}} pages"
         },
         "builtin-tech-proposal": {
           "name": "Technical Proposal",
           "description": "Generate a professional technical proposal document",
-          "content": "Please generate a complete technical proposal Word document (.docx) for project review and technical decision-making.\n\n## Content Structure\n1. Cover page — project name, document version, date, classification\n2. Revision history — table: version, date, changes, author\n3. Glossary — terms and abbreviations used\n4. Project Overview — background, objectives, constraints\n5. Requirements Analysis — functional summary, non-functional requirements (performance, security, availability)\n6. Architecture Design — architecture description, technology choices with rationale, module breakdown\n7. Detailed Design — core design points, interface definitions, data model\n8. Implementation Plan — phases, milestones, resource needs, deliverables\n9. Risk Assessment — technical risks, mitigation strategies\n\n## Document Format\n- Title: 18pt bold centered; H1: 14pt bold; H2: 12pt bold\n- Body: 10.5pt, 1.25 line spacing\n- Code blocks in monospace font with gray background\n- Header: project name centered; Footer: page number centered\n\n## Output\n- Save to workspace, filename format: Technical_Proposal_ProjectName_YYYY-MM-DD.docx\n- Run validator_handler to verify quality\n\nProject name: {{projectName}}\nBackground: {{background}}\nCore requirements: {{requirements}}"
+          "content": "Please generate a complete technical proposal Word document (.docx) for project review and technical decision-making.\n\n## Content Structure\n1. Cover page — project name, document version, date, classification\n2. Revision history — table: version, date, changes, author\n3. Glossary — terms and abbreviations used\n4. Project Overview — background, objectives, constraints\n5. Requirements Analysis — functional summary, non-functional requirements (performance, security, availability)\n6. Architecture Design — architecture description, technology choices with rationale, module breakdown\n7. Detailed Design — core design points, interface definitions, data model\n8. Implementation Plan — phases, milestones, resource needs, deliverables\n9. Risk Assessment — technical risks, mitigation strategies\n\n## Document Format\n- Title: 18pt bold centered; H1: 14pt bold; H2: 12pt bold\n- Body: 10.5pt, 1.25 line spacing\n- Code blocks in monospace font with gray background\n- Header: project name centered; Footer: page number centered\n\n## Output\n- Save to workspace, filename format: Technical_Proposal_ProjectName_YYYY-MM-DD.docx\n- Run validator to verify quality\n\nProject name: {{projectName}}\nBackground: {{background}}\nCore requirements: {{requirements}}"
         },
         "builtin-business-letter": {
           "name": "Business Letter",
           "description": "Generate a formal business correspondence document",
-          "content": "Please generate a formal business letter Word document (.docx) with proper formatting and appropriate language.\n\n## Content Structure\n1. Letterhead — organization name, logo placeholder, address, contact info\n2. Title — Regarding: [Subject], centered bold\n3. Reference number — organization acronym [Year] No.X, right-aligned\n4. Recipient — full organization name, flush left\n5. Body — opening (context), main content (structured points), closing (thanks or reply request)\n6. Signature — organization name, date, contact person\n7. Attachment note (if any) — name and quantity\n\n## Style Requirements\n- Formal, concise, accurate language\n- Clear paragraphs, one topic per paragraph\n- Cite sources for data or references\n- Avoid vague expressions; specify time, quantities clearly\n\n## Document Format\n- Title: 16pt bold centered\n- Body: 12pt, 1.5 line spacing\n- Margins: proper business letter standard\n- Page number: bottom center\n\n## Output\n- Save to workspace, filename format: Letter_Subject_YYYY-MM-DD.docx\n- Run validator_handler to verify quality\n\nRecipient: {{recipient}}\nPurpose: {{purpose}}\nDetails: {{details}}"
+          "content": "Please generate a formal business letter Word document (.docx) with proper formatting and appropriate language.\n\n## Content Structure\n1. Letterhead — organization name, logo placeholder, address, contact info\n2. Title — Regarding: [Subject], centered bold\n3. Reference number — organization acronym [Year] No.X, right-aligned\n4. Recipient — full organization name, flush left\n5. Body — opening (context), main content (structured points), closing (thanks or reply request)\n6. Signature — organization name, date, contact person\n7. Attachment note (if any) — name and quantity\n\n## Style Requirements\n- Formal, concise, accurate language\n- Clear paragraphs, one topic per paragraph\n- Cite sources for data or references\n- Avoid vague expressions; specify time, quantities clearly\n\n## Document Format\n- Title: 16pt bold centered\n- Body: 12pt, 1.5 line spacing\n- Margins: proper business letter standard\n- Page number: bottom center\n\n## Output\n- Save to workspace, filename format: Letter_Subject_YYYY-MM-DD.docx\n- Run validator to verify quality\n\nRecipient: {{recipient}}\nPurpose: {{purpose}}\nDetails: {{details}}"
         },
         "builtin-project-plan": {
           "name": "Project Plan",
           "description": "Generate a project planning document",
-          "content": "Please generate a complete project plan Word document (.docx) for project initiation and execution tracking.\n\n## Content Structure\n1. Cover — project name, version, date, authoring organization\n2. Revision history — version, date, changes, author\n3. Project Overview — background, SMART objectives, scope, key stakeholders\n4. WBS — work breakdown by phase/module using multi-level lists\n5. Milestone Plan — table: milestone name, deliverable, acceptance criteria, target date\n6. Detailed Schedule — table: task ID, name, dependencies, owner, start/end dates, duration\n7. Resource Plan — human resources, equipment/tools, budget estimate\n8. Quality Management — quality standards, review mechanism, acceptance process\n9. Risk Management — risk register: description, probability, impact, strategy, owner\n10. Communication Plan — audience, method, frequency, content\n\n## Document Format\n- Title: 18pt bold centered; H1: 14pt bold; H2: 12pt bold\n- Body: 10.5pt, 1.25 line spacing\n- Professional styled tables with color-coded key rows/columns\n- Header: project name; Footer: page number\n\n## Output\n- Save to workspace, filename format: Project_Plan_ProjectName_YYYY-MM-DD.docx\n- Run validator_handler to verify quality\n\nProject name: {{projectName}}\nObjectives: {{objectives}}\nTimeline: {{timeline}}"
+          "content": "Please generate a complete project plan Word document (.docx) for project initiation and execution tracking.\n\n## Content Structure\n1. Cover — project name, version, date, authoring organization\n2. Revision history — version, date, changes, author\n3. Project Overview — background, SMART objectives, scope, key stakeholders\n4. WBS — work breakdown by phase/module using multi-level lists\n5. Milestone Plan — table: milestone name, deliverable, acceptance criteria, target date\n6. Detailed Schedule — table: task ID, name, dependencies, owner, start/end dates, duration\n7. Resource Plan — human resources, equipment/tools, budget estimate\n8. Quality Management — quality standards, review mechanism, acceptance process\n9. Risk Management — risk register: description, probability, impact, strategy, owner\n10. Communication Plan — audience, method, frequency, content\n\n## Document Format\n- Title: 18pt bold centered; H1: 14pt bold; H2: 12pt bold\n- Body: 10.5pt, 1.25 line spacing\n- Professional styled tables with color-coded key rows/columns\n- Header: project name; Footer: page number\n\n## Output\n- Save to workspace, filename format: Project_Plan_ProjectName_YYYY-MM-DD.docx\n- Run validator to verify quality\n\nProject name: {{projectName}}\nObjectives: {{objectives}}\nTimeline: {{timeline}}"
         }
       }
     },
@@ -502,6 +597,40 @@
       "faqA5": "Click the workspace selector in the top bar to switch workspaces, or add, switch and manage workspaces in Settings > Workspace Management. Each workspace's files and configuration are independent.",
       "faqQ6": "How to use Prompt templates?",
       "faqA6": "You can create and manage commonly used Prompt templates in Settings > Prompt Templates, with support for variable placeholders. You can quickly insert template content through the template picker in the input box."
+    },
+    "lsp": {
+      "title": "LSP Language Server Status",
+      "description": "View and manage language server processes",
+      "refresh": "Refresh",
+      "restart": "Restart",
+      "stopAll": "Stop All",
+      "language": "Language",
+      "status": "Status",
+      "command": "Command",
+      "pid": "PID",
+      "serverName": "Server",
+      "workspaceRoot": "Workspace Root",
+      "startedAt": "Started At",
+      "noServers": "No registered language servers",
+      "statusRunning": "Running",
+      "statusStopped": "Stopped",
+      "statusStarting": "Starting",
+      "statusError": "Error",
+      "loadError": "Failed to load LSP status",
+      "restartSuccess": "Language server restarted",
+      "restartError": "Restart failed",
+      "errorProgramNotFound": "LSP server program not found, please ensure the language server is installed and added to PATH",
+      "errorProcessExited": "LSP server exited immediately after start, please check if the workspace contains project identifier files (e.g. Cargo.toml)",
+      "errorTimeout": "LSP server response timeout, may be indexing or workspace configuration is abnormal",
+      "stopAllSuccess": "All language servers stopped",
+      "stopAllError": "Stop failed",
+      "experimental": "Experimental",
+      "enableLsp": "Enable LSP Language Server",
+      "enableLspDesc": "Provides code completion, diagnostics and other language services",
+      "confirmTitle": "Experimental Feature Confirmation",
+      "confirmContent": "LSP Language Server is an experimental feature. Enabling it may affect performance or stability. Are you sure you want to enable it?",
+      "confirmCancel": "Cancel",
+      "confirmEnable": "Enable"
     }
   },
   "history": {
@@ -592,6 +721,7 @@
     "templateMessage": "Are you sure you want to delete template \"{{name}}\"?",
     "versionMessage": "Are you sure you want to roll back to version \"{{name}}\"?",
     "clearSessionsMessage": "Are you sure you want to clear all sessions in workspace \"{{name}}\"?",
+    "permissionMessage": "Are you sure you want to delete permission rule \"{{name}}\"?",
     "permanentWarning": "This action is permanent and cannot be undone."
   },
   "errorBoundary": {
@@ -742,7 +872,8 @@
     "moreActions": "More actions",
     "clearSessionHistory": "Clear session history",
     "clearSessionHistorySuccess": "All sessions in this workspace have been cleared",
-    "clearSessionHistoryFailed": "Failed to clear session history, please retry"
+    "clearSessionHistoryFailed": "Failed to clear session history, please retry",
+    "showMoreSessions": "Show more sessions ({{count}})"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
   "update.checkFailedWithError": "Update check failed: {{error}}"

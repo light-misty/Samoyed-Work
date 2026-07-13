@@ -112,7 +112,10 @@ pub fn init(log_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // 注册全局 logger（含文件输出）
     register_logger(Some(Mutex::new(non_blocking)), level_filter)?;
 
-    log::info!("DocAgent 日志系统初始化完成，日志文件: {}", log_path.display());
+    log::info!(
+        "DocAgent 日志系统初始化完成，日志文件: {}",
+        log_path.display()
+    );
 
     Ok(())
 }
@@ -277,11 +280,8 @@ mod tests {
 
     /// 创建临时测试目录（在系统临时目录下创建唯一子目录）
     fn make_test_dir(prefix: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "docagent_test_{}_{}",
-            prefix,
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("docagent_test_{}_{}", prefix, std::process::id()));
         // 清理可能存在的旧目录
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("创建测试目录失败");
@@ -506,12 +506,30 @@ mod tests {
     fn test_rust_log_env_var_parsing() {
         // 测试 RUST_LOG 环境变量的解析逻辑
         // log::LevelFilter 实现了 FromStr，支持大小写不敏感的解析
-        assert_eq!("debug".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Debug);
-        assert_eq!("INFO".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Info);
-        assert_eq!("warn".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Warn);
-        assert_eq!("error".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Error);
-        assert_eq!("trace".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Trace);
-        assert_eq!("off".parse::<log::LevelFilter>().unwrap(), log::LevelFilter::Off);
+        assert_eq!(
+            "debug".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Debug
+        );
+        assert_eq!(
+            "INFO".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Info
+        );
+        assert_eq!(
+            "warn".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Warn
+        );
+        assert_eq!(
+            "error".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Error
+        );
+        assert_eq!(
+            "trace".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Trace
+        );
+        assert_eq!(
+            "off".parse::<log::LevelFilter>().unwrap(),
+            log::LevelFilter::Off
+        );
         // 无效字符串应解析失败
         assert!("invalid".parse::<log::LevelFilter>().is_err());
     }

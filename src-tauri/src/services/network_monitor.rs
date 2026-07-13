@@ -65,7 +65,9 @@ impl<R: Runtime> NetworkMonitor<R> {
                             status: NetworkStatus::Online.as_str().to_string(),
                             previous_status: NetworkStatus::Offline.as_str().to_string(),
                         };
-                        let _ = emitter.app_handle_ref().emit(SYSTEM_NETWORK_CHANGE, &payload);
+                        let _ = emitter
+                            .app_handle_ref()
+                            .emit(SYSTEM_NETWORK_CHANGE, &payload);
 
                         // 触发Provider恢复和连接池重建
                         let router_snap = router.read().await.clone();
@@ -85,7 +87,9 @@ impl<R: Runtime> NetworkMonitor<R> {
                             status: NetworkStatus::Offline.as_str().to_string(),
                             previous_status: NetworkStatus::Online.as_str().to_string(),
                         };
-                        let _ = emitter.app_handle_ref().emit(SYSTEM_NETWORK_CHANGE, &payload);
+                        let _ = emitter
+                            .app_handle_ref()
+                            .emit(SYSTEM_NETWORK_CHANGE, &payload);
                     }
                 }
 

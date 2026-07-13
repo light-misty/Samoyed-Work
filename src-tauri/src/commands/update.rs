@@ -109,8 +109,9 @@ pub async fn download_update(
 ) -> Result<DownloadUpdateResult, CommandError> {
     let max_retries: u32 = 2;
 
-    let endpoint_url = reqwest::Url::parse(UPDATE_ENDPOINT)
-        .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, format!("无效的端点 URL: {}", e)))?;
+    let endpoint_url = reqwest::Url::parse(UPDATE_ENDPOINT).map_err(|e| {
+        CommandError::update(UPDATE_DOWNLOAD_FAILED, format!("无效的端点 URL: {}", e))
+    })?;
     log::info!("download_update 端点: {}", UPDATE_ENDPOINT);
 
     for retry in 0..=max_retries {
@@ -126,14 +127,18 @@ pub async fn download_update(
             .build()
             .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string()))?;
 
-        let update = updater.check().await.map_err(|e| {
-            CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string())
-        })?;
+        let update = updater
+            .check()
+            .await
+            .map_err(|e| CommandError::update(UPDATE_DOWNLOAD_FAILED, e.to_string()))?;
 
         let update = match update {
             Some(u) => u,
             None => {
-                return Err(CommandError::update(UPDATE_NO_UPDATE_AVAILABLE, "没有可用的更新"));
+                return Err(CommandError::update(
+                    UPDATE_NO_UPDATE_AVAILABLE,
+                    "没有可用的更新",
+                ));
             }
         };
 
@@ -204,7 +209,10 @@ pub async fn download_update(
         }
     }
 
-    Err(CommandError::update(UPDATE_DOWNLOAD_FAILED, "更新下载失败，重试耗尽".to_string()))
+    Err(CommandError::update(
+        UPDATE_DOWNLOAD_FAILED,
+        "更新下载失败，重试耗尽".to_string(),
+    ))
 }
 
 /// 转义 NSIS 安装器命令行参数
@@ -228,7 +236,10 @@ pub async fn install_downloaded_update(
 ) -> Result<(), CommandError> {
     let path = std::path::Path::new(&installer_path);
     if !path.exists() {
-        return Err(CommandError::update(UPDATE_INSTALL_FAILED, "更新安装文件不存在"));
+        return Err(CommandError::update(
+            UPDATE_INSTALL_FAILED,
+            "更新安装文件不存在",
+        ));
     }
 
     log::info!("开始安装更新, restart={}, path={}", restart, installer_path);

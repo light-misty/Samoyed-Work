@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tauri::{Manager, Emitter};
 use tauri::path::BaseDirectory;
+use tauri::{Emitter, Manager};
 
 pub mod commands;
 pub mod config;
@@ -22,21 +22,52 @@ pub struct ConfirmDecision {
     pub feedback: Option<String>,
 }
 
+/// 权限审批决策（双态权限系统）
+/// 用于 permission_channels 传递用户的双态回复（once/reject）
+#[derive(Debug, Clone)]
+pub struct PermissionDecision {
+    /// 用户回复：Once/Reject
+    pub response: crate::services::permission::types::PermissionResponse,
+    /// 用户反馈（可选）
+    pub feedback: Option<String>,
+}
+
 /// 应用全局状态，通过 tauri::State 在命令中共享
 pub struct AppState {
     pub db: Arc<crate::db::Database>,
     pub config: Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
     pub active_agents: Arc<tokio::sync::Mutex<HashMap<String, bool>>>,
-    pub confirm_channels: Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
+    pub confirm_channels:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<ConfirmDecision>>>>,
+    /// 权限审批通道（双态权限系统，once/reject）
+    pub permission_channels:
+        Arc<tokio::sync::Mutex<HashMap<String, tokio::sync::oneshot::Sender<PermissionDecision>>>>,
+    /// Question 工具答案通道（按 question_id 隔离）
+    /// QuestionTool 创建 oneshot::Sender 存入，前端通过 submit_question_answer 命令回复
+    pub question_channels: crate::services::tool::builtin::question::QuestionChannels,
+    /// 权限注册表（默认规则 + 用户规则合并）
+    pub permission_registry: Arc<crate::services::permission::registry::PermissionRegistry>,
+    /// Doom loop 检测器
+    pub doom_loop_detector: Arc<crate::services::permission::doom_loop::DoomLoopDetector>,
+    /// Agent 模式管理器（Plan/Build/Document）
+    pub agent_mode_manager: Arc<crate::services::agent::AgentModeManager>,
     pub doc_service: Arc<crate::services::document::DocumentService>,
     pub llm_router: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>>,
     pub tool_registry: Arc<crate::services::tool::registry::ToolRegistry>,
-    pub handler_registry: Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
+    /// 子 Agent 执行器：由 TaskTool 委托执行子任务
+    /// 通过延迟注入模式在 setup 中初始化并注入到 TaskTool
+    pub sub_executor: Arc<crate::services::agent::sub_executor::SubAgentExecutor>,
+    pub handler_registry:
+        Arc<tokio::sync::Mutex<crate::services::handler::registry::HandlerRegistry>>,
     pub fs_watcher: Arc<crate::services::fs_watcher::FsWatcherService<tauri::Wry>>,
     pub network_monitor: Arc<crate::services::network_monitor::NetworkMonitor<tauri::Wry>>,
     /// Scratchpad 共享状态：智能体草稿本，按 session_id 隔离
     /// 由 ScratchpadTool 写入，由 AgentContext 在每轮迭代时读取摘要
     pub scratchpad_states: crate::services::tool::builtin::SharedScratchpadStates,
+    /// Skill 注册表：管理已加载的 Skill，在 Agent 启动时注入 AgentContext
+    pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
+    /// LSP 服务器管理器：管理 LSP 语言服务器进程
+    pub lsp_manager: Arc<crate::services::lsp::manager::LspServerManager>,
 }
 
 /// 从系统 PATH 中查找 Python 可执行文件（开发模式兜底）
@@ -183,8 +214,9 @@ pub fn run() {
 
             let llm_router = crate::services::llm::router::LlmRouter::from_config(&llm_config)
                 .with_app_handle(Some(app.handle().clone()));
-            let llm_router_arc: Arc<tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>> =
-                Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router)));
+            let llm_router_arc: Arc<
+                tokio::sync::RwLock<Arc<crate::services::llm::router::LlmRouter>>,
+            > = Arc::new(tokio::sync::RwLock::new(Arc::new(llm_router)));
 
             // 解析 Python 可执行文件路径
             // 优先级：
@@ -208,10 +240,15 @@ pub fn run() {
                 #[cfg(not(debug_assertions))]
                 {
                     // 生产模式：优先使用应用资源目录中的嵌入式 Python
-                    let embedded_python = app.path()
+                    let embedded_python = app
+                        .path()
                         .resolve("sidecar_dist/python/python.exe", BaseDirectory::Resource)
                         .ok()
-                        .map(|p| crate::utils::strip_unc_prefix(&p).to_string_lossy().to_string());
+                        .map(|p| {
+                            crate::utils::strip_unc_prefix(&p)
+                                .to_string_lossy()
+                                .to_string()
+                        });
 
                     if let Some(path) = embedded_python {
                         if std::path::Path::new(&path).exists() {
@@ -219,7 +256,10 @@ pub fn run() {
                             path
                         } else {
                             // 资源路径解析成功但文件不存在，回退到系统 PATH
-                            log::warn!("嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH", path);
+                            log::warn!(
+                                "嵌入式 Python 路径解析成功但文件不存在: {}，回退到系统 PATH",
+                                path
+                            );
                             find_system_python()
                         }
                     } else {
@@ -244,7 +284,8 @@ pub fn run() {
                 // Tauri 资源路径解析：生产环境中 bundle.resources 打包的文件通过此 API 定位
                 // resolve() 会自动处理路径中的 .. -> _up_ 等转换，比手动拼接 resource_dir() 更可靠
                 // 生产环境通过 sidecar_dist/ 打包，脚本路径为 sidecar_dist/sidecar/main.py
-                let embedded_script = app.path()
+                let embedded_script = app
+                    .path()
                     .resolve("sidecar_dist/sidecar/main.py", BaseDirectory::Resource)
                     .ok();
 
@@ -288,12 +329,14 @@ pub fn run() {
                     None => {
                         log::error!(
                             "Sidecar 脚本未找到，已尝试以下路径: {:?}",
-                            candidates.iter()
+                            candidates
+                                .iter()
                                 .map(|p| p.to_string_lossy().to_string())
                                 .collect::<Vec<_>>()
                         );
                         // 兜底：使用绝对路径形式的最后候选，避免依赖 CWD
-                        candidates.last()
+                        candidates
+                            .last()
                             .map(|p| p.to_string_lossy().to_string())
                             .unwrap_or_else(|| "sidecar/main.py".to_string())
                     }
@@ -321,21 +364,176 @@ pub fn run() {
             );
 
             // 初始化 Tool 注册表并注册内置工具
-            // 读取 Git Bash 路径配置（命令超时由 LLM 自主决定）
-            let git_bash_path = config_manager
+            // 读取 Git Bash 路径配置（命令超时由 LLM 自主决定）+ WebSearch 配置
+            let (git_bash_path, web_search_config) = config_manager
                 .load_app_settings()
-                .map(|s| s.git_bash_path)
+                .map(|s| (s.git_bash_path, s.web_search))
                 .unwrap_or_default();
+
+            // 读取 LSP 配置
+            let lsp_config = config_manager
+                .load_app_settings()
+                .map(|s| s.lsp)
+                .unwrap_or_default();
+
+            // 初始化权限系统组件
+            // 先创建 db_arc，permission_registry 需要 Arc<Database>
+            let db_arc = Arc::new(database);
+            let permission_registry = Arc::new(
+                crate::services::permission::registry::PermissionRegistry::new(Arc::clone(&db_arc)),
+            );
+            let doom_loop_detector =
+                Arc::new(crate::services::permission::doom_loop::DoomLoopDetector::new());
+            let agent_mode_manager = Arc::new(crate::services::agent::AgentModeManager::new());
+
+            // 创建 question_channels（QuestionTool 与 submit_question_answer 命令共享）
+            let question_channels: crate::services::tool::builtin::question::QuestionChannels =
+                Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+
             let mut tool_registry = crate::services::tool::registry::ToolRegistry::new();
-            let scratchpad_states = crate::services::tool::builtin::register_builtin_tools(
+
+            // 初始化 LSP 组件
+            // 优先使用当前活动工作区路径作为 LSP 根目录(便于 rust-analyzer 找到 Cargo.toml 等)
+            // 若无活动工作区或路径不存在,回退到应用数据目录
+            let lsp_workspace_root = {
+                let mut root = app_data_dir.clone();
+                if let Ok(ws_config) = config_manager.load_workspaces() {
+                    if let Ok(settings) = config_manager.load_app_settings() {
+                        let active_id = &settings.workspace.default_workspace_id;
+                        if !active_id.is_empty() {
+                            if let Some(ws) =
+                                ws_config.workspaces.iter().find(|w| w.id == *active_id)
+                            {
+                                let ws_path = std::path::PathBuf::from(&ws.path);
+                                if ws_path.exists() {
+                                    root = ws_path;
+                                    log::info!("LSP 工作区根目录设为活动工作区: {}", ws.path);
+                                } else {
+                                    log::warn!(
+                                        "活动工作区路径不存在,回退到应用数据目录: {}",
+                                        ws.path
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                root
+            };
+            let lsp_manager = Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                lsp_workspace_root,
+                std::time::Duration::from_secs(lsp_config.request_timeout_seconds),
+            ));
+            let lsp_router = Arc::new(crate::services::lsp::router::LanguageRouter::new());
+            let lsp_cache = Arc::new(if lsp_config.cache.enabled {
+                crate::services::lsp::cache::LspResultCache::new(
+                    lsp_config.cache.ttl_seconds,
+                    lsp_config.cache.max_entries,
+                )
+            } else {
+                // 缓存禁用时创建 TTL=0 的缓存（所有查询立即过期，相当于禁用）
+                log::info!("LSP 结果缓存已禁用（lsp.cache.enabled=false）");
+                crate::services::lsp::cache::LspResultCache::new(0, 0)
+            });
+
+            // 注册 LSP 服务器配置（仅在 lsp.enabled = true 时）
+            if lsp_config.enabled {
+                for server_config in &lsp_config.servers {
+                    if server_config.enabled {
+                        let config = crate::models::lsp::LspServerConfig {
+                            language: server_config.language.clone(),
+                            command: server_config.command.clone(),
+                            root_patterns: server_config.root_patterns.clone(),
+                            initialization_options: server_config.initialization_options.clone(),
+                        };
+                        tauri::async_runtime::block_on(async {
+                            lsp_manager.register_config(config).await;
+                        });
+                        log::info!("已注册 LSP 服务器配置: language={}", server_config.language);
+                    }
+                }
+            }
+
+            // 初始化 Skill 注册表（需在 register_builtin_tools 之前，供 SkillTool 注册使用）
+            // 全局目录: ~/.agent/skills/，项目目录: .agent/skills/（当前工作目录下）
+            let global_skill_dir = {
+                #[cfg(target_os = "windows")]
+                {
+                    std::env::var_os("USERPROFILE")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        .join(".agent")
+                        .join("skills")
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    std::env::var_os("HOME")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        .join(".agent")
+                        .join("skills")
+                }
+            };
+            let project_skill_dir = std::path::PathBuf::from(".agent").join("skills");
+            let skill_loader = crate::services::skill::loader::SkillLoader::new(
+                global_skill_dir.clone(),
+                Some(project_skill_dir.clone()),
+                Vec::new(),
+            );
+            let skill_registry = Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                skill_loader,
+            ));
+            // 加载 Skill（失败时不阻断启动，仅记录警告）
+            match skill_registry.reload() {
+                Ok(count) => log::info!("已加载 {} 个 Skill", count),
+                Err(e) => log::warn!("加载 Skill 失败: {}", e.message),
+            }
+
+            // register_builtin_tools 注册 Task/WebFetch/WebSearch/Question 工具
+            // TaskTool 采用延迟注入模式：先注册不含 sub_executor 的实例，后续通过 set_sub_executor 注入
+            let registration = crate::services::tool::builtin::register_builtin_tools(
                 &mut tool_registry,
                 git_bash_path,
+                Arc::clone(&db_arc),
+                web_search_config,
+                question_channels.clone(),
+                Some(app.handle().clone()),
+                Arc::clone(&lsp_manager),
+                Arc::clone(&lsp_router),
+                Arc::clone(&lsp_cache),
+                Arc::clone(&skill_registry),
+                lsp_config.experimental_enabled,
             );
+            let scratchpad_states = registration.scratchpad_states;
+            let task_tool = registration.task_tool;
+
+            // 初始化 SubAgentExecutor（需要 tool_registry，故在工具注册后创建）
+            // 共享 llm_router、tool_registry、permission_registry、app_handle、db
+            let tool_registry_arc = Arc::new(tool_registry);
+            let sub_executor =
+                Arc::new(crate::services::agent::sub_executor::SubAgentExecutor::new(
+                    Arc::clone(&llm_router_arc),
+                    Arc::clone(&tool_registry_arc),
+                    Arc::clone(&permission_registry),
+                    Some(app.handle().clone()),
+                    Arc::clone(&db_arc),
+                ));
+            // 延迟注入 SubAgentExecutor 到 TaskTool（setup 为同步上下文，使用 block_on 调用 async setter）
+            // 使用 trait 对象 Arc<dyn SubAgentExecTrait> 避免 SubAgentExecutor 的 Drop glue 在 cdylib 模式下的符号导出问题
+            tauri::async_runtime::block_on(async {
+                task_tool
+                    .set_sub_executor(Arc::clone(&sub_executor)
+                        as Arc<dyn crate::services::agent::SubAgentExecTrait>)
+                    .await;
+            });
 
             log::info!("DocAgent 应用初始化完成");
 
             // 初始化文件监听服务
-            let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(app.handle().clone());
+            let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(
+                app.handle().clone(),
+                Some(Arc::clone(&lsp_cache)),
+            );
 
             // 初始化网络监控服务
             let network_monitor = crate::services::network_monitor::NetworkMonitor::new(
@@ -344,17 +542,25 @@ pub fn run() {
             );
 
             let state = AppState {
-                db: Arc::new(database),
+                db: db_arc,
                 config: Arc::new(tokio::sync::Mutex::new(config_manager)),
                 active_agents: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
                 confirm_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                permission_channels: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+                question_channels,
+                permission_registry,
+                doom_loop_detector,
+                agent_mode_manager,
                 doc_service: doc_service_for_handlers,
                 llm_router: llm_router_arc,
-                tool_registry: Arc::new(tool_registry),
+                tool_registry: tool_registry_arc,
+                sub_executor,
                 handler_registry: Arc::new(tokio::sync::Mutex::new(handler_registry)),
                 fs_watcher: Arc::new(fs_watcher),
                 network_monitor: Arc::new(network_monitor),
                 scratchpad_states,
+                skill_registry,
+                lsp_manager,
             };
 
             app.manage(state);
@@ -368,12 +574,28 @@ pub fn run() {
                     if let Ok(settings) = cfg.load_app_settings() {
                         let active_id = &settings.workspace.default_workspace_id;
                         if !active_id.is_empty() {
-                            if let Some(ws) = ws_config.workspaces.iter().find(|w| w.id == *active_id) {
+                            if let Some(ws) =
+                                ws_config.workspaces.iter().find(|w| w.id == *active_id)
+                            {
                                 fs_watcher.watch(ws.id.clone(), ws.path.clone()).await;
                             }
                         }
                     }
                 }
+            });
+
+            // 启动 Skill 目录监听，实现热重载
+            // 监听全局目录(~/.agent/skills/)和项目目录(.agent/skills/)，
+            // 当 SKILL.md 文件变更时自动触发 SkillRegistry 重载
+            let fs_watcher_for_skill = app.state::<AppState>().fs_watcher.clone();
+            let skill_registry_for_watcher = app.state::<AppState>().skill_registry.clone();
+            tauri::async_runtime::spawn(async move {
+                fs_watcher_for_skill
+                    .watch_skill_directories(
+                        vec![global_skill_dir, project_skill_dir],
+                        skill_registry_for_watcher,
+                    )
+                    .await;
             });
 
             // 启动定期 Provider 健康检查（每 5 分钟执行一次）
@@ -393,9 +615,8 @@ pub fn run() {
                         continue;
                     }
                     let results = router_snapshot.health_check_all().await;
-                    let summary: Vec<(&String, bool)> = results.iter()
-                        .map(|(k, v)| (k, v.success))
-                        .collect();
+                    let summary: Vec<(&String, bool)> =
+                        results.iter().map(|(k, v)| (k, v.success)).collect();
                     log::info!("定期健康检查完成: {:?}", summary);
                 }
             });
@@ -414,6 +635,23 @@ pub fn run() {
                 }
             });
 
+            // 启动 LSP 定期健康检查（间隔 > 0 时启动）
+            let lsp_manager_for_health = Arc::clone(&app.state::<AppState>().lsp_manager);
+            let lsp_health_interval = lsp_config.health_check_interval_seconds;
+            if lsp_health_interval > 0 {
+                tauri::async_runtime::spawn(async move {
+                    let mut interval =
+                        tokio::time::interval(std::time::Duration::from_secs(lsp_health_interval));
+                    interval.tick().await; // 跳过首次立即触发
+                    loop {
+                        interval.tick().await;
+                        if let Err(e) = lsp_manager_for_health.health_check().await {
+                            log::warn!("LSP 健康检查失败: {}", e.message);
+                        }
+                    }
+                });
+            }
+
             // 启动定期工作区目录存在性检查（每 10 秒执行一次）
             // 作为父目录监听器的兜底机制，当父目录监听器失效时仍能检测到目录删除
             let fs_watcher_for_check = app.state::<AppState>().fs_watcher.clone();
@@ -429,7 +667,9 @@ pub fn run() {
                         fs_watcher_for_check.stop().await;
                         continue;
                     }
-                    if let Some((wid, wpath, wname)) = fs_watcher_for_check.get_active_watch_info().await {
+                    if let Some((wid, wpath, wname)) =
+                        fs_watcher_for_check.get_active_watch_info().await
+                    {
                         if !wpath.exists() || !wpath.is_dir() {
                             log::warn!(
                                 "定期检查: 工作区目录已不存在, workspace_id={}, path={}, name={}",
@@ -438,11 +678,12 @@ pub fn run() {
                                 wname
                             );
                             // 发射工作区目录删除事件
-                            let deleted_payload = crate::events::types::WorkspaceDirectoryDeletedPayload {
-                                workspace_id: wid.clone(),
-                                workspace_name: wname.clone(),
-                                workspace_path: wpath.to_string_lossy().to_string(),
-                            };
+                            let deleted_payload =
+                                crate::events::types::WorkspaceDirectoryDeletedPayload {
+                                    workspace_id: wid.clone(),
+                                    workspace_name: wname.clone(),
+                                    workspace_path: wpath.to_string_lossy().to_string(),
+                                };
                             let _ = app_handle_for_check.emit(
                                 crate::events::types::WORKSPACE_DIRECTORY_DELETED,
                                 deleted_payload,
@@ -489,6 +730,7 @@ pub fn run() {
             commands::workspace::set_active_workspace,
             commands::workspace::get_file_tree,
             commands::workspace::search_files,
+            commands::workspace::get_workspace_git_status,
             // 文档命令
             commands::document::preview_document,
             commands::document::get_document_versions,
@@ -510,17 +752,31 @@ pub fn run() {
             commands::agent::start_agent,
             commands::agent::stop_agent,
             commands::agent::confirm_operation,
+            commands::agent::permission_respond,
+            commands::agent::switch_agent_mode,
             commands::agent::get_context_usage,
             commands::agent::is_agent_running,
+            commands::agent::submit_question_answer,
+            commands::agent::list_sub_agent_messages,
             // 模板命令
             commands::template::list_templates,
             commands::template::get_template,
             commands::template::create_template,
             commands::template::update_template,
             commands::template::delete_template,
+            // 权限规则命令
+            commands::permission::list_permission_rules,
+            commands::permission::add_permission_rule,
+            commands::permission::update_permission_rule,
+            commands::permission::delete_permission_rule,
             // 日志命令
             commands::log::get_log_path,
             commands::log::open_directory,
+            // LSP 命令
+            commands::lsp::lsp_get_status,
+            commands::lsp::lsp_restart_server,
+            commands::lsp::lsp_stop_all,
+            commands::lsp::lsp_initialize,
             // 更新命令
             #[cfg(desktop)]
             commands::update::check_update,
@@ -603,7 +859,14 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                 fn SetWindowLongPtrW(hwnd: HWND_PTR, index: i32, new_long: LONG_PTR) -> LONG_PTR;
                 fn SetWindowSubclass(
                     hwnd: HWND_PTR,
-                    subclass_proc: unsafe extern "system" fn(*mut std::ffi::c_void, u32, usize, isize, usize, usize) -> isize,
+                    subclass_proc: unsafe extern "system" fn(
+                        *mut std::ffi::c_void,
+                        u32,
+                        usize,
+                        isize,
+                        usize,
+                        usize,
+                    ) -> isize,
                     uid: usize,
                     dw_ref_data: usize,
                 ) -> BOOL_T;
@@ -627,24 +890,31 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                     window_name.as_ptr(),
                 );
 
-                if !child.is_null() {
-                    if is_maximized {
-                        let _ = ShowWindow(child, SW_HIDE);
-                        let _ = SetWindowPos(
-                            child,
-                            0 as HWND_PTR,
-                            0, 0, 0, 0,
-                            SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
-                        );
-                    }
+                if !child.is_null() && is_maximized {
+                    let _ = ShowWindow(child, SW_HIDE);
+                    let _ = SetWindowPos(
+                        child,
+                        0 as HWND_PTR,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
+                    );
                 }
 
                 // 最大化时移除 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU 样式
                 if is_maximized {
                     let mut remove_mask: u32 = 0;
-                    if (style & WS_SIZEBOX) != 0 { remove_mask |= WS_SIZEBOX; }
-                    if (style & WS_MAXIMIZEBOX) != 0 { remove_mask |= WS_MAXIMIZEBOX; }
-                    if (style & WS_SYSMENU) != 0 { remove_mask |= WS_SYSMENU; }
+                    if (style & WS_SIZEBOX) != 0 {
+                        remove_mask |= WS_SIZEBOX;
+                    }
+                    if (style & WS_MAXIMIZEBOX) != 0 {
+                        remove_mask |= WS_MAXIMIZEBOX;
+                    }
+                    if (style & WS_SYSMENU) != 0 {
+                        remove_mask |= WS_SYSMENU;
+                    }
 
                     if remove_mask != 0 {
                         let new_style = (style & !remove_mask) as LONG_PTR;
@@ -653,20 +923,23 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
                         let _ = SetWindowPos(
                             parent_hwnd,
                             0 as HWND_PTR,
-                            0, 0, 0, 0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE
+                                | SWP_NOSIZE
+                                | SWP_NOZORDER
+                                | SWP_NOACTIVATE
+                                | SWP_FRAMECHANGED
+                                | SWP_ASYNCWINDOWPOS,
                         );
                     }
                 }
 
                 // 安装 WM_SIZE subclass，在窗口状态切换时自动调整样式和子窗口
                 let subclass_uid: usize = 0xD0CA6E77;
-                let _ = SetWindowSubclass(
-                    parent_hwnd,
-                    fix_hit_test_subclass_proc,
-                    subclass_uid,
-                    0,
-                );
+                let _ = SetWindowSubclass(parent_hwnd, fix_hit_test_subclass_proc, subclass_uid, 0);
             }
         }
     }
@@ -675,6 +948,7 @@ fn fix_drag_resize_child_window_size(app: &tauri::AppHandle) {
 /// 自定义 subclass：监听 WM_SIZE 事件，在窗口状态切换时调整样式、子窗口可见性和窗口尺寸
 #[cfg(target_os = "windows")]
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)] // RECT/MONITORINFO 是 Win32 API 标准类型名
 unsafe extern "system" fn fix_hit_test_subclass_proc(
     hwnd: *mut std::ffi::c_void,
     msg: u32,
@@ -779,9 +1053,15 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // - WS_MAXIMIZEBOX + WS_SYSMENU: 防止 Windows 11 Snap Layouts 拦截 mouseup
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
                 let mut remove_mask: u32 = 0;
-                if (style & WS_SIZEBOX) != 0 { remove_mask |= WS_SIZEBOX; }
-                if (style & WS_MAXIMIZEBOX) != 0 { remove_mask |= WS_MAXIMIZEBOX; }
-                if (style & WS_SYSMENU) != 0 { remove_mask |= WS_SYSMENU; }
+                if (style & WS_SIZEBOX) != 0 {
+                    remove_mask |= WS_SIZEBOX;
+                }
+                if (style & WS_MAXIMIZEBOX) != 0 {
+                    remove_mask |= WS_MAXIMIZEBOX;
+                }
+                if (style & WS_SYSMENU) != 0 {
+                    remove_mask |= WS_SYSMENU;
+                }
 
                 if remove_mask != 0 {
                     let new_style = (style & !remove_mask) as LONG_PTR;
@@ -789,8 +1069,16 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE
+                            | SWP_NOSIZE
+                            | SWP_NOZORDER
+                            | SWP_NOACTIVATE
+                            | SWP_FRAMECHANGED
+                            | SWP_ASYNCWINDOWPOS,
                     );
                 }
                 // 关键修复：从最小化恢复到最大化时，Windows 在恢复样式后已设置了包含边框的
@@ -817,7 +1105,11 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 let wa_h = work_area.bottom - work_area.top;
                 let win_w = win_rect.right - win_rect.left;
                 let win_h = win_rect.bottom - win_rect.top;
-                if win_w != wa_w || win_h != wa_h || win_rect.left != work_area.left || win_rect.top != work_area.top {
+                if win_w != wa_w
+                    || win_h != wa_h
+                    || win_rect.left != work_area.left
+                    || win_rect.top != work_area.top
+                {
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
@@ -831,13 +1123,21 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // 隐藏 TAURI_DRAG_RESIZE_WINDOW 子窗口
                 let class_name: Vec<u16> = "TAURI_DRAG_RESIZE_BORDERS\0".encode_utf16().collect();
                 let window_name: Vec<u16> = "TAURI_DRAG_RESIZE_WINDOW\0".encode_utf16().collect();
-                let child = FindWindowExW(hwnd, std::ptr::null_mut(), class_name.as_ptr(), window_name.as_ptr());
+                let child = FindWindowExW(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    class_name.as_ptr(),
+                    window_name.as_ptr(),
+                );
                 if !child.is_null() {
                     let _ = ShowWindow(child, SW_HIDE);
                     let _ = SetWindowPos(
                         child,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
+                        0,
+                        0,
+                        0,
+                        0,
                         SWP_ASYNCWINDOWPOS | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOMOVE,
                     );
                 }
@@ -846,9 +1146,15 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                 // 窗口非最大化（真正还原）：恢复 WS_SIZEBOX + WS_MAXIMIZEBOX + WS_SYSMENU
                 let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
                 let mut add_mask: u32 = 0;
-                if (style & WS_SIZEBOX) == 0 { add_mask |= WS_SIZEBOX; }
-                if (style & WS_MAXIMIZEBOX) == 0 { add_mask |= WS_MAXIMIZEBOX; }
-                if (style & WS_SYSMENU) == 0 { add_mask |= WS_SYSMENU; }
+                if (style & WS_SIZEBOX) == 0 {
+                    add_mask |= WS_SIZEBOX;
+                }
+                if (style & WS_MAXIMIZEBOX) == 0 {
+                    add_mask |= WS_MAXIMIZEBOX;
+                }
+                if (style & WS_SYSMENU) == 0 {
+                    add_mask |= WS_SYSMENU;
+                }
 
                 if add_mask != 0 {
                     let new_style = (style | add_mask) as LONG_PTR;
@@ -856,8 +1162,16 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
                     let _ = SetWindowPos(
                         hwnd,
                         0 as HWND_PTR,
-                        0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_ASYNCWINDOWPOS,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE
+                            | SWP_NOSIZE
+                            | SWP_NOZORDER
+                            | SWP_NOACTIVATE
+                            | SWP_FRAMECHANGED
+                            | SWP_ASYNCWINDOWPOS,
                     );
                 }
                 DefSubclassProc(hwnd, msg, wparam, lparam)
@@ -882,6 +1196,7 @@ unsafe extern "system" fn fix_hit_test_subclass_proc(
 /// 的窗口管理逻辑冲突。DWMWA_WINDOW_CORNER_PREFERENCE 是独立的 DWM 属性，
 /// 不依赖 WS_THICKFRAME 即可生效。
 #[cfg(target_os = "windows")]
+#[allow(clippy::upper_case_acronyms)] // DWORD 是 Win32 API 标准类型名
 fn apply_window_rounded_corners(app: &tauri::AppHandle) {
     use tauri::Manager;
     if let Some(window) = app.get_webview_window("main") {

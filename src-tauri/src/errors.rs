@@ -170,6 +170,11 @@ impl CommandError {
     pub fn tool(code: u32, message: impl Into<String>) -> Self {
         Self::new(code, message)
     }
+
+    /// 快捷创建运行时错误
+    pub fn runtime(code: u32, message: impl Into<String>) -> Self {
+        Self::new(code, message)
+    }
 }
 
 impl std::fmt::Display for CommandError {

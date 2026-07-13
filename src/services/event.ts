@@ -97,6 +97,140 @@ export interface NetworkRetryPayload {
   reason: string;
 }
 
+/** 上下文压缩开始事件 */
+export interface CompactionStartPayload {
+  sessionId: string;
+  /** 压缩前 token 数 */
+  tokensBefore: number;
+}
+
+/** 上下文压缩完成事件 */
+export interface CompactionDonePayload {
+  sessionId: string;
+  /** 压缩前 token 数 */
+  tokensBefore: number;
+  /** 压缩后 token 数 */
+  tokensAfter: number;
+  /** 是否实际执行了压缩 */
+  compacted: boolean;
+  /** 压缩失败时的错误信息 */
+  error?: string;
+}
+
+// ================================================================
+// 子 Agent 与提问事件 Payload 类型
+// ================================================================
+
+/** 子 Agent 状态变更事件 */
+export interface SubAgentStatusPayload {
+  /** 父会话 ID */
+  parentSessionId: string;
+  /** 子 Agent 唯一标识 */
+  agentId: string;
+  /** 状态: "running" | "completed" | "failed" | "cancelled" */
+  status: string;
+  /** 附加消息（错误信息或结果摘要） */
+  message?: string;
+  /** 任务描述（父 Agent 给子 Agent 的任务指令） */
+  taskDescription: string;
+  /** 当前迭代次数 */
+  iteration: number;
+}
+
+/** 子 Agent 工具调用事件 */
+export interface SubAgentToolCallPayload {
+  /** 父会话 ID */
+  parentSessionId: string;
+  /** 子 Agent 唯一标识 */
+  agentId: string;
+  /** 工具调用 ID（用于关联 tool_result） */
+  toolCallId: string;
+  /** 工具名称 */
+  toolName: string;
+  /** 工具调用参数 */
+  arguments: Record<string, unknown>;
+  /** 当前迭代次数 */
+  iteration: number;
+}
+
+/** 子 Agent 思考链增量事件 */
+export interface SubAgentThinkingPayload {
+  /** 父会话 ID */
+  parentSessionId: string;
+  /** 子 Agent 唯一标识 */
+  agentId: string;
+  /** 思考内容增量 */
+  content: string;
+  /** 是否为流式输出的中间片段 */
+  isStreaming: boolean;
+  /** 当前迭代次数 */
+  iteration: number;
+}
+
+/** 子 Agent 内容增量事件 */
+export interface SubAgentContentPayload {
+  /** 父会话 ID */
+  parentSessionId: string;
+  /** 子 Agent 唯一标识 */
+  agentId: string;
+  /** 内容增量 */
+  content: string;
+  /** 是否为流式输出的中间片段 */
+  isStreaming: boolean;
+  /** 当前迭代次数 */
+  iteration: number;
+}
+
+/** 子 Agent 工具执行结果事件 */
+export interface SubAgentToolResultPayload {
+  /** 父会话 ID */
+  parentSessionId: string;
+  /** 子 Agent 唯一标识 */
+  agentId: string;
+  /** 工具调用 ID（关联 tool_call 事件） */
+  toolCallId: string;
+  /** 工具名称 */
+  toolName: string;
+  /** 成功时的结果 */
+  result?: string;
+  /** 失败时的错误信息 */
+  error?: string;
+  /** 是否成功 */
+  success: boolean;
+  /** 当前迭代次数 */
+  iteration: number;
+}
+
+/** 提问选项 */
+export interface QuestionOption {
+  /** 选项标签 */
+  label: string;
+  /** 选项描述 */
+  description: string;
+}
+
+/** 单个提问项 */
+export interface QuestionItem {
+  /** 短标签（最多12字符） */
+  header: string;
+  /** 完整问题文本 */
+  question: string;
+  /** 2-4 个选项 */
+  options: QuestionOption[];
+  /** 是否允许多选 */
+  multiSelect: boolean;
+}
+
+/** 向用户提问事件 */
+export interface QuestionPayload {
+  /** 会话 ID */
+  sessionId: string;
+  /** 提问唯一标识，提交回答时使用 */
+  questionId: string;
+  /** 问题列表 */
+  questions: QuestionItem[];
+}
+
 // ================================================================
 // 系统事件 Payload 类型
 // ================================================================
@@ -244,6 +378,78 @@ export function onAgentNetworkRetry(
   handler: (payload: NetworkRetryPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<NetworkRetryPayload>("agent:network_retry", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听上下文压缩开始事件 */
+export function onAgentCompactionStart(
+  handler: (payload: CompactionStartPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<CompactionStartPayload>("agent:compaction_start", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听上下文压缩完成事件 */
+export function onAgentCompactionDone(
+  handler: (payload: CompactionDonePayload) => void,
+): Promise<UnlistenFn> {
+  return listen<CompactionDonePayload>("agent:compaction_done", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听子 Agent 状态变更事件 */
+export function onSubAgentStatus(
+  handler: (payload: SubAgentStatusPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubAgentStatusPayload>("agent:sub_agent_status", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听子 Agent 工具调用事件 */
+export function onSubAgentToolCall(
+  handler: (payload: SubAgentToolCallPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubAgentToolCallPayload>("agent:sub_agent_tool_call", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听子 Agent 思考链增量事件 */
+export function onSubAgentThinking(
+  handler: (payload: SubAgentThinkingPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubAgentThinkingPayload>("agent:sub_agent_thinking", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听子 Agent 内容增量事件 */
+export function onSubAgentContent(
+  handler: (payload: SubAgentContentPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubAgentContentPayload>("agent:sub_agent_content", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听子 Agent 工具执行结果事件 */
+export function onSubAgentToolResult(
+  handler: (payload: SubAgentToolResultPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SubAgentToolResultPayload>("agent:sub_agent_tool_result", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听向用户提问事件 */
+export function onQuestion(
+  handler: (payload: QuestionPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<QuestionPayload>("agent:question", (event) => {
     handler(event.payload);
   });
 }

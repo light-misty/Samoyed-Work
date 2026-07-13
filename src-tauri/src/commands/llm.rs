@@ -6,10 +6,10 @@ use tauri::State;
 use crate::config::llm_config::{AdvancedConfig, ProviderType};
 use crate::errors::{CommandError, LLM_CONNECTION_FAILED};
 use crate::models::llm::{ConnectionResult, ProviderConfig, ProviderInfo};
-use crate::services::llm::provider::LlmProvider;
-use crate::services::llm::openai_adapter::OpenAiAdapter;
 use crate::services::llm::anthropic_adapter::AnthropicAdapter;
 use crate::services::llm::gemini_adapter::GeminiAdapter;
+use crate::services::llm::openai_adapter::OpenAiAdapter;
+use crate::services::llm::provider::LlmProvider;
 use crate::AppState;
 
 /// 测试 LLM Provider 连接
@@ -73,7 +73,10 @@ pub async fn test_connection_with_config(
             })?;
             match llm_config.providers.iter().find(|p| p.id == *pid) {
                 Some(existing) => {
-                    log::info!("API Key 为空，使用已保存 Provider 的密钥: provider_id={}", pid);
+                    log::info!(
+                        "API Key 为空，使用已保存 Provider 的密钥: provider_id={}",
+                        pid
+                    );
                     existing.api_key_encrypted.clone()
                 }
                 None => {
@@ -132,22 +135,18 @@ pub async fn test_connection_with_config(
                 advanced,
             ))
         }
-        ProviderType::Anthropic => {
-            Box::new(AnthropicAdapter::new(
-                config.api_base.clone(),
-                api_key.clone(),
-                config.model.clone(),
-                advanced,
-            ))
-        }
-        ProviderType::Gemini => {
-            Box::new(GeminiAdapter::new(
-                config.api_base.clone(),
-                api_key.clone(),
-                config.model.clone(),
-                advanced,
-            ))
-        }
+        ProviderType::Anthropic => Box::new(AnthropicAdapter::new(
+            config.api_base.clone(),
+            api_key.clone(),
+            config.model.clone(),
+            advanced,
+        )),
+        ProviderType::Gemini => Box::new(GeminiAdapter::new(
+            config.api_base.clone(),
+            api_key.clone(),
+            config.model.clone(),
+            advanced,
+        )),
     };
 
     // 执行测试连接
@@ -269,7 +268,10 @@ pub async fn update_provider(
 
     // 如果传入的 api_key 为空，保留原有的 api_key_encrypted（编辑时"留空则保持不变"）
     let api_key_to_save = if config.api_key.trim().is_empty() {
-        log::info!("API Key 为空，保留原有加密密钥: provider_id={}", provider_id);
+        log::info!(
+            "API Key 为空，保留原有加密密钥: provider_id={}",
+            provider_id
+        );
         existing.api_key_encrypted.clone()
     } else {
         config.api_key.clone()
@@ -292,10 +294,16 @@ pub async fn update_provider(
         supports_vision: config.supports_vision,
     };
 
-    crate::config::llm_config::update_provider(&mut llm_config, &provider_id, provider).map_err(|e| {
-        log::error!("更新 Provider 失败: provider_id={}, error={}", provider_id, e);
-        e
-    })?;
+    crate::config::llm_config::update_provider(&mut llm_config, &provider_id, provider).map_err(
+        |e| {
+            log::error!(
+                "更新 Provider 失败: provider_id={}, error={}",
+                provider_id,
+                e
+            );
+            e
+        },
+    )?;
     cfg_manager.save_llm_config(&llm_config).map_err(|e| {
         log::error!("保存 LLM 配置失败: {}", e);
         e
@@ -321,7 +329,11 @@ pub async fn delete_provider(
         e
     })?;
     crate::config::llm_config::delete_provider(&mut llm_config, &provider_id).map_err(|e| {
-        log::error!("删除 Provider 失败: provider_id={}, error={}", provider_id, e);
+        log::error!(
+            "删除 Provider 失败: provider_id={}, error={}",
+            provider_id,
+            e
+        );
         e
     })?;
     cfg_manager.save_llm_config(&llm_config).map_err(|e| {
@@ -337,7 +349,10 @@ pub async fn delete_provider(
 }
 
 /// 根据 LLM 配置重建 LlmRouter
-async fn rebuild_router(state: &State<'_, AppState>, llm_config: &crate::config::llm_config::LlmConfig) {
+async fn rebuild_router(
+    state: &State<'_, AppState>,
+    llm_config: &crate::config::llm_config::LlmConfig,
+) {
     // 保留旧路由器的 AppHandle，避免重建后丢失事件通知能力
     let app_handle = {
         let guard = state.llm_router.read().await;
@@ -365,9 +380,7 @@ pub async fn health_check_providers(
 /// 强制恢复所有 Provider 为可用状态
 /// 用于网络恢复后或用户手动点击"检查连接"时，立即重置所有 Provider 健康状态
 #[tauri::command]
-pub async fn force_recover_providers(
-    state: State<'_, AppState>,
-) -> Result<(), CommandError> {
+pub async fn force_recover_providers(state: State<'_, AppState>) -> Result<(), CommandError> {
     log::info!("强制恢复所有 Provider 为可用状态");
     let router = state.llm_router.read().await;
     router.force_recover_all().await;
@@ -378,9 +391,7 @@ pub async fn force_recover_providers(
 
 /// 获取当前网络状态
 #[tauri::command]
-pub async fn get_network_status(
-    state: State<'_, AppState>,
-) -> Result<String, CommandError> {
+pub async fn get_network_status(state: State<'_, AppState>) -> Result<String, CommandError> {
     let status = state.network_monitor.get_status().await;
     Ok(status.as_str().to_string())
 }

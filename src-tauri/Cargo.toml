@@ -40,3 +40,42 @@ dunce = "1"
 encoding_rs = "0.8"
 # SHA-256 哈希计算：用于 get_file_hash 工具计算文件哈希，支持去重和完整性校验
 sha2 = "0.10"
+# 阶段 1 新增:编程 Agent 核心工具依赖
+# edit 工具:差异计算和补丁生成
+similar = "2"
+# glob/grep 工具:基于 ignore crate(ripgrep 封装,支持 .gitignore)
+ignore = "0.4"
+# glob 模式编译
+globset = "0.4"
+# grep 工具:正则表达式引擎
+regex = "1"
+# 阶段 2 新增:权限系统通配符匹配(支持 * 和 ? 通配符,适用于命令字符串和文件路径)
+wildmatch = "2.4"
+# 阶段 3 新增:Skill 系统依赖
+# YAML frontmatter 解析(用于 Skill 系统读取 SKILL.md 中的 frontmatter 元数据)
+serde_yaml = "0.9"
+# markdown frontmatter 提取(用于从 Markdown 文件中分离 frontmatter 与正文)
+yaml-front-matter = "0.1"
+# 阶段 3 新增:SourceCode 代码语义搜索依赖
+# tree-sitter 代码解析引擎(用于 SourceCode 工具实现代码符号提取和语义搜索)
+tree-sitter = "0.22"
+# 各语言 grammar 包(与 tree-sitter 0.22 兼容)
+tree-sitter-c = "0.21"
+tree-sitter-cpp = "0.21"
+tree-sitter-rust = "0.21"
+tree-sitter-python = "0.21"
+tree-sitter-javascript = "0.21"
+tree-sitter-typescript = "0.21"
+tree-sitter-go = "0.21"
+tree-sitter-java = "0.21"
+# 阶段 4 新增:WebFetch 工具依赖
+# HTML 转 Markdown(用于 WebFetch 工具将抓取的网页转换为 Markdown 文本)
+html2md = "0.2"
+# URL 解析(用于 URL 验证器,校验和解析用户输入的 URL)
+url = "2.5"
+# URL 编码(用于 SerpAPI 查询参数编码)
+urlencoding = "2"
+
+[dev-dependencies]
+# 测试用临时文件
+tempfile = "3"

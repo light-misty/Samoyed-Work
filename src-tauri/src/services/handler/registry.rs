@@ -1,7 +1,7 @@
-﻿use std::collections::HashMap;
-use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::models::handler::{HandlerInfo, HandlerResult};
 
@@ -61,7 +61,11 @@ impl HandlerRegistry {
         let name = handler.handler_name().to_string();
         log::info!("注册处理器: {}", name);
         self.handlers.insert(name.clone(), Arc::from(handler));
-        log::debug!("处理器注册完成: {}, 当前注册总数: {}", name, self.handlers.len());
+        log::debug!(
+            "处理器注册完成: {}, 当前注册总数: {}",
+            name,
+            self.handlers.len()
+        );
     }
 
     /// 获取处理器的 Arc 引用（可在锁外使用）
@@ -84,7 +88,11 @@ impl HandlerRegistry {
                 if result.success {
                     log::info!("处理器执行成功: {}, 耗时: {}ms", name, result.duration_ms);
                 } else {
-                    log::error!("处理器执行失败: {}, 错误: {}", name, result.error.as_deref().unwrap_or("未知错误"));
+                    log::error!(
+                        "处理器执行失败: {}, 错误: {}",
+                        name,
+                        result.error.as_deref().unwrap_or("未知错误")
+                    );
                 }
                 result
             }
@@ -94,7 +102,8 @@ impl HandlerRegistry {
                     success: false,
                     output: None,
                     error: Some(format!("处理器不存在: {}", name)),
-                    duration_ms: 0, error_code: None,
+                    duration_ms: 0,
+                    error_code: None,
                 }
             }
         }
@@ -103,7 +112,9 @@ impl HandlerRegistry {
     /// 生成 OpenAI function calling 格式的工具定义（包含所有已注册处理器）
     pub fn tool_definitions(&self) -> Vec<Value> {
         log::debug!("生成工具定义, 处理器总数: {}", self.handlers.len());
-        let definitions: Vec<Value> = self.handlers.values()
+        let definitions: Vec<Value> = self
+            .handlers
+            .values()
             .map(|handler| {
                 json!({
                     "type": "function",
@@ -113,27 +124,31 @@ impl HandlerRegistry {
                         "parameters": handler.parameters(),
                     }
                 })
-            }).collect();
+            })
+            .collect();
         log::debug!("工具定义生成完成, 数量: {}", definitions.len());
         definitions
     }
 
     /// 列出所有处理器信息（内置处理器始终启用）
     pub fn list_handlers(&self) -> Vec<HandlerInfo> {
-        self.handlers.values().map(|handler| {
-            let handler_id = handler.handler_name();
-            HandlerInfo {
-                id: handler_id.to_string(),
-                name: handler_id.to_string(),
-                description: handler.description().to_string(),
-                category: handler.category().to_string(),
-                is_builtin: handler.is_builtin(),
-                enabled: true,
-                version: "1.0.0".to_string(),
-                params_schema: Some(handler.parameters()),
-                supported_types: handler.supported_types(),
-            }
-        }).collect()
+        self.handlers
+            .values()
+            .map(|handler| {
+                let handler_id = handler.handler_name();
+                HandlerInfo {
+                    id: handler_id.to_string(),
+                    name: handler_id.to_string(),
+                    description: handler.description().to_string(),
+                    category: handler.category().to_string(),
+                    is_builtin: handler.is_builtin(),
+                    enabled: true,
+                    version: "1.0.0".to_string(),
+                    params_schema: Some(handler.parameters()),
+                    supported_types: handler.supported_types(),
+                }
+            })
+            .collect()
     }
 
     /// 检查处理器是否存在
@@ -146,21 +161,39 @@ impl HandlerRegistry {
 mod tests {
     use super::*;
 
-    struct MockHandler { name: String }
+    struct MockHandler {
+        name: String,
+    }
 
     impl MockHandler {
-        fn new(name: &str) -> Self { Self { name: name.to_string() } }
+        fn new(name: &str) -> Self {
+            Self {
+                name: name.to_string(),
+            }
+        }
     }
 
     #[async_trait]
     impl Handler for MockHandler {
-        fn handler_name(&self) -> &str { &self.name }
-        fn description(&self) -> &str { "mock handler" }
-        fn parameters(&self) -> Value { json!({"type": "object"}) }
-        fn is_builtin(&self) -> bool { false }
+        fn handler_name(&self) -> &str {
+            &self.name
+        }
+        fn description(&self) -> &str {
+            "mock handler"
+        }
+        fn parameters(&self) -> Value {
+            json!({"type": "object"})
+        }
+        fn is_builtin(&self) -> bool {
+            false
+        }
         async fn execute(&self, _params: Value) -> crate::models::handler::HandlerResult {
             crate::models::handler::HandlerResult {
-                success: true, output: None, error: None, duration_ms: 0, error_code: None,
+                success: true,
+                output: None,
+                error: None,
+                duration_ms: 0,
+                error_code: None,
             }
         }
     }

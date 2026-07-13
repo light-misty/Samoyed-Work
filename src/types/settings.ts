@@ -1,12 +1,16 @@
 // ===== 设置相关类型定义 - 与 Rust 后端对齐 =====
 
-export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "appearance" | "shortcuts" | "general" | "help";
+export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "permission" | "appearance" | "shortcuts" | "general" | "help" | "lsp";
 
 // ----- 应用设置 -----
 
 export type ConfirmationLevel = "always" | "editOnly" | "never";
 export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
+
+export interface LspSettings {
+  enabled: boolean;
+}
 
 export interface GeneralSettings {
   authorName: string;
@@ -54,6 +58,7 @@ export interface AppSettings {
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
   update: UpdateSettings;
+  lsp: LspSettings;
   /** 用户首选 Provider ID（持久化，跨会话保持；为空表示使用列表第一个 Provider） */
   preferredProviderId?: string | null;
   /** Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测） */

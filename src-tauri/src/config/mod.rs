@@ -1,5 +1,5 @@
-pub mod llm_config;
 pub mod app_settings;
+pub mod llm_config;
 pub mod workspace_config;
 
 use std::path::{Path, PathBuf};

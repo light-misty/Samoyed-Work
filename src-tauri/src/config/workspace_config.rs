@@ -2,7 +2,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::{CommandError, FS_PATH_NOT_FOUND, CONFIG_WORKSPACE_PATH_EXISTS};
+use crate::errors::{CommandError, CONFIG_WORKSPACE_PATH_EXISTS, FS_PATH_NOT_FOUND};
 
 /// 工作区条目
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -76,9 +76,13 @@ pub fn add_workspace(
         let existing_normalized = crate::utils::canonicalize(Path::new(&existing.path))
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| existing.path.clone());
-        
+
         if normalized_path == existing_normalized {
-            log::warn!("添加工作区失败，路径已存在: {} (已注册为: {})", path, existing.name);
+            log::warn!(
+                "添加工作区失败，路径已存在: {} (已注册为: {})",
+                path,
+                existing.name
+            );
             return Err(CommandError::config(
                 CONFIG_WORKSPACE_PATH_EXISTS,
                 format!("工作区路径已存在: {} (已注册为 '{}')", path, existing.name),
@@ -110,13 +114,14 @@ pub fn remove_workspace(config: &mut WorkspacesConfig, id: &str) -> Result<(), C
         .position(|w| w.id == id)
         .ok_or_else(|| {
             log::warn!("移除工作区失败，不存在: {}", id);
-            CommandError::fs(
-                FS_PATH_NOT_FOUND,
-                format!("工作区 '{}' 不存在", id),
-            )
+            CommandError::fs(FS_PATH_NOT_FOUND, format!("工作区 '{}' 不存在", id))
         })?;
 
     config.workspaces.remove(index);
-    log::info!("已移除工作区: id={}，剩余数量: {}", id, config.workspaces.len());
+    log::info!(
+        "已移除工作区: id={}，剩余数量: {}",
+        id,
+        config.workspaces.len()
+    );
     Ok(())
 }

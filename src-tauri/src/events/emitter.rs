@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Emitter, Runtime};
 
-use crate::errors::CommandError;
 use super::types;
+use crate::errors::CommandError;
 
 /// Agent 事件发射器，封装 Tauri 事件发送逻辑
 /// 所有 emit 方法返回 Result，调用方可根据事件重要性决定是否忽略错误
@@ -44,17 +44,15 @@ impl<R: Runtime> AgentEmitter<R> {
         } else {
             log::debug!("发射事件: {}", event);
         }
-        self.app_handle
-            .emit(event, payload)
-            .map_err(|e| {
-                // 关键事件发射失败用 warn 级别，非关键用 debug 级别
-                if critical {
-                    log::warn!("关键事件 {} 发射失败: {}", event, e);
-                } else {
-                    log::debug!("事件 {} 发射失败（非关键）: {}", event, e);
-                }
-                CommandError::from(e)
-            })
+        self.app_handle.emit(event, payload).map_err(|e| {
+            // 关键事件发射失败用 warn 级别，非关键用 debug 级别
+            if critical {
+                log::warn!("关键事件 {} 发射失败: {}", event, e);
+            } else {
+                log::debug!("事件 {} 发射失败（非关键）: {}", event, e);
+            }
+            CommandError::from(e)
+        })
     }
 
     /// 发射 Agent 思考链增量事件（非关键，高频流式）
@@ -63,7 +61,10 @@ impl<R: Runtime> AgentEmitter<R> {
     }
 
     /// 发射 Agent 深度思考链增量事件（非关键，高频流式）
-    pub fn emit_deep_thinking(&self, payload: types::DeepThinkingPayload) -> Result<(), CommandError> {
+    pub fn emit_deep_thinking(
+        &self,
+        payload: types::DeepThinkingPayload,
+    ) -> Result<(), CommandError> {
         self.emit_event(types::AGENT_DEEP_THINKING, payload, false, true)
     }
 
@@ -103,22 +104,34 @@ impl<R: Runtime> AgentEmitter<R> {
     }
 
     /// 发射网络重试事件（非关键）
-    pub fn emit_network_retry(&self, payload: types::NetworkRetryPayload) -> Result<(), CommandError> {
+    pub fn emit_network_retry(
+        &self,
+        payload: types::NetworkRetryPayload,
+    ) -> Result<(), CommandError> {
         self.emit_event(types::AGENT_NETWORK_RETRY, payload, false, false)
     }
 
     /// 发射会话更新事件（关键 - 前端依赖此事件刷新会话列表）
-    pub fn emit_session_updated(&self, payload: types::SessionUpdatePayload) -> Result<(), CommandError> {
+    pub fn emit_session_updated(
+        &self,
+        payload: types::SessionUpdatePayload,
+    ) -> Result<(), CommandError> {
         self.emit_event(types::SESSION_UPDATED, payload, true, false)
     }
 
     /// 发射 LLM Provider 切换通知事件（非关键）
-    pub fn emit_provider_switch(&self, payload: types::ProviderSwitchPayload) -> Result<(), CommandError> {
+    pub fn emit_provider_switch(
+        &self,
+        payload: types::ProviderSwitchPayload,
+    ) -> Result<(), CommandError> {
         self.emit_event(types::LLM_PROVIDER_SWITCH, payload, false, false)
     }
 
     /// 发射上下文窗口使用情况更新事件（非关键）
-    pub fn emit_context_usage(&self, payload: types::ContextUsagePayload) -> Result<(), CommandError> {
+    pub fn emit_context_usage(
+        &self,
+        payload: types::ContextUsagePayload,
+    ) -> Result<(), CommandError> {
         self.emit_event(types::AGENT_CONTEXT_UPDATE, payload, false, false)
     }
 }

@@ -16,7 +16,9 @@ import type {
   Session,
   SessionSummary,
   SessionDetail,
+  Message,
   WorkspaceInfo,
+  GitStatus,
   FileNode,
   SearchOptions,
   SearchResult,
@@ -29,6 +31,10 @@ import type {
   CreateTemplateParams,
   UpdateTemplateParams,
   ContextUsageInfo,
+  PermissionRule,
+  AddPermissionRuleParams,
+  UpdatePermissionRuleParams,
+  LspServerInfo,
 } from "../types";
 
 // ================================================================
@@ -192,6 +198,13 @@ export async function getFileTree(
     path: path ?? null,
     depth: depth ?? null,
   }), { context: "getFileTree" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 获取工作区的 Git 仓库状态 */
+export async function getWorkspaceGitStatus(workspacePath: string): Promise<GitStatus> {
+  const result = await safeInvoke(() => invoke<GitStatus>("get_workspace_git_status", { workspacePath }), { context: "getWorkspaceGitStatus" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
@@ -390,6 +403,30 @@ export async function confirmOperation(
   if (!result.ok) throw result.error.raw;
 }
 
+/** 权限审批回复（双态权限系统：once/reject） */
+export async function permissionRespond(
+  sessionId: string,
+  operationId: string,
+  response: 'once' | 'reject',
+  feedback?: string,
+): Promise<void> {
+  const result = await safeInvoke(() => invoke("permission_respond", {
+    sessionId,
+    operationId,
+    response,
+    feedback: feedback ?? null,
+  }), { context: "permissionRespond" });
+  if (!result.ok) throw result.error.raw;
+}
+
+/** 切换 Agent 模式（Plan/Build/Document），由前端按钮触发 */
+export async function switchAgentMode(sessionId: string, mode: 'plan' | 'build' | 'document'): Promise<void> {
+  const result = await safeInvoke(() => invoke("switch_agent_mode", { sessionId, mode }), {
+    context: "switchAgentMode",
+  });
+  if (!result.ok) throw result.error.raw;
+}
+
 /** 获取上下文窗口使用信息 */
 export async function getContextUsage(sessionId: string): Promise<ContextUsageInfo> {
   const result = await safeInvoke(() => invoke<ContextUsageInfo>("get_context_usage", { sessionId }), { context: "getContextUsage" });
@@ -400,6 +437,22 @@ export async function getContextUsage(sessionId: string): Promise<ContextUsageIn
 /** 检查指定会话的 Agent 是否正在运行 */
 export async function isAgentRunning(sessionId: string): Promise<boolean> {
   const result = await safeInvoke(() => invoke<boolean>("is_agent_running", { sessionId }), { context: "isAgentRunning" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 提交用户对 Agent 提问的回答 */
+export async function submitQuestionAnswer(
+  questionId: string,
+  answers: Array<{ questionIndex: number; selectedOptions: string[] }>,
+): Promise<void> {
+  const result = await safeInvoke(() => invoke("submit_question_answer", { questionId, answers }), { context: "submitQuestionAnswer" });
+  if (!result.ok) throw result.error.raw;
+}
+
+/** 查询指定子 Agent 的所有持久化消息 */
+export async function listSubAgentMessages(agentId: string): Promise<Message[]> {
+  const result = await safeInvoke(() => invoke<Message[]>("list_sub_agent_messages", { agentId }), { context: "listSubAgentMessages" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }
@@ -518,4 +571,98 @@ export async function installDownloadedUpdate(
     { context: "installDownloadedUpdate" },
   );
   if (!result.ok) throw result.error.raw;
+}
+
+// ================================================================
+// 权限规则命令
+// ================================================================
+
+/** 列出权限规则（默认规则 + 用户规则） */
+export async function listPermissionRules(
+  scope?: string,
+  workspaceId?: string,
+  sessionId?: string,
+  permissionType?: string,
+  enabledOnly?: boolean,
+  includeDefaults?: boolean,
+): Promise<PermissionRule[]> {
+  const result = await safeInvoke(() => invoke<PermissionRule[]>("list_permission_rules", {
+    scope: scope ?? null,
+    workspaceId: workspaceId ?? null,
+    sessionId: sessionId ?? null,
+    permissionType: permissionType ?? null,
+    enabledOnly: enabledOnly ?? null,
+    includeDefaults: includeDefaults ?? null,
+  }), { context: "listPermissionRules" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 添加权限规则 */
+export async function addPermissionRule(params: AddPermissionRuleParams): Promise<PermissionRule> {
+  const result = await safeInvoke(() => invoke<PermissionRule>("add_permission_rule", {
+    scope: params.scope,
+    permissionType: params.permissionType,
+    pattern: params.pattern,
+    action: params.action,
+    description: params.description ?? null,
+    workspaceId: params.workspaceId ?? null,
+    sessionId: params.sessionId ?? null,
+  }), { context: "addPermissionRule" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 更新权限规则 */
+export async function updatePermissionRule(ruleId: string, params: UpdatePermissionRuleParams): Promise<PermissionRule> {
+  const result = await safeInvoke(() => invoke<PermissionRule>("update_permission_rule", {
+    ruleId,
+    scope: params.scope ?? null,
+    permissionType: params.permissionType ?? null,
+    pattern: params.pattern ?? null,
+    action: params.action ?? null,
+    description: params.description ?? null,
+    enabled: params.enabled ?? null,
+    workspaceId: params.workspaceId ?? null,
+    sessionId: params.sessionId ?? null,
+  }), { context: "updatePermissionRule" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 删除权限规则 */
+export async function deletePermissionRule(ruleId: string): Promise<void> {
+  const result = await safeInvoke(() => invoke("delete_permission_rule", { ruleId }), { context: "deletePermissionRule" });
+  if (!result.ok) throw result.error.raw;
+}
+
+// ================================================================
+// LSP 命令
+// ================================================================
+
+/** 获取所有 LSP 服务器状态 */
+export async function lspGetStatus(): Promise<LspServerInfo[]> {
+  const result = await safeInvoke(() => invoke<LspServerInfo[]>("lsp_get_status"), { context: "lspGetStatus" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 重启指定语言的 LSP 服务器 */
+export async function lspRestartServer(language: string): Promise<void> {
+  // 禁用默认 Toast，由前端 handleRestart 统一处理错误提示，避免双重 Toast
+  const result = await safeInvoke(() => invoke("lsp_restart_server", { language }), { context: "lspRestartServer", showToast: false });
+  if (!result.ok) throw result.error.raw;
+}
+
+/** 停止所有 LSP 服务器 */
+export async function lspStopAll(): Promise<void> {
+  const result = await safeInvoke(() => invoke("lsp_stop_all"), { context: "lspStopAll" });
+  if (!result.ok) throw result.error.raw;
+}
+
+/** 初始化 LSP：注册并启动所有启用的语言服务器 */
+export async function lspInitialize(): Promise<LspServerInfo[]> {
+  const result = await safeInvoke(() => invoke<LspServerInfo[]>("lsp_initialize"), { context: "lspInitialize" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
