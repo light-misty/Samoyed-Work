@@ -788,6 +788,8 @@ export default function App() {
 
     resetAgent();
     resetRefs();
+    // 退出子 Agent 工作流页面，避免删除会话后残留子 Agent 视图
+    clearSubAgentWorkflow();
 
     if (nextSessionId) {
       // 切换到下一个可用会话（不下 clearNodes，restoreSessionFromCache 会直接覆盖）
@@ -835,7 +837,7 @@ export default function App() {
       clearNodes();
       clearContextUsage();
     }
-  }, [clearNodes, resetAgent, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
+  }, [clearNodes, resetAgent, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
 
   // 打开文档预览：从后端获取文档内容并显示预览浮层
   const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {

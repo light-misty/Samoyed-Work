@@ -206,14 +206,10 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
           color: var(--color-text-tertiary, #8f959e);
           font-size: 13px;
         }
-        /* 子Agent工作流中父Agent指令消息框：横跨整个页面，居中对齐 */
-        .subagent-body .wf-user-node {
-          justify-content: center;
-        }
+        /* 子Agent工作流中父Agent指令消息框：横跨整个页面 */
         .subagent-body .wf-user-msg-wrapper {
           width: 100%;
           max-width: 100%;
-          align-items: center;
         }
         .subagent-body .wf-user-node .wf-node-card {
           width: 100%;
