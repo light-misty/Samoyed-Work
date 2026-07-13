@@ -849,7 +849,8 @@
     "moreActions": "更多操作",
     "clearSessionHistory": "清空会话历史",
     "clearSessionHistorySuccess": "已清空工作区的所有会话",
-    "clearSessionHistoryFailed": "清空会话历史失败，请重试"
+    "clearSessionHistoryFailed": "清空会话历史失败，请重试",
+    "showMoreSessions": "显示更多会话 ({{count}})"
   },
   "inputArea.removeAttachment": "移除 {{name}}",
   "update.checkFailedWithError": "检查更新失败: {{error}}"

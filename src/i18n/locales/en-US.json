@@ -872,7 +872,8 @@
     "moreActions": "More actions",
     "clearSessionHistory": "Clear session history",
     "clearSessionHistorySuccess": "All sessions in this workspace have been cleared",
-    "clearSessionHistoryFailed": "Failed to clear session history, please retry"
+    "clearSessionHistoryFailed": "Failed to clear session history, please retry",
+    "showMoreSessions": "Show more sessions ({{count}})"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
   "update.checkFailedWithError": "Update check failed: {{error}}"
