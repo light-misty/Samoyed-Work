@@ -211,10 +211,12 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
           justify-content: center;
         }
         .subagent-body .wf-user-msg-wrapper {
+          width: 100%;
           max-width: 100%;
           align-items: center;
         }
         .subagent-body .wf-user-node .wf-node-card {
+          width: 100%;
           max-width: 100%;
         }
         .subagent-body .wf-msg-copy-btn {

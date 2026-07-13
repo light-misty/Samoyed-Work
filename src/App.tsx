@@ -76,7 +76,7 @@ export default function App() {
 
   // 子 Agent 工作流详情页：当前查看的子 Agent ID，非空时切换到详情页替代主工作流
   const currentSubAgentId = useWorkflowStore((s) => s.currentSubAgentId);
-  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes } = useWorkflowStore();
+  const { addNode, updateNode, setExecutionStatus, clearNodes, setPermissionHandler, loadFromMessages, executionStatus, initContextUsageListener, loadContextUsage, clearContextUsage, saveSessionToCache, restoreSessionFromCache, clearSessionCache, getCachedStreamingRefs, nodes, clearSubAgentWorkflow } = useWorkflowStore();
   const { switchSession, loadSessions, clearCurrentSession, currentSessionId, sessions } = useSessionStore();
   const updateSessionTitleLocal = useSessionStore((s) => s.updateSessionTitleLocal);
   const { loadSettings, initThemeListener } = useSettingsStore();
@@ -704,6 +704,8 @@ export default function App() {
     // 会直接覆盖 nodes/contextUsage，避免中间 nodes=[] 导致空页面闪烁。
     resetAgent();
     resetRefs();
+    // 退出子 Agent 工作流页面，确保侧边栏切换会话时回到主工作流视图
+    clearSubAgentWorkflow();
 
     // 更新 session store 中的当前会话 ID
     switchSession(sessionId);
@@ -755,7 +757,7 @@ export default function App() {
     if (hasMessages) {
       loadContextUsage(sessionId);
     }
-  }, [clearNodes, resetAgent, clearContextUsage, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
+  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
 
   // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
   // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
