@@ -14,10 +14,16 @@ export function WorkspaceSelector() {
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null);
   const [deleteWorkspaceName, setDeleteWorkspaceName] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const deleteDialogOpenRef = useRef(false);
   const currentWs = workspaces.find((w) => w.id === currentWorkspaceId);
+
+  useEffect(() => {
+    deleteDialogOpenRef.current = deleteWorkspaceId !== null;
+  }, [deleteWorkspaceId]);
 
   /* 点击外部关闭下拉框 */
   const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (deleteDialogOpenRef.current) return;
     if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
       setOpen(false);
     }
@@ -97,7 +103,7 @@ export function WorkspaceSelector() {
       {open && (
         <div className="ws-selector-dropdown">
           {/* 工作区列表 */}
-          <div className="ws-selector-list">
+          <div className={`ws-selector-list ${workspaces.length > 3 ? "ws-selector-list-scrollable" : ""}`}>
             {workspaces.length === 0 && (
               <div className="ws-selector-empty">{t('workspace.noWorkspace')}</div>
             )}
@@ -232,9 +238,17 @@ export function WorkspaceSelector() {
           }
         }
         .ws-selector-list {
-          max-height: 320px;
-          overflow-y: auto;
+          max-height: 169px;
+          overflow-y: hidden;
           padding: 4px;
+        }
+        .ws-selector-list-scrollable {
+          overflow-y: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .ws-selector-list-scrollable::-webkit-scrollbar {
+          display: none;
         }
         .ws-selector-empty {
           padding: 20px 16px;
