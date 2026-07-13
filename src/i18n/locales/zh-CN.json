@@ -167,14 +167,14 @@
     "failedWithError": "上下文压缩失败: {{error}}"
   },
   "subAgentNode": {
-    "running": "子 Agent 执行中",
-    "completed": "子 Agent 已完成",
-    "failed": "子 Agent 失败",
-    "cancelled": "子 Agent 已取消",
+    "running": "SubAgent 执行中",
+    "completed": "SubAgent 已完成",
+    "failed": "SubAgent 失败",
+    "cancelled": "SubAgent 已取消",
     "error": "错误: {{message}}"
   },
   "subAgentWorkflow": {
-    "title": "子 Agent 工作流",
+    "title": "SubAgent 工作流",
     "back": "返回",
     "loading": "加载中...",
     "empty": "暂无工作流数据"
