@@ -337,7 +337,7 @@ pub struct LspCacheConfig {
 
 /// LSP 默认是否启用
 fn default_lsp_enabled() -> bool {
-    true
+    false
 }
 
 /// LSP 默认请求超时时间（秒）

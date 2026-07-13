@@ -781,6 +781,7 @@ pub fn run() {
             commands::lsp::lsp_get_status,
             commands::lsp::lsp_restart_server,
             commands::lsp::lsp_stop_all,
+            commands::lsp::lsp_initialize,
             // 更新命令
             #[cfg(desktop)]
             commands::update::check_update,

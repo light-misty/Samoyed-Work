@@ -623,7 +623,13 @@
       "restartError": "Restart failed",
       "stopAllSuccess": "All language servers stopped",
       "stopAllError": "Stop failed",
-      "experimental": "Experimental"
+      "experimental": "Experimental",
+      "enableLsp": "Enable LSP Language Server",
+      "enableLspDesc": "Provides code completion, diagnostics and other language services",
+      "confirmTitle": "Experimental Feature Confirmation",
+      "confirmContent": "LSP Language Server is an experimental feature. Enabling it may affect performance or stability. Are you sure you want to enable it?",
+      "confirmCancel": "Cancel",
+      "confirmEnable": "Enable"
     }
   },
   "history": {

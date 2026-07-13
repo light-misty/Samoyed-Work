@@ -75,6 +75,9 @@ const defaultSettings: AppSettings = {
   update: {
     autoCheck: true,
   },
+  lsp: {
+    enabled: false,
+  },
   gitBashPath: "",
 };
 

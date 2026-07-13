@@ -600,7 +600,13 @@
       "restartError": "重启失败",
       "stopAllSuccess": "已停止所有语言服务器",
       "stopAllError": "停止失败",
-      "experimental": "实验性功能"
+      "experimental": "实验性功能",
+      "enableLsp": "启用 LSP 语言服务器",
+      "enableLspDesc": "开启后可使用代码补全、诊断等语言服务功能",
+      "confirmTitle": "实验性功能确认",
+      "confirmContent": "LSP 语言服务器为实验性功能，开启后可能会影响应用性能或稳定性。是否确认开启？",
+      "confirmCancel": "取消",
+      "confirmEnable": "确认开启"
     }
   },
   "history": {

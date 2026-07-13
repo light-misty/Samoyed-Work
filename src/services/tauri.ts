@@ -650,3 +650,10 @@ export async function lspStopAll(): Promise<void> {
   const result = await safeInvoke(() => invoke("lsp_stop_all"), { context: "lspStopAll" });
   if (!result.ok) throw result.error.raw;
 }
+
+/** 初始化 LSP：注册并启动所有启用的语言服务器 */
+export async function lspInitialize(): Promise<LspServerInfo[]> {
+  const result = await safeInvoke(() => invoke<LspServerInfo[]>("lsp_initialize"), { context: "lspInitialize" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}

@@ -8,6 +8,10 @@ export type ConfirmationLevel = "always" | "editOnly" | "never";
 export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
 
+export interface LspSettings {
+  enabled: boolean;
+}
+
 export interface GeneralSettings {
   authorName: string;
   /** 作者邮箱 */
@@ -54,6 +58,7 @@ export interface AppSettings {
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
   update: UpdateSettings;
+  lsp: LspSettings;
   /** 用户首选 Provider ID（持久化，跨会话保持；为空表示使用列表第一个 Provider） */
   preferredProviderId?: string | null;
   /** Git Bash 可执行文件路径（空字符串表示从 PATH 自动检测） */
