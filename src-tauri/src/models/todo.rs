@@ -139,7 +139,7 @@ impl TodoList {
             return None;
         }
 
-        let mut summary = String::from("\n## 当前任务清单\n");
+        let mut summary = String::from("\n## Current Task List\n");
         for item in &self.items {
             let status_icon = match item.status {
                 TodoStatus::Pending => "[ ]",
@@ -158,7 +158,7 @@ impl TodoList {
         let completed = self.completed_count();
         let pending = self.pending_count();
         summary.push_str(&format!(
-            "\n进度: {}/{} 已完成, {} 待处理\n",
+            "\nProgress: {}/{} completed, {} pending\n",
             completed, total, pending
         ));
 

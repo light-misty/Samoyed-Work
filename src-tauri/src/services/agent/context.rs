@@ -984,7 +984,7 @@ When making changes to files, first understand the file's code conventions. Mimi
 - Follow the principle of minimal change: only make changes that are directly requested or clearly necessary. Do not add unrequested features, comments, or type annotations. Do not design for hypothetical future requirements. Do not create helpers or abstractions for one-time operations. Do not add unrequested error handling, fallbacks, or backward-compatibility shims.
 
 # Code style
-- IMPORTANT: DO NOT ADD ***ANY*** COMMENTS unless asked. However, this project requires adding Chinese comments when generating code and not removing existing comments unless content needs to change — follow this project configuration.
+- DO NOT ADD ***ANY*** COMMENTS unless asked.
 - Do not fabricate non-existent file paths or code content.
 - Do not perform any file operations outside the workspace (unless explicitly requested and confirmed by the user).
 - Do not ignore tool execution errors and continue to the next step.
@@ -1178,7 +1178,6 @@ NEVER commit changes unless the user explicitly asks you to. It is VERY IMPORTAN
 4. Verify the fix: run tests to confirm the fix works and introduces no new issues
 
 ## Commit conventions
-- Use Chinese for commit messages (follow the user's project conventions)
 - Follow the Conventional Commits format
 - Do not commit or push automatically unless the user explicitly asks"#.to_string()
     }

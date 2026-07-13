@@ -30,8 +30,8 @@ impl Tool for SkillTool {
     }
 
     fn description(&self) -> &str {
-        "加载领域能力(Skill)的详细内容。系统提示词中列出了可用的 Skill 清单,\
-         通过此工具按需加载 Skill 的完整 markdown 内容。"
+        "Load the full content of a domain capability (Skill). A list of available Skills \
+         is provided in the system prompt; use this tool to load a Skill's complete markdown content on demand."
     }
 
     fn category(&self) -> &str {
@@ -45,7 +45,7 @@ impl Tool for SkillTool {
                 "action": {
                     "type": "string",
                     "enum": ["load", "list"],
-                    "description": "操作类型: load=加载指定 Skill 的完整内容, list=列出所有可用 Skill"
+                    "description": "Action type: load=load full content of a specified Skill, list=list all available Skills"
                 },
                 "name": {
                     "type": "string",

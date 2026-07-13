@@ -482,7 +482,11 @@ async fn generate_session_title(
     llm_router: &Arc<LlmRouter>,
 ) -> Result<String, CommandError> {
     // 系统提示词包含标题生成的完整指令，严格区分系统消息与用户消息
-    let system_prompt = "你是一个会话标题生成器。根据用户的消息，生成一个简短、准确的会话标题。要求：1) 不超过20个字；2) 直接输出标题文本；3) 不要加引号；4) 不要加任何额外说明；5) 不要使用emoji。请为以下用户消息生成标题：";
+    let system_prompt = "You are a session title generator. Generate a short, accurate session title based on the user's message. Rules:\n\
+        1) No more than 20 characters\n\
+        2) Output the title text directly without quotes or extra explanation\n\
+        3) Use the same language as the user's message (e.g., use Chinese if the user writes in Chinese)\n\
+        4) Do not use emoji";
 
     let messages = vec![
         ChatMessage {
@@ -497,7 +501,7 @@ async fn generate_session_title(
         },
         ChatMessage {
             role: "user".to_string(),
-            content: user_message.to_string(),
+            content: format!("<user_message>\n{}\n</user_message>", user_message),
             content_parts: None,
             tool_calls: None,
             tool_call_id: None,
@@ -1413,7 +1417,7 @@ async fn run_agent(
         if !supports_vision {
             // 不支持视觉：注入增强版约束提示词
             ctx.system_prompt = format!(
-                "{}\n\n<vision_constraint>\n当前模型不支持图片理解功能。用户发送了图片附件，但图片数据已被系统移除，你无法看到图片内容。\n\n你必须遵守以下规则：\n1. 绝对不要假装能够看到或分析图片内容\n2. 绝对不要基于图片附件猜测用户意图或编造图片内容\n3. 绝对不要因为无法查看图片而自行执行与用户请求无关的操作（如生成文档、调用工具等）\n4. 如果用户的问题依赖图片内容，直接告知你无法查看图片，并建议用户用文字描述图片内容\n5. 如果用户只是发送了图片但没有文字说明，询问用户希望你对图片做什么\n</vision_constraint>",
+                "{}\n\n<vision_constraint>\nThe current model does not support image understanding. The user has sent image attachments, but the image data has been removed by the system — you cannot see the image content.\n\nYou MUST follow these rules:\n1. NEVER pretend you can see or analyze image content\n2. NEVER guess the user's intent or fabricate image content based on attachments\n3. NEVER perform unrelated operations (such as generating documents, calling tools, etc.) just because you cannot view images\n4. If the user's question depends on image content, tell them directly that you cannot view images and suggest describing the content in text\n5. If the user only sends images without text, ask them what they would like you to do with the images\n</vision_constraint>",
                 ctx.system_prompt
             );
             log::warn!(
@@ -1423,7 +1427,7 @@ async fn run_agent(
         } else {
             // 支持视觉时注入图片可见性提示
             ctx.system_prompt = format!(
-                "{}\n\n<image_visibility_warning>\n用户发送了图片附件，你可以看到这些图片。请基于你实际看到的图片内容进行回答，不要对图片内容进行猜测或虚构。\n</image_visibility_warning>",
+                "{}\n\n<image_visibility_warning>\nThe user has sent image attachments. You can see these images. Answer based on what you actually see in the images — do not guess or fabricate image content.\n</image_visibility_warning>",
                 ctx.system_prompt
             );
         }
