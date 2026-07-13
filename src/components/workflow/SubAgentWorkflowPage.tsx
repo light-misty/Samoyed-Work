@@ -146,7 +146,7 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
         ) : (
           <div ref={scrollRef} className="workflow-scroll-container" onScroll={handleScroll}>
             {subAgentNodes.map((node) => (
-              <WorkflowNodeRenderer key={node.id} node={node} />
+              <WorkflowNodeRenderer key={node.id} node={node} hideCopy />
             ))}
           </div>
         )}

@@ -13,19 +13,20 @@ import { QuestionNode } from "./QuestionNode";
 interface WorkflowNodeRendererProps {
   node: WorkflowNode;
   onRetry?: () => void;
+  hideCopy?: boolean;
 }
 
-export function WorkflowNodeRenderer({ node, onRetry }: WorkflowNodeRendererProps) {
+export function WorkflowNodeRenderer({ node, onRetry, hideCopy }: WorkflowNodeRendererProps) {
   const { toggleNode } = useWorkflowStore();
   const nt = node.type as WorkflowNodeType;
 
   switch (nt) {
     case "user":
-      return <UserNode node={node as WorkflowNode<"user">} />;
+      return <UserNode node={node as WorkflowNode<"user">} hideCopy={hideCopy} />;
     case "thinking":
       return <ThinkingNode node={node as WorkflowNode<"thinking">} />;
     case "content":
-      return <ContentNode node={node as WorkflowNode<"content">} />;
+      return <ContentNode node={node as WorkflowNode<"content">} hideCopy={hideCopy} />;
     case "tool":
       return <ToolNode node={node as WorkflowNode<"tool">} />;
     case "confirm":

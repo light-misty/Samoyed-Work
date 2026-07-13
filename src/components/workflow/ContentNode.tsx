@@ -7,9 +7,10 @@ import { useWorkflowStore } from "../../stores/useWorkflowStore";
 
 interface ContentNodeProps {
   node: WorkflowNode<"content">;
+  hideCopy?: boolean;
 }
 
-export function ContentNode({ node }: ContentNodeProps) {
+export function ContentNode({ node, hideCopy }: ContentNodeProps) {
   const { t } = useTranslation();
   const data = node.data as ContentNodeData;
   const isCompleted = node.status === "completed" && !data.isStreaming;
@@ -62,7 +63,7 @@ export function ContentNode({ node }: ContentNodeProps) {
           content={data.content}
           className="wf-content-markdown"
         />
-        {isCompleted && isLastContentInTurn && isTurnCompleted && (
+        {!hideCopy && isCompleted && isLastContentInTurn && isTurnCompleted && (
           <div className="wf-content-copy-btn">
             <button
               className="wf-copy-button"

@@ -6,9 +6,10 @@ import { formatSize } from "../../utils/format";
 
 interface UserNodeProps {
   node: WorkflowNode<"user">;
+  hideCopy?: boolean;
 }
 
-export function UserNode({ node }: UserNodeProps) {
+export function UserNode({ node, hideCopy }: UserNodeProps) {
   const { t } = useTranslation();
   const data = node.data as UserNodeData;
   const hasAttachments = data.attachments && data.attachments.length > 0;
@@ -49,19 +50,21 @@ export function UserNode({ node }: UserNodeProps) {
             )}
           </div>
         </div>
-        <div className={`wf-msg-copy-btn${copied ? " wf-copy-visible" : ""}`}>
-          <button
-            className="wf-copy-button"
-            onClick={handleCopy}
-            title={copied ? t('common.copied') : t('common.copy')}
-          >
-            {copied ? (
-              <Icon name="check" size={12} />
-            ) : (
-              <Icon name="copy" size={12} />
-            )}
-          </button>
-        </div>
+        {!hideCopy && (
+          <div className={`wf-msg-copy-btn${copied ? " wf-copy-visible" : ""}`}>
+            <button
+              className="wf-copy-button"
+              onClick={handleCopy}
+              title={copied ? t('common.copied') : t('common.copy')}
+            >
+              {copied ? (
+                <Icon name="check" size={12} />
+              ) : (
+                <Icon name="copy" size={12} />
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
