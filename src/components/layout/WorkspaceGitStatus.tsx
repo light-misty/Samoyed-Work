@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { getWorkspaceGitStatus } from "../../services/tauri";
+import { onGitStatusChanged } from "../../services/event";
 import type { GitStatus } from "../../types";
 
 const gitStatusCache = new Map<string, GitStatus>();
@@ -27,6 +28,7 @@ export function WorkspaceGitStatus({ pageLevel = false }: WorkspaceGitStatusProp
     }
 
     let cancelled = false;
+    let unlisten: (() => void) | null = null;
 
     const fetchStatus = () => {
       getWorkspaceGitStatus(path)
@@ -39,12 +41,26 @@ export function WorkspaceGitStatus({ pageLevel = false }: WorkspaceGitStatusProp
         });
     };
 
+    // 首次挂载时加载一次
     fetchStatus();
-    const pollId = setInterval(fetchStatus, 3000);
+
+    // 监听 Git 分支变更事件，取代定时轮询
+    // 当用户切换 Git 分支（.git/HEAD 文件变化）时触发
+    onGitStatusChanged((payload) => {
+      if (payload.workspaceId === currentWorkspaceId && !cancelled) {
+        fetchStatus();
+      }
+    }).then((fn) => {
+      if (cancelled) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
 
     return () => {
       cancelled = true;
-      clearInterval(pollId);
+      if (unlisten) unlisten();
     };
   }, [currentWs?.path]);
 

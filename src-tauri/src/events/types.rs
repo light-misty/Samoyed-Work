@@ -41,6 +41,7 @@ pub const WORKSPACE_DIRECTORY_DELETED: &str = "workspace:directory_deleted";
 pub const FILE_CHANGE: &str = "file:change";
 pub const LLM_PROVIDER_SWITCH: &str = "llm:provider_switch";
 pub const SYSTEM_NETWORK_CHANGE: &str = "system:network_change";
+pub const GIT_STATUS_CHANGED: &str = "git:status_changed";
 
 // ================================================================
 // Agent 事件 Payload 类型
@@ -354,6 +355,13 @@ pub struct FileChangePayload {
     pub path: String,
     /// 重命名时的旧路径
     pub old_path: Option<String>,
+}
+
+/// Git 状态变更事件（.git/HEAD 文件变化时触发）
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GitStatusChangedPayload {
+    pub workspace_id: String,
 }
 
 /// 网络状态变化事件

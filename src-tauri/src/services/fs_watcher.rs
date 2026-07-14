@@ -8,7 +8,8 @@ use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Mutex;
 
 use crate::events::types::{
-    FileChangePayload, WorkspaceDirectoryDeletedPayload, FILE_CHANGE, WORKSPACE_DIRECTORY_DELETED,
+    FileChangePayload, GitStatusChangedPayload, WorkspaceDirectoryDeletedPayload, FILE_CHANGE,
+    GIT_STATUS_CHANGED, WORKSPACE_DIRECTORY_DELETED,
 };
 use crate::services::skill::registry::SkillRegistry;
 
@@ -151,6 +152,14 @@ impl<R: Runtime> FsWatcherService<R> {
                                     .emit(WORKSPACE_DIRECTORY_DELETED, deleted_payload);
                                 return;
                             }
+                        }
+
+                        // 检测 .git/HEAD 文件变更，发射 Git 状态刷新事件
+                        if event_path.ends_with(".git/HEAD") {
+                            let git_payload = GitStatusChangedPayload {
+                                workspace_id: ws_wid.clone(),
+                            };
+                            let _ = ws_app_handle.emit(GIT_STATUS_CHANGED, git_payload);
                         }
 
                         let payload = FileChangePayload {

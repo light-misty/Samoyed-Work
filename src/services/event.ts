@@ -485,6 +485,20 @@ export function onFileChange(
   });
 }
 
+/** Git 状态变更事件 Payload（.git/HEAD 文件变化时触发） */
+export interface GitStatusChangedPayload {
+  workspaceId: string;
+}
+
+/** 监听 Git 状态变更事件 */
+export function onGitStatusChanged(
+  handler: (payload: GitStatusChangedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<GitStatusChangedPayload>("git:status_changed", (event) => {
+    handler(event.payload);
+  });
+}
+
 /** 监听网络状态变化事件 */
 export function onSystemNetworkChange(
   handler: (payload: NetworkChangePayload) => void,
