@@ -10,7 +10,7 @@
 
 [English](./README.md) | [简体中文](./README_zh.md)
 
-<img src="assets/screenshots/English.png" alt="WorkMolde AI Screenshot" width="800" />
+<img src="assets/screenshots/English1.1.0.png" alt="WorkMolde AI Screenshot" width="800" />
 
 </div>
 
