@@ -1,4 +1,4 @@
-# WorkMolde AI Python Sidecar 构建脚本
+﻿# WorkMolde AI Python Sidecar 构建脚本
 # 下载 Python Embeddable Distribution + 安装依赖 + 复制 sidecar 源码 + 编译 .pyc 隐藏源码
 # 最终产物 sidecar_dist/ 通过 tauri.conf.json 的 bundle.resources 打包到 NSIS 安装包
 #
