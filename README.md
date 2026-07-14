@@ -16,7 +16,7 @@
 
 ## Installation
 
-Download the latest Windows installer from [Releases](https://github.com/XuMingKe-06/WorkMolde-AI/releases) and run it to install.
+Download the latest Windows installer from [Releases](https://github.com/light-misty/WorkMolde-AI/releases) and run it to install.
 
 ## Features
 

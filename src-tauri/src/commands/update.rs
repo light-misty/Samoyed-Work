@@ -11,7 +11,7 @@ use tauri_plugin_updater::UpdaterExt;
 /// GitHub 更新端点
 #[cfg(desktop)]
 const UPDATE_ENDPOINT: &str =
-    "https://github.com/XuMingKe-06/WorkMolde-AI/releases/latest/download/latest.json";
+    "https://github.com/light-misty/WorkMolde-AI/releases/latest/download/latest.json";
 
 /// 构建 Updater 实例，使用 GitHub 端点
 #[cfg(desktop)]

@@ -16,7 +16,7 @@
 
 ## 安装
 
-从 [GitHub Releases](https://github.com/XuMingKe-06/WorkMolde-AI/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
+从 [GitHub Releases](https://github.com/light-misty/WorkMolde-AI/releases) 下载最新版本 Windows 安装包，运行即可完成安装。
 
 ## 核心功能
 
