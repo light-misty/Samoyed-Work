@@ -1,4 +1,4 @@
-# WorkMolde AI - AI文档处理Agent桌面应用 产品需求文档（PRD）
+# Samoyed Work - AI文档处理Agent桌面应用 产品需求文档（PRD）
 
 > 版本：v2.0  
 > 日期：2026-06-14  
@@ -10,7 +10,7 @@
 
 ### 1.1 产品定位
 
-WorkMolde AI 是一款专注于文档处理的 AI Agent 桌面应用，面向软件开发者及频繁处理文档的用户群体。用户通过自然语言对话驱动 Agent 完成文档的生成、读取、修改、格式转换等操作，支持 Word、Excel、PPT、PDF、Markdown 等多种文档格式。
+Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软件开发者及频繁处理文档的用户群体。用户通过自然语言对话驱动 Agent 完成文档的生成、读取、修改、格式转换等操作，支持 Word、Excel、PPT、PDF、Markdown 等多种文档格式。
 
 ### 1.2 核心价值
 
@@ -238,7 +238,7 @@ WorkMolde AI 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 
 ### 3.9 命令执行安全
 
-- write_script Tool：将智能体生成的脚本写入系统临时目录 `<temp_dir>/workmolde/scripts/`
+- write_script Tool：将智能体生成的脚本写入系统临时目录 `<temp_dir>/samoyed_work/scripts/`
 - run_command Tool：通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制
 - Git Bash 路径优先使用用户配置，为空时从 PATH 环境变量自动检测
 - 高风险命令需要用户确认

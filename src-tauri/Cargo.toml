@@ -1,13 +1,13 @@
 [package]
-name = "workmolde"
+name = "samoyed-work"
 version = "1.1.0"
 description = "AI工作助手桌面应用"
-authors = ["WorkMolde AI Team"]
+authors = ["Samoyed Work Team"]
 license = "MIT"
 edition = "2021"
 
 [lib]
-name = "workmolde_lib"
+name = "samoyed_work_lib"
 crate-type = ["lib", "cdylib"]
 
 [build-dependencies]

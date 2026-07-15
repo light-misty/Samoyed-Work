@@ -19,19 +19,19 @@
 
 | 日志文件 | 路径 | 说明 |
 |---------|------|------|
-| workmolde.log | `D:\DeskTop\WorkMolde-AI\log\workmolde.log` | Rust 主进程日志（Agent 迭代、Tool 执行、错误） |
-| sidecar.log | `D:\DeskTop\WorkMolde-AI\src-tauri\target\debug\log\sidecar.log` | Python Sidecar 日志（Handler 执行、代码执行） |
+| samoyed_work.log | `D:\DeskTop\Samoyed-Work\log\samoyed_work.log` | Rust 主进程日志（Agent 迭代、Tool 执行、错误） |
+| sidecar.log | `D:\DeskTop\Samoyed-Work\src-tauri\target\debug\log\sidecar.log` | Python Sidecar 日志（Handler 执行、代码执行） |
 
 **日志检查命令**（PowerShell）：
 ```powershell
 # 查看最近的 WARN/ERROR
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern 'WARN|ERROR' | Select-Object -Last 20
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern 'WARN|ERROR' | Select-Object -Last 20
 
 # 查看 Agent 迭代和完成状态
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern 'Agent 迭代|Agent 执行完成|Agent 执行失败'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern 'Agent 迭代|Agent 执行完成|Agent 执行失败'
 
 # 查看工具结果截断日志
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '已截断|工具结果'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '已截断|工具结果'
 ```
 
 ---
@@ -406,7 +406,7 @@ print(prs.core_properties.comments)  # 应输出 color_scheme:forest
 
 **日志验证**：
 ```
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '路径越界|路径不在工作区内'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '路径越界|路径不在工作区内'
 ```
 
 ### 9.2 绝对路径越界防护（canonicalize 失败场景）
@@ -467,7 +467,7 @@ Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '路径
 **测试步骤**：
 1. 创建一个超过 6000 字符的文件（如 `large_chinese.txt`，6629 字符）
 2. 向 Agent 发送：`读取 large_chinese.txt 的全部内容`
-3. 检查 workmolde.log
+3. 检查 samoyed_work.log
 
 **预期结果**：
 - 工具结果包含 `[已截断: 原始 N 字符，保留头部 4200 + 尾部 1800，省略中间 N 字符]`
@@ -484,17 +484,17 @@ Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '路径
 **日志验证命令**：
 ```powershell
 # 检查常规截断（INFO）
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '工具结果内容字段已截断'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '工具结果内容字段已截断'
 
 # 检查字符串级安全截断（WARN，极端情况）
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '工具结果字符串级安全截断'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '工具结果字符串级安全截断'
 ```
 
 ### 10.2 reasoning_content 压缩日志
 
 **测试步骤**：
 1. 执行需要多轮迭代的复杂任务（如完成多个测试项）
-2. 检查 workmolde.log 中的压缩记录
+2. 检查 samoyed_work.log 中的压缩记录
 
 **预期结果**：
 - 日志包含 DEBUG 记录：
@@ -508,7 +508,7 @@ Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '工具
 
 **日志验证命令**：
 ```powershell
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '压缩早期 reasoning_content' | Select-Object -Last 10
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '压缩早期 reasoning_content' | Select-Object -Last 10
 ```
 
 ### 10.3 Agent 迭代次数监控
@@ -524,7 +524,7 @@ Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern '压缩
 
 **日志验证命令**：
 ```powershell
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern 'Agent 执行完成|Agent 执行失败|超过最大迭代'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern 'Agent 执行完成|Agent 执行失败|超过最大迭代'
 ```
 
 ---
@@ -574,7 +574,7 @@ Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern 'Agent 
 
 ```powershell
 # 检查测试时间范围内的所有 ERROR
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\log\workmolde.log' -Pattern 'ERROR' | Select-Object -Last 20
+Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern 'ERROR' | Select-Object -Last 20
 ```
 
 **判定标准**：
@@ -648,18 +648,18 @@ python -c "import sys; sys.path.insert(0, 'sidecar'); from handlers.word_handler
 ```powershell
 # 验证路径安全校验一致性（第九章）
 # 检查所有工具是否使用统一的 validate_existing_path_in_workspace
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\src-tauri\src\services\tool\builtin.rs' -Pattern 'validate_existing_path_in_workspace' | Measure-Object | Select-Object -ExpandProperty Count
+Select-String -Path 'D:\DeskTop\Samoyed-Work\src-tauri\src\services\tool\builtin.rs' -Pattern 'validate_existing_path_in_workspace' | Measure-Object | Select-Object -ExpandProperty Count
 # 预期：≥ 9（1 个函数定义 + 8 个调用点：read_file/file_info/file_exists/delete_file/rename_file/copy_file/delete_directory/get_file_hash/read_file_lines）
 
 # 验证 reasoning_content 压缩阈值（第十章）
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\src-tauri\src\services\agent\context.rs' -Pattern 'REASONING_COMPRESS_THRESHOLD|REASONING_COMPRESS_KEEP'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\src-tauri\src\services\agent\context.rs' -Pattern 'REASONING_COMPRESS_THRESHOLD|REASONING_COMPRESS_KEEP'
 # 预期：THRESHOLD=1200, KEEP=500
 
 # 验证 MAX_ITERATIONS（第十章）
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\src-tauri\src\services\agent\executor.rs' -Pattern 'max_iterations'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\src-tauri\src\services\agent\executor.rs' -Pattern 'max_iterations'
 # 预期：100（commands/agent.rs、executor.rs、context.rs 三处保持一致）
 
 # 验证工具结果截断日志（第十章）
-Select-String -Path 'D:\DeskTop\WorkMolde-AI\src-tauri\src\services\agent\executor.rs' -Pattern '工具结果内容字段已截断'
+Select-String -Path 'D:\DeskTop\Samoyed-Work\src-tauri\src\services\agent\executor.rs' -Pattern '工具结果内容字段已截断'
 # 预期：找到 log::info! 调用
 ```

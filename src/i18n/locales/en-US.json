@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "WorkMolde AI",
+    "name": "Samoyed Work",
     "desc": "AI Agent-powered intelligent work assistant desktop app",
     "techStack": "Tauri 2 + React + Rust + Python",
     "engineVersion": "Python 3.12+ Sidecar"
@@ -64,9 +64,9 @@
     "directoryDeletedToast": "The directory of workspace \"{{name}}\" has been deleted, automatically removed"
   },
   "workflow": {
-    "startNewSession": "Work with WorkMolde",
-    "startNewSessionPlan": "Plan with WorkMolde",
-    "startNewSessionCode": "Code with WorkMolde",
+    "startNewSession": "Work with Samoyed Work",
+    "startNewSessionPlan": "Plan with Samoyed Work",
+    "startNewSessionCode": "Code with Samoyed Work",
     "emptySession": "Empty Session",
     "timeline": "Workflow Timeline",
     "thinking": "Thinking"
