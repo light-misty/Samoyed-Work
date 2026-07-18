@@ -94,28 +94,18 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
 
         isProgrammaticScrollRef.current = true;
 
-        // 判断是否为会话切换：节点数减少或一次性增加超过1个
-        // 节点数减少永远是会话切换（正常流程不会删除节点）
-        // 节点数跳跃增加也是会话切换（正常发消息一次只加1个节点）
         const isSessionSwitch = nodes.length < prevLength || Math.abs(nodes.length - prevLength) > 1;
-        // 用户发消息：新增了恰好一个用户节点，即使之前手动上滚也应跟随
-        const isNewUserMessage = !isSessionSwitch && nodes.length > prevLength && nodes[nodes.length - 1]?.type === "user";
+        const isNewNode = !isSessionSwitch && nodes.length > prevLength;
+        const isNewAgentNode = isNewNode && nodes[nodes.length - 1]?.type !== "user";
         const isStreaming = streamingContentKey > 0;
 
         if (isSessionSwitch) {
-          // 会话切换：强制跳转到底部，忽略用户之前的上滚状态
           autoScrollRef.current = true;
           el.scrollTop = el.scrollHeight;
-
-          // content-visibility: auto 导致懒加载，scrollHeight 初始不准，
-          // 持续重试直到底部稳定
+          // content-visibility: auto 导致 scrollHeight 初始不准，持续重试直到底部稳定
           let retries = 0;
-          const MAX_RETRIES = 30;
           const retryScroll = () => {
-            if (retries >= MAX_RETRIES) {
-              isProgrammaticScrollRef.current = false;
-              return;
-            }
+            if (retries >= 30) { isProgrammaticScrollRef.current = false; return; }
             retries++;
             const prevHeight = el.scrollHeight;
             el.scrollTop = el.scrollHeight;
@@ -128,19 +118,32 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
             });
           };
           requestAnimationFrame(retryScroll);
-        } else if (autoScrollRef.current || isNewUserMessage) {
-          // 用户在底部时自动跟随，或用户发新消息时强制跟随
-          if (isNewUserMessage) {
-            autoScrollRef.current = true;
-          }
-          if (isStreaming) {
+        } else if (autoScrollRef.current || isNewNode) {
+          if (isNewNode) autoScrollRef.current = true;
+          if (isStreaming || isNewAgentNode) {
             el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
           } else {
             el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
           }
-          requestAnimationFrame(() => {
-            isProgrammaticScrollRef.current = false;
-          });
+          // content-visibility: auto 对新节点高度估算不准，重试确保到底
+          if (isNewAgentNode) {
+            let retries = 0;
+            const retryScroll = () => {
+              if (retries >= 5) { isProgrammaticScrollRef.current = false; return; }
+              retries++;
+              requestAnimationFrame(() => {
+                if (el.scrollHeight - el.scrollTop - el.clientHeight >= 2) {
+                  el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+                  retryScroll();
+                } else {
+                  isProgrammaticScrollRef.current = false;
+                }
+              });
+            };
+            requestAnimationFrame(retryScroll);
+          } else {
+            requestAnimationFrame(() => { isProgrammaticScrollRef.current = false; });
+          }
         } else {
           isProgrammaticScrollRef.current = false;
         }

@@ -88,27 +88,39 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
         isProgrammaticScrollRef.current = true;
         const el = scrollRef.current;
 
-        // 判断是否为会话切换：节点数减少或一次性增加超过1个
         const isSessionSwitch = subAgentNodes.length < prevLength || Math.abs(subAgentNodes.length - prevLength) > 1;
+        const isNewNode = !isSessionSwitch && subAgentNodes.length > prevLength;
         const isStreaming = streamingContentKey > 0;
 
         if (isSessionSwitch) {
-          // 会话切换：强制跳转到底部，忽略用户之前的上滚状态
           autoScrollRef.current = true;
           el.scrollTop = el.scrollHeight;
-          requestAnimationFrame(() => {
-            isProgrammaticScrollRef.current = false;
-          });
-        } else if (autoScrollRef.current) {
-          // 用户在底部时自动跟随
-          if (isStreaming) {
+          requestAnimationFrame(() => { isProgrammaticScrollRef.current = false; });
+        } else if (autoScrollRef.current || isNewNode) {
+          if (isNewNode) autoScrollRef.current = true;
+          if (isStreaming || isNewNode) {
             el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
           } else {
             el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
           }
-          requestAnimationFrame(() => {
-            isProgrammaticScrollRef.current = false;
-          });
+          if (isNewNode) {
+            let retries = 0;
+            const retryScroll = () => {
+              if (retries >= 5) { isProgrammaticScrollRef.current = false; return; }
+              retries++;
+              requestAnimationFrame(() => {
+                if (el.scrollHeight - el.scrollTop - el.clientHeight >= 2) {
+                  el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+                  retryScroll();
+                } else {
+                  isProgrammaticScrollRef.current = false;
+                }
+              });
+            };
+            requestAnimationFrame(retryScroll);
+          } else {
+            requestAnimationFrame(() => { isProgrammaticScrollRef.current = false; });
+          }
         } else {
           isProgrammaticScrollRef.current = false;
         }
