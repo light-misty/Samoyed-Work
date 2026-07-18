@@ -1,6 +1,6 @@
 [package]
 name = "samoyed-work"
-version = "1.1.0"
+version = "1.1.1"
 description = "AI工作助手桌面应用"
 authors = ["Samoyed Work Team"]
 license = "MIT"
