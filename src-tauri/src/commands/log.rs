@@ -67,3 +67,35 @@ pub async fn open_directory(path: String) -> Result<(), CommandError> {
 
     Ok(())
 }
+
+/// 在系统默认浏览器中打开指定 URL
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), CommandError> {
+    log::info!("open_url: 在浏览器中打开: {}", url);
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("打开 URL 失败: {}", e)))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("打开 URL 失败: {}", e)))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| CommandError::fs(FS_IO_ERROR, format!("打开 URL 失败: {}", e)))?;
+    }
+
+    Ok(())
+}

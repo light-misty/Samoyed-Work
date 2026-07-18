@@ -6,6 +6,7 @@ import { useToastStore } from "../../stores/useToastStore";
 import { useUpdateStore } from "../../stores/useUpdateStore";
 import * as tauriCmd from "../../services/tauri";
 import { getVersion } from "@tauri-apps/api/app";
+import { Icon } from "../common/Icon";
 
 export function GeneralTab() {
   const { t } = useTranslation();
@@ -289,7 +290,22 @@ export function GeneralTab() {
         <div className="about-card">
           <div className="about-name">Samoyed Work</div>
           <div className="about-version">v{currentVersion || "0.1.0"}</div>
-
+          <div className="about-links">
+            <button
+              className="about-link-btn"
+              onClick={() => tauriCmd.openUrl("https://github.com/light-misty/Samoyed-Work")}
+            >
+              <Icon name="github" size={14} />
+              <span>{t('settings.general.github')}</span>
+            </button>
+            <button
+              className="about-link-btn"
+              onClick={() => tauriCmd.openUrl(`https://github.com/light-misty/Samoyed-Work/releases/tag/v${currentVersion || "0.1.0"}`)}
+            >
+              <Icon name="external-link" size={14} />
+              <span>{t('settings.general.changelog')}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -378,6 +394,30 @@ export function GeneralTab() {
           font-family: var(--font-mono);
           color: var(--color-text-tertiary);
           margin-top: 4px;
+        }
+        .about-links {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .about-link-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 4px 10px;
+          font-size: 12px;
+          font-weight: 500;
+          border-radius: var(--radius-sm);
+          background: var(--color-bg);
+          color: var(--color-text-secondary);
+          cursor: pointer;
+          transition: all 0.15s;
+          border: 1px solid var(--color-border);
+        }
+        .about-link-btn:hover {
+          background: var(--color-bg-hover);
+          color: var(--color-text-primary);
+          border-color: var(--color-accent);
         }
         .setting-toggle {
           position: relative;

@@ -293,7 +293,9 @@
       "currentVersion": "Current version: v{{version}}",
       "checking": "Checking...",
       "checkUpdate": "Check for Updates",
-      "about": "About"
+      "about": "About",
+      "github": "GitHub",
+      "changelog": "Changelog"
     },
     "appearance": {
       "sectionTitle": "Theme",

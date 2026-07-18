@@ -512,6 +512,12 @@ export async function openDirectory(path: string): Promise<void> {
   if (!result.ok) throw result.error.raw;
 }
 
+/** 在系统默认浏览器中打开指定 URL */
+export async function openUrl(url: string): Promise<void> {
+  const result = await safeInvoke(() => invoke<void>("open_url", { url }), { context: "openUrl" });
+  if (!result.ok) throw result.error.raw;
+}
+
 // ================================================================
 // 更新命令
 // ================================================================

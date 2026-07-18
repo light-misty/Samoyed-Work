@@ -772,6 +772,7 @@ pub fn run() {
             // 日志命令
             commands::log::get_log_path,
             commands::log::open_directory,
+            commands::log::open_url,
             // LSP 命令
             commands::lsp::lsp_get_status,
             commands::lsp::lsp_restart_server,
