@@ -396,10 +396,10 @@ const paths: Record<IconName, React.JSX.Element> = {
   ),
   // 信息/帮助
   info: (
-    <g key="info">
+    <g key="info" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="16" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12.01" y2="8" />
+      <path d="M12 8v4" />
+      <path d="M12 16h.01" />
     </g>
   ),
   // 图片

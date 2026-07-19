@@ -305,6 +305,13 @@ export function GeneralTab() {
               <Icon name="external-link" size={14} />
               <span>{t('settings.general.changelog')}</span>
             </button>
+            <button
+              className="about-link-btn"
+              onClick={() => tauriCmd.openUrl("https://github.com/light-misty/Samoyed-Work/issues")}
+            >
+              <Icon name="info" size={14} />
+              <span>{t('settings.general.issueFeedback')}</span>
+            </button>
           </div>
         </div>
       </div>

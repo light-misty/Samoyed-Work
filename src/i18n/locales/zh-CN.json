@@ -295,7 +295,8 @@
       "checkUpdate": "检查更新",
       "about": "关于",
       "github": "GitHub",
-      "changelog": "更新日志"
+      "changelog": "更新日志",
+      "issueFeedback": "问题反馈"
     },
     "appearance": {
       "sectionTitle": "主题",

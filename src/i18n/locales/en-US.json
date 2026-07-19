@@ -295,7 +295,8 @@
       "checkUpdate": "Check for Updates",
       "about": "About",
       "github": "GitHub",
-      "changelog": "Changelog"
+      "changelog": "Changelog",
+      "issueFeedback": "Issue Feedback"
     },
     "appearance": {
       "sectionTitle": "Theme",
