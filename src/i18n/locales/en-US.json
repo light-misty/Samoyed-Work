@@ -210,7 +210,7 @@
   },
   "agentInfo": {
     "sectionTitle": "Agent Info",
-    "currentModel": "Current Model",
+    "currentModel": "Model",
     "modelConnected": "Model connected",
     "modelDisconnected": "Model disconnected",
     "notConfigured": "Not configured",
