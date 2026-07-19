@@ -6,6 +6,21 @@ interface ToolNodeProps {
   node: WorkflowNode<"tool">;
 }
 
+/** 无路径工具 → i18n key 映射 */
+const toolDescriptions: Record<string, string> = {
+  bash: 'toolBrief.runCommand',
+  task: 'toolBrief.runTask',
+  scratchpad: 'toolBrief.scratchpad',
+  todowrite: 'toolBrief.todoWrite',
+  question: 'toolBrief.question',
+  web_search: 'toolBrief.webSearch',
+  read_web: 'toolBrief.readWeb',
+  webfetch: 'toolBrief.readWeb',
+  search: 'toolBrief.searchFiles',
+  glob: 'toolBrief.globFiles',
+  grep: 'toolBrief.grepFiles',
+};
+
 export function ToolNode({ node }: ToolNodeProps) {
   const { t } = useTranslation();
   const data = node.data as ToolNodeData;
@@ -46,11 +61,18 @@ export function ToolNode({ node }: ToolNodeProps) {
   return (
     <div className={`wf-node${isRunning ? " wf-tool-running" : ""}`}>
       <div className="wf-tool-content">
-        {/* 工具名称和简要描述 */}
+        {/* 工具名称和文件路径 */}
         <div className="wf-tool-brief">
           <span className="font-mono">{data.toolName}</span>
-          <span> · </span>
-          <span>{data.briefDescription}</span>
+          {data.toolName === 'skill' && data.input?.name ? (
+            <><span> · </span><span>{String(data.input.name)}</span></>
+          ) : data.toolName === 'write_script' && data.input?.filename ? (
+            <><span> · </span><span>{t('toolBrief.writeScript')} {String(data.input.filename)}</span></>
+          ) : data.filePath ? (
+            <><span> · </span><span>{data.filePath}</span></>
+          ) : toolDescriptions[data.toolName] ? (
+            <><span> · </span><span>{t(toolDescriptions[data.toolName])}</span></>
+          ) : null}
           {isRunning && (
             <span className="wf-tool-status-running">{t('toolNode.executing')}</span>
           )}

@@ -55,52 +55,79 @@ export function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// 直接导入 i18n 实例（i18n 在应用启动时已同步初始化，此处在运行时调用时 i18n 已就绪）
-import i18n from '../i18n';
+/**
+ * 将相对路径转换为绝对路径
+ */
+function resolveAbsolutePath(path: string, workspaceRoot: string): string {
+  if (!path) return path;
+  // Windows 绝对路径：C:\...
+  if (/^[a-zA-Z]:[/\\]/.test(path)) return path;
+  // Unix 绝对路径：/...
+  if (path.startsWith('/')) return path;
+  // 相对路径：拼接工作区根目录
+  const sep = workspaceRoot.includes('\\') ? '\\' : '/';
+  const normalized = path.replace(/[/\\]/g, sep);
+  // "." 表示当前目录，直接返回工作区根目录
+  if (normalized === '.') return workspaceRoot;
+  return workspaceRoot.endsWith(sep)
+    ? workspaceRoot + normalized
+    : workspaceRoot + sep + normalized;
+}
 
-export function generateToolBrief(toolName: string, input: Record<string, unknown>): string {
-  const f = (key: string) => String(input[key] ?? "");
-  const actionMap: Record<string, string> = {
-    read: i18n.t('toolBrief.read'),
-    convert: i18n.t('toolBrief.convert'),
-    analyze: i18n.t('toolBrief.analyze'),
-  };
-  const formatMap: Record<string, string> = {
-    docx: "Word",
-    xlsx: "Excel",
-    pptx: "PPT",
-    pdf: "PDF",
-  };
-  const action = actionMap[f("action")] || "";
-  const format = formatMap[toolName] || "";
-  switch (toolName) {
-    case "docx":
-    case "xlsx":
-    case "pptx":
-    case "pdf":
-      // 流式阶段提前发射时参数可能为空，此时只显示格式名称
-      if (action) {
-        return `${action} ${format} ${f("path") || i18n.t('toolBrief.document')}`;
+/**
+ * 提取工具调用的文件路径（绝对路径），无路径时返回 undefined
+ */
+export function extractToolPath(
+  toolName: string,
+  input: Record<string, unknown>,
+  workspaceRoot: string
+): string | undefined {
+  const f = (key: string) => String(input[key] ?? '');
+
+  // rename：源路径（绝对）→ 目标文件名
+  if (toolName === 'rename') {
+    const source = f('source_path');
+    const target = f('target_path');
+    if (source) {
+      const absSource = resolveAbsolutePath(source, workspaceRoot);
+      if (target) {
+        const targetName = target.replace(/^.*[/\\]/, '');
+        return `${absSource} → ${targetName}`;
       }
-      return `${format} ${f("path") || i18n.t('toolBrief.document')}`;
-    case "remove":
-      return `${i18n.t('toolBrief.delete')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "search":
-      return `${i18n.t('toolBrief.search')} ${f("query") ? `"${f("query")}"` : i18n.t('toolBrief.file')}`;
-    case "list":
-      return i18n.t('toolBrief.listDirectory');
-    case "read":
-      return `${i18n.t('toolBrief.read')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "write":
-      return `${i18n.t('toolBrief.write')} ${f("path") || i18n.t('toolBrief.file')}`;
-    case "bash":
-      return i18n.t('toolBrief.runCommand');
-    case "write_script":
-      // 显示脚本语言和文件名
-      return f("filename")
-        ? `${i18n.t('toolBrief.writeScript')} ${f("filename")}`
-        : i18n.t('toolBrief.writeScript');
-    default:
-      return toolName;
+      return absSource;
+    }
+    return undefined;
   }
+
+  // copy：源路径（绝对）→ 目标路径（绝对）
+  if (toolName === 'copy') {
+    const source = f('source_path');
+    const target = f('target_path');
+    if (source) {
+      const absSource = resolveAbsolutePath(source, workspaceRoot);
+      const absTarget = target ? resolveAbsolutePath(target, workspaceRoot) : '';
+      return target ? `${absSource} → ${absTarget}` : absSource;
+    }
+    return undefined;
+  }
+
+  // lsp：使用 file_path 参数
+  if (toolName === 'lsp') {
+    const p = f('file_path');
+    return p ? resolveAbsolutePath(p, workspaceRoot) : undefined;
+  }
+
+  // 统一使用 path 参数的工具
+  const pathTools = new Set([
+    'list', 'read', 'write', 'edit', 'edit_lines', 'remove',
+    'file_info', 'read_lines', 'remove_dir', 'mkdir', 'exists',
+    'hash', 'source_code',
+    'docx', 'xlsx', 'pptx', 'pdf',
+  ]);
+  if (pathTools.has(toolName)) {
+    const p = f('path');
+    return p ? resolveAbsolutePath(p, workspaceRoot) : undefined;
+  }
+
+  return undefined;
 }

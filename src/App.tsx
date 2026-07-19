@@ -21,11 +21,18 @@ import { useUpdateStore } from "./stores/useUpdateStore";
 import { useToastStore } from "./stores/useToastStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
-import { generateToolBrief } from "./utils/format";
+import { extractToolPath } from "./utils/format";
 import type { NodeStatus, ToolNodeData } from "./types";
 import type { UpdateInfo } from "./services/tauri";
 import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
+
+/** 获取当前工作区的根目录绝对路径 */
+function getWorkspaceRoot(): string {
+  const { workspaces, currentWorkspaceId } = useWorkspaceStore.getState();
+  const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+  return ws?.path || '';
+}
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
 const PreviewOverlay = lazy(() =>
@@ -393,7 +400,7 @@ export default function App() {
             ...existingToolNode.data,
             toolName: currentToolCall.toolName,
             input: currentToolCall.arguments,
-            briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
+            filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
           } as ToolNodeData,
         });
       } else {
@@ -418,7 +425,7 @@ export default function App() {
               toolName: currentToolCall.toolName,
               callId: currentToolCall.callId,
               input: currentToolCall.arguments,
-              briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
+              filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
             } as ToolNodeData,
           });
         } else {
@@ -430,7 +437,7 @@ export default function App() {
           addNode("tool", {
             toolName: currentToolCall.toolName,
             input: currentToolCall.arguments,
-            briefDescription: generateToolBrief(currentToolCall.toolName, currentToolCall.arguments),
+            filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
             callId: currentToolCall.callId,
           }, "running", toolIteration);
         }

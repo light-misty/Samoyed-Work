@@ -3,10 +3,18 @@ import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeD
 import type { Message } from "../types/session";
 import type { ContextUsageInfo } from "../types/settings";
 
-import { generateToolBrief } from "../utils/format";
+import { extractToolPath } from "../utils/format";
+import { useWorkspaceStore } from "./useWorkspaceStore";
 import { onAgentContextUpdate, type QuestionItem } from "../services/event";
 import * as tauriCmd from "../services/tauri";
 import i18n from "../i18n";
+
+/** 获取当前工作区的根目录绝对路径 */
+function getWorkspaceRoot(): string {
+  const { workspaces, currentWorkspaceId } = useWorkspaceStore.getState();
+  const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+  return ws?.path || '';
+}
 
 /** 按会话缓存的状态条目，切换会话时保存/恢复 */
 export interface SessionCacheEntry {
@@ -318,7 +326,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
               timestamp: msgTimestamp,
               data: {
                 toolName: tc.name,
-                briefDescription: generateToolBrief(tc.name, (tc.arguments ?? {}) as Record<string, unknown>),
+                filePath: extractToolPath(tc.name, (tc.arguments ?? {}) as Record<string, unknown>, getWorkspaceRoot()),
                 input: (tc.arguments ?? {}) as Record<string, unknown>,
                 callId: tc.id,
                 success,
@@ -581,7 +589,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         toolName,
         callId: toolCallId,
         input: args,
-        briefDescription: generateToolBrief(toolName, args),
+        filePath: extractToolPath(toolName, args, getWorkspaceRoot()),
       },
       isExpanded: true,
       iteration,
@@ -898,7 +906,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
                     ...n.data,
                     toolName: event.toolName,
                     input: event.arguments,
-                    briefDescription: generateToolBrief(event.toolName, event.arguments),
+                    filePath: extractToolPath(event.toolName, event.arguments, getWorkspaceRoot()),
                   },
                 }
               : n
@@ -916,7 +924,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
             data: {
               toolName: event.toolName,
               input: event.arguments,
-              briefDescription: generateToolBrief(event.toolName, event.arguments),
+              filePath: extractToolPath(event.toolName, event.arguments, getWorkspaceRoot()),
               callId: event.callId,
             },
             isExpanded: true,
