@@ -403,12 +403,47 @@
       "builtinHandlers": "内置 Handlers",
       "noHandlers": "暂无 Handler",
       "toolBadge": "Tool",
-      "handlerBadge": "Handler"
+      "handlerBadge": "Handler",
+      "descriptions": {
+        "docx": "Word 文档 (.docx) 处理器，支持读取、格式转换和分析三种操作。转换支持 md/txt/pdf 格式（与 sidecar word_handler.convert 实际支持一致）。",
+        "xlsx": "Excel 文档 (.xlsx) 处理器，支持读取、格式转换和分析三种操作。转换支持 csv/pdf/html/txt 格式（与 sidecar excel_handler.convert 实际支持一致）。",
+        "pptx": "PowerPoint 演示文稿 (.pptx) 处理器，支持读取和分析两种操作。",
+        "pdf": "PDF 文档 (.pdf) 处理器，支持读取、格式转换 (convert)、分析 (analyze) 和修改 (modify) 操作。modify 通过 operation 参数分发到 17 种子操作：页面操作 (rotate_pages/delete_pages/extract_pages/reorder_pages)、合并/拆分、水印 (add_text_watermark/add_image_watermark)、页眉页脚 (add_header_footer)、加密解密 (encrypt/decrypt)、元数据 (set_metadata)、书签/目录 (add_bookmarks/set_toc)、标注 (add_annotation)、表单填写 (fill_form)、压缩 (compress)。",
+        "validator": "文档质量验证器，检测常见文档质量问题并返回警告列表。支持 docx/xlsx/pptx/pdf/md/txt 六种类型。Markdown 检测未闭合代码块/标题级别跳跃/行尾空白/连续空行；纯文本检测混合换行符/混合缩进/单行过长/连续空行。返回 {valid, warnings, stats}。"
+      }
     },
     "tools": {
       "sectionTitle": "Tools 管理",
       "builtinTools": "内置 Tools",
-      "noTools": "暂无 Tool"
+      "noTools": "暂无 Tool",
+      "descriptions": {
+        "list": "列出指定目录中的文件和子目录。适用场景：浏览工作区内容、定位文件、了解目录层次。支持深度控制和扩展名过滤。",
+        "search": "在指定目录中搜索文件，支持按文件名或内容搜索。适用场景：按名称查找文件、按内容关键词搜索、按扩展名过滤。设置 include_content=true 可搜索文件内容。",
+        "read": "读取纯文本文件内容 (.txt/.md/.csv/.json/.xml 等)，自动添加行号（格式 `   123→content`），含二进制检测保护。不依赖 Sidecar，速度更快。支持按行范围读取 (start_line/end_line 参数)。文件大小限制 2MB。注意：仅用于纯文本文件；Word/Excel/PPT/PDF 等结构化文档请使用 docx/xlsx/pptx/pdf 处理器的读取操作。",
+        "file_info": "获取文件元数据（大小、修改时间、类型等）。适用场景：读取前了解文件信息、检查文件类型、确认文件存在且可访问。不需要文件内容时优先使用此工具。",
+        "exists": "检查文件或目录是否存在。适用场景：在读取或修改文件前验证路径、避免对不存在的文件进行操作。比 list 更轻量。",
+        "remove": "删除指定文件，可选择在删除前创建备份。注意：此操作不可逆，将自动触发用户确认。建议删除前创建版本快照。",
+        "mkdir": "创建目录（支持递归创建）。适用场景：在写入文件前确保目标目录存在、整理文件结构。默认递归创建父目录。",
+        "write": "写入纯文本文件内容 (.txt/.md/.csv/.json 等)，不依赖 Sidecar。适用场景：创建纯文本文件、修改 Markdown 文件、保存 JSON 配置。支持追加模式。注意：仅用于纯文本；生成结构化文档请使用 docx/xlsx/pptx/pdf 处理器的 generate 操作。禁止写入脚本文件 (.py/.sh/.bash/.ps1/.bat/.cmd 等)，请使用 write_script 工具将脚本写入系统临时目录。内容大小限制 4KB（约 4000 字符），超出可能触发 LLM 响应截断。",
+        "rename": "重命名或移动文件。适用场景：整理文件结构、修改文件名。注意：跨文件系统移动可能失败；此操作不可逆。",
+        "copy": "复制文件到新路径。适用场景：创建文件副本、备份文件、复制模板。支持二进制文件复制。",
+        "remove_dir": "递归删除目录及其所有内容。注意：此操作不可逆，将自动触发用户确认。建议删除前确认目录内容。",
+        "hash": "计算文件的 SHA-256 哈希值。适用场景：文件去重、完整性验证、变更检测。返回十六进制哈希字符串。",
+        "edit": "精确字符串替换工具。old_string 必须在文件中唯一匹配（0 处匹配报错，多处匹配报错，除非 replace_all=true）。当 old_string 为空且文件不存在时，创建新文件。生成差异摘要显示修改前后内容。",
+        "glob": "使用 glob 模式匹配查找文件。基于 ignore crate，遵循 .gitignore 规则。支持 **/*.rs、{a,b}/*.ts 等模式。返回相对于工作区的路径列表（最多 1000 条）。",
+        "grep": "使用正则表达式搜索文件内容。基于 ignore crate，遵循 .gitignore。支持上下文行 (context_before/context_after)、文件扩展名过滤 (include) 和大小写不敏感。返回匹配结果列表（含文件路径、行号、行内容和上下文行）。",
+        "scratchpad": "智能体草稿本：记录或读取任务笔记以在迭代轮次间保持上下文。适用场景：在复杂多步任务中记录关键决策、待办事项、文件路径和中间结果。建议在完成重要步骤后调用 action=add 记录要点；当任务上下文变得冗长时，调用 action=read 回顾已有笔记；任务完成后调用 action=clear 清理。笔记内容会在后续迭代中自动注入上下文，无需重复读取。",
+        "write_script": "将脚本内容写入临时文件供 bash 工具执行。支持编写 Python 或 Bash 脚本以解决用户问题（文档处理、数据分析、自动化任务等）。脚本文件存储在系统临时目录，不会污染工作区。返回脚本文件的绝对路径，可在 bash 中通过 'python <路径>' 或 'bash <路径>' 执行。",
+        "bash": "通过 Git Bash 执行 Shell 命令。可用于运行脚本文件、执行系统命令、处理文件等。工作目录默认为当前工作区，可通过 working_dir 参数指定。命令超时默认 60 秒，可通过 timeout 参数调整（最大 300 秒）。输出超过 6000 字符将自动截断。高风险命令（包含 rm/del/rmdir/format/shutdown/sudo/git push --force 等）将请求用户确认。返回 stdout、stderr、exit_code、success 和 duration_secs 字段。重要：禁止通过 cp/mv/重定向将脚本文件 (.py/.sh/.bash 等) 复制或移动到工作区目录，脚本文件仅在系统临时目录中执行。",
+        "todowrite": "结构化任务管理工具。支持创建、更新、列出和清除任务。任务状态：pending / in_progress / completed。同一时间最多一个 in_progress 任务；将新任务设为 in_progress 会自动将其他 in_progress 任务改为 pending。",
+        "source_code": "代码语义搜索工具。基于 tree-sitter 解析代码语法树，支持按符号类型（function/method/class/struct/interface/enum 等）和名称通配符查询。支持 8 种语言：Rust/Python/JavaScript/TypeScript/Go/Java/C/C++。",
+        "skill": "加载领域能力（Skill）的完整内容。可用的 Skill 列表在系统提示中提供；使用此工具按需加载 Skill 的完整 Markdown 内容。",
+        "task": "将子任务委托给子 Agent 执行。子 Agent 拥有独立的上下文，继承父 Agent 的系统提示、工作区和工具配置。适用于将复杂任务拆解为独立的子任务。支持两种模式：single（单一子任务）和 batch（并行批量子任务）。",
+        "webfetch": "获取指定 URL 的网页内容并自动转换为 Markdown 格式。支持 HTML 页面、JSON API 和纯文本资源。适用于阅读在线文档、API 参考、技术文章等。内网地址和敏感端口自动屏蔽。",
+        "websearch": "执行网络搜索并返回相关结果列表（标题、URL、摘要）。适用于查找最新信息、技术文档、API 用法等。搜索后端由配置决定（MCP/Tavily/SerpAPI）。",
+        "question": "向用户提问并等待回答。适用于需要用户决策、需求澄清或选项选择的场景。一次最多可提出 4 个问题，每个问题 2-4 个选项。用户回答后继续执行。",
+        "lsp": "LSP 代码智能工具（实验性）。通过 operation 参数指定操作类型：\n- definition：跳转到符号定义\n- references：查找符号引用\n- hover：获取悬停信息\n- diagnostics：获取文件诊断\n- document_symbol：获取文档符号列表\n- workspace_symbol：搜索工作区符号\n- implementation：跳转到实现\n- call_hierarchy：获取调用层级（direction=incoming|outgoing）"
+      }
     },
     "templates": {
       "builtin": "内置",
