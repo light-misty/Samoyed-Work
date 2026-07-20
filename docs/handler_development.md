@@ -155,7 +155,7 @@ pub trait Tool: Send + Sync {
 | `search_files` | 搜索文件 | query, path?, extensions?, max_results?, include_content? |
 | `read_file` | 读取纯文本文件 | path, encoding? |
 | `write_text_file` | 写入文本文件 | path, content, append? |
-| `delete_file` | 删除文件 | path, create_backup? |
+| `delete_file` | 删除文件 | path |
 | `file_info` | 获取文件元数据 | path |
 | `file_exists` | 检查文件/目录是否存在 | path |
 | `create_directory` | 创建目录 | path, recursive? |

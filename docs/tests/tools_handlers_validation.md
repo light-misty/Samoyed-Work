@@ -85,11 +85,6 @@ Select-String -Path 'D:\DeskTop\Samoyed-Work\log\samoyed_work.log' -Pattern '已
 - 尝试删除工作区根目录 → 应返回错误"禁止删除工作区根目录"
 - 路径越界（如 `../other_dir`）→ 应返回 `TOOL_PATH_OUT_OF_BOUNDS`
 
-**备份测试**：
-1. 向 Agent 发送：`删除 test_dir 目录，并创建备份`
-2. 检查是否生成 `test_dir.bak` 目录
-3. 验证备份内容与原目录一致
-
 ### 1.4 get_file_hash - 计算文件哈希
 
 **测试步骤**：

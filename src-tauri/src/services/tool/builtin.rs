@@ -3369,7 +3369,7 @@ impl Tool for DeleteFileTool {
         "remove"
     }
     fn description(&self) -> &str {
-        "Delete the specified file, with optional backup before deletion. Note: this operation is irreversible and will automatically trigger user confirmation. Creating a version snapshot before deletion is recommended."
+        "Delete the specified file. Note: this operation is irreversible and will automatically trigger user confirmation. Creating a version snapshot before deletion is recommended."
     }
     fn category(&self) -> &str {
         "filesystem"
@@ -3381,11 +3381,6 @@ impl Tool for DeleteFileTool {
                 "path": {
                     "type": "string",
                     "description": "Path of the file to delete (relative to workspace)"
-                },
-                "create_backup": {
-                    "type": "boolean",
-                    "description": "Whether to create a backup file before deletion",
-                    "default": true
                 }
             },
             "required": ["path"]
@@ -3456,43 +3451,14 @@ impl Tool for DeleteFileTool {
         }
 
         let safe_path = canonical_file.to_string_lossy().to_string();
-        let create_backup = params["create_backup"].as_bool().unwrap_or(true);
-        let mut backup_path_str = String::new();
-
-        if create_backup {
-            let backup_path = format!("{}.bak", safe_path);
-            match tokio::fs::copy(&safe_path, &backup_path).await {
-                Ok(_) => {
-                    log::info!("删除前已创建备份: {}", backup_path);
-                    backup_path_str = backup_path;
-                }
-                Err(e) => {
-                    // 备份失败时拒绝删除，避免数据丢失
-                    // 用户可显式设置 create_backup=false 跳过备份后再删除
-                    log::error!("创建备份失败: {}, 拒绝删除操作", e);
-                    return ToolResult {
-                        success: false,
-                        output: None,
-                        error: Some(format!(
-                            "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
-                            e
-                        )),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                    };
-                }
-            }
-        }
 
         match tokio::fs::remove_file(&safe_path).await {
             Ok(_) => {
                 log::info!("文件已删除: {}", safe_path);
-                let mut result = json!({
+                let result = json!({
                     "path": file_path,
                     "message": format!("File deleted: {}", file_path),
                 });
-                if !backup_path_str.is_empty() {
-                    result["backup_path"] = json!(backup_path_str);
-                }
                 ToolResult {
                     success: true,
                     output: Some(result),
@@ -4514,11 +4480,6 @@ impl Tool for DeleteDirectoryTool {
                 "path": {
                     "type": "string",
                     "description": "Directory path to delete (relative to workspace)"
-                },
-                "create_backup": {
-                    "type": "boolean",
-                    "description": "Whether to create a backup directory before deletion (copy to .bak suffix directory), default false (directory backup is expensive)",
-                    "default": false
                 }
             },
             "required": ["path"]
@@ -4528,7 +4489,6 @@ impl Tool for DeleteDirectoryTool {
         let start = Instant::now();
         let dir_path = params["path"].as_str().unwrap_or("");
         let workspace_root = params["workspace_root"].as_str().unwrap_or("");
-        let create_backup = params["create_backup"].as_bool().unwrap_or(false);
 
         if dir_path.is_empty() {
             return ToolResult {
@@ -4583,57 +4543,15 @@ impl Tool for DeleteDirectoryTool {
         }
 
         let safe_path = canonical_dir.to_string_lossy().to_string();
-        let mut backup_path_str = String::new();
-
-        // 可选备份：复制到 .bak 目录
-        if create_backup {
-            let backup_path = format!("{}.bak", safe_path);
-            match tokio::fs::create_dir_all(&backup_path).await {
-                Ok(_) => {
-                    // 递归复制目录内容到备份目录
-                    if let Err(e) = copy_dir_recursive(&safe_path, &backup_path).await {
-                        log::error!("创建目录备份失败: {}, 拒绝删除操作", e);
-                        // 清理部分创建的备份
-                        let _ = tokio::fs::remove_dir_all(&backup_path).await;
-                        return ToolResult {
-                            success: false,
-                            output: None,
-                            error: Some(format!(
-                                "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
-                                e
-                            )),
-                            duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                        };
-                    }
-                    log::info!("删除前已创建备份: {}", backup_path);
-                    backup_path_str = backup_path;
-                }
-                Err(e) => {
-                    log::error!("创建备份目录失败: {}, 拒绝删除操作", e);
-                    return ToolResult {
-                        success: false,
-                        output: None,
-                        error: Some(format!(
-                            "Failed to create backup: {}. To force delete without backup, set create_backup=false and retry",
-                            e
-                        )),
-                        duration_ms: start.elapsed().as_millis() as u64, error_code: None,
-                    };
-                }
-            }
-        }
 
         // 执行删除
         match tokio::fs::remove_dir_all(&safe_path).await {
             Ok(_) => {
                 log::info!("目录已删除: {}", safe_path);
-                let mut result = json!({
+                let result = json!({
                     "path": dir_path,
                     "message": format!("目录已删除: {}", dir_path),
                 });
-                if !backup_path_str.is_empty() {
-                    result["backup_path"] = json!(backup_path_str);
-                }
                 ToolResult {
                     success: true,
                     output: Some(result),
@@ -4654,37 +4572,6 @@ impl Tool for DeleteDirectoryTool {
             }
         }
     }
-}
-
-/// 递归复制目录内容到目标目录
-/// 用于 delete_directory 的备份功能
-async fn copy_dir_recursive(src: &str, dst: &str) -> Result<(), std::io::Error> {
-    tokio::task::spawn_blocking({
-        let src = src.to_string();
-        let dst = dst.to_string();
-        move || {
-            fn copy_inner(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-                if !dst.exists() {
-                    std::fs::create_dir_all(dst)?;
-                }
-                for entry in std::fs::read_dir(src)? {
-                    let entry = entry?;
-                    let path = entry.path();
-                    let file_name = entry.file_name();
-                    let dest_path = dst.join(&file_name);
-                    if path.is_dir() {
-                        copy_inner(&path, &dest_path)?;
-                    } else {
-                        std::fs::copy(&path, &dest_path)?;
-                    }
-                }
-                Ok(())
-            }
-            copy_inner(std::path::Path::new(&src), std::path::Path::new(&dst))
-        }
-    })
-    .await
-    .map_err(std::io::Error::other)?
 }
 
 // ============================================================
