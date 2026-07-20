@@ -24,12 +24,14 @@ pub fn create_session(
 /// 根据 ID 获取会话
 pub fn get_session(conn: &Connection, id: &str) -> Result<Session, CommandError> {
     conn.query_row(
-        "SELECT id, workspace_id, title, created_at, updated_at, llm_provider, llm_model
+        "SELECT id, workspace_id, title, created_at, updated_at, llm_provider, llm_model, active_branch_id
          FROM sessions WHERE id = ?1",
         rusqlite::params![id],
         |row| {
             let workspace_id: String = row.get(1)?;
             let provider_id: String = row.get(5)?;
+            // 读取活跃分支 ID（数据库列允许 NULL，映射为 Option<String>）
+            let active_branch_id: Option<String> = row.get(7)?;
             Ok(Session {
                 id: row.get(0)?,
                 workspace_id: if workspace_id.is_empty() {
@@ -43,6 +45,7 @@ pub fn get_session(conn: &Connection, id: &str) -> Result<Session, CommandError>
                 created_at: row.get(3)?,
                 updated_at: row.get(4)?,
                 status: String::from("active"),
+                active_branch_id,
             })
         },
     )

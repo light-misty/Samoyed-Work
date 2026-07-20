@@ -678,6 +678,142 @@
   opacity: 0.5;
 }
 
+/* 创建分支按钮：复用删除按钮样式，但 hover 颜色为 accent */
+.wf-branch-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-branch-button:hover {
+  color: var(--color-text-primary);
+}
+
+.wf-branch-button:active {
+  opacity: 0.5;
+}
+
+/* 编辑模式 textarea */
+.wf-user-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.wf-user-edit-textarea:focus {
+  border-color: var(--color-accent);
+}
+
+/* 编辑模式按钮容器：始终可见 */
+.wf-edit-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: 1;
+}
+
+/* 编辑模式确认按钮 */
+.wf-edit-confirm-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-edit-confirm-button:hover {
+  color: var(--color-accent);
+}
+
+.wf-edit-confirm-button:active {
+  opacity: 0.5;
+}
+
+/* 编辑模式取消按钮 */
+.wf-edit-cancel-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-edit-cancel-button:hover {
+  color: var(--color-error);
+}
+
+.wf-edit-cancel-button:active {
+  opacity: 0.5;
+}
+
+/* 分支切换器容器 */
+.wf-branch-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* 分支切换器箭头按钮 */
+.wf-branch-arrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-branch-arrow:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.wf-branch-arrow:active:not(:disabled) {
+  opacity: 0.5;
+}
+
+.wf-branch-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* 分支切换器计数文本 */
+.wf-branch-counter {
+  min-width: 24px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 消息删除确认弹窗（通过 Portal 渲染到 document.body） */
 .wf-del-overlay {
   position: fixed;

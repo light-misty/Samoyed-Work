@@ -17,6 +17,8 @@ import type {
   SessionSummary,
   SessionDetail,
   Message,
+  CreateBranchResult,
+  BranchGroupInfo,
   WorkspaceInfo,
   GitStatus,
   FileNode,
@@ -675,6 +677,58 @@ export async function lspStopAll(): Promise<void> {
 /** 初始化 LSP：注册并启动所有启用的语言服务器 */
 export async function lspInitialize(): Promise<LspServerInfo[]> {
   const result = await safeInvoke(() => invoke<LspServerInfo[]>("lsp_initialize"), { context: "lspInitialize" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+// ================================================================
+// 分支命令
+// ================================================================
+
+/**
+ * 创建分支
+ * 在指定用户消息节点处分叉出新分支
+ * @param sessionId 会话 ID
+ * @param forkMessageId 分叉点的用户消息 ID
+ * @param newContent 用户修改后的新消息内容
+ * @returns 创建结果（包含新分支 ID、分支组 ID、新消息 ID）
+ */
+export async function createBranch(
+  sessionId: string,
+  forkMessageId: string,
+  newContent: string,
+): Promise<CreateBranchResult> {
+  const result = await safeInvoke(() =>
+    invoke<CreateBranchResult>("create_branch", { sessionId, forkMessageId, newContent }),
+    { context: "createBranch" },
+  );
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/**
+ * 切换会话的活跃分支
+ * @param sessionId 会话 ID
+ * @param branchId 目标分支 ID
+ */
+export async function switchBranch(sessionId: string, branchId: string): Promise<void> {
+  const result = await safeInvoke(() =>
+    invoke<void>("switch_branch", { sessionId, branchId }),
+    { context: "switchBranch" },
+  );
+  if (!result.ok) throw result.error.raw;
+}
+
+/**
+ * 列出会话内所有分支组（用于前端渲染切换器）
+ * @param sessionId 会话 ID
+ * @returns 分支组信息列表
+ */
+export async function listBranchGroups(sessionId: string): Promise<BranchGroupInfo[]> {
+  const result = await safeInvoke(() =>
+    invoke<BranchGroupInfo[]>("list_branch_groups", { sessionId }),
+    { context: "listBranchGroups" },
+  );
   if (!result.ok) throw result.error.raw;
   return result.data;
 }

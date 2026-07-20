@@ -128,6 +128,8 @@ export default function App() {
   const lastSentTextRef = useRef<string | null>(null);
   // 保存最后一次发送的选项，用于错误重试
   const lastSentOptionsRef = useRef<Record<string, unknown> | undefined>(undefined);
+  // 追踪当前活跃分支 ID，用于在 saveSessionToCache 时获取并传给 store
+  const activeBranchIdRef = useRef<string>("");
 
   // 关闭 thinking 节点并设置状态
   function closeThinkingNode(status: NodeStatus) {
@@ -678,7 +680,7 @@ export default function App() {
         thinkingNodeId: thinkingNodeIdRef.current,
         confirmNodeId: confirmNodeIdRef.current,
         currentIteration: currentIterationRef.current,
-      });
+      }, activeBranchIdRef.current);
       setTypewriterVisible(true);
     } else {
       setTypewriterVisible(true);
@@ -688,6 +690,8 @@ export default function App() {
     clearCurrentSession();
     clearContextUsage();
     resetRefs();
+    // 新建会话时重置活跃分支 ID
+    activeBranchIdRef.current = "";
   }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId]);
 
   // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
@@ -704,7 +708,7 @@ export default function App() {
         thinkingNodeId: thinkingNodeIdRef.current,
         confirmNodeId: confirmNodeIdRef.current,
         currentIteration: currentIterationRef.current,
-      });
+      }, activeBranchIdRef.current);
     }
 
     // 跳过 clearNodes()/clearContextUsage()，restoreSessionFromCache/loadFromMessages
@@ -734,11 +738,17 @@ export default function App() {
     // 无论是否缓存命中，都从后端加载最新消息以确保数据一致性
     let hasMessages = false;
     try {
-      const detail = await tauriCmd.getSession(sessionId);
+      // 并行获取分支组信息和会话详情，减少串行等待
+      const [branchGroups, detail] = await Promise.all([
+        tauriCmd.listBranchGroups(sessionId),
+        tauriCmd.getSession(sessionId),
+      ]);
       hasMessages = detail.messages.length > 0;
+      // 更新 activeBranchIdRef（无论是否缓存命中都更新，因为切换会话时活跃分支可能变化）
+      activeBranchIdRef.current = detail.activeBranchId;
       // 仅在缓存未命中时使用后端数据覆盖（缓存命中时后端数据作为补充验证）
       if (!cacheHit) {
-        loadFromMessages(detail.messages);
+        loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
       }
     } catch (err) {
       console.error("[App] 加载历史会话失败:", err);
@@ -818,8 +828,13 @@ export default function App() {
       // 缓存未命中时从后端加载
       if (!cacheHit) {
         try {
-          const detail = await tauriCmd.getSession(nextSessionId);
-          loadFromMessages(detail.messages);
+          // 并行获取分支组信息和会话详情
+          const [branchGroups, detail] = await Promise.all([
+            tauriCmd.listBranchGroups(nextSessionId),
+            tauriCmd.getSession(nextSessionId),
+          ]);
+          activeBranchIdRef.current = detail.activeBranchId;
+          loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
         } catch (err) {
           console.error("[App] 加载切换后的会话失败:", err);
           clearNodes();
@@ -843,6 +858,8 @@ export default function App() {
       // 没有其他会话，清空工作流和上下文
       clearNodes();
       clearContextUsage();
+      // 重置活跃分支 ID
+      activeBranchIdRef.current = "";
     }
   }, [clearNodes, resetAgent, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
 

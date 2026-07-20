@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData } from "../types";
-import type { Message } from "../types/session";
+import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData } from "../types";
+import type { Message, BranchGroupInfo } from "../types/session";
 import type { ContextUsageInfo } from "../types/settings";
 
 import { extractToolPath } from "../utils/format";
@@ -46,6 +46,10 @@ export interface SessionCacheEntry {
   bgCompactionNodeId: string | null;
   /** 最后访问时间，用于 LRU 淘汰 */
   lastAccessedAt: number;
+  /** 当前活跃分支 ID，用于切换分支时检测缓存失效 */
+  activeBranchId: string;
+  /** 分支组列表快照，restore 时恢复 */
+  branchGroups: BranchGroupInfo[];
 }
 
 /** 缓存上限：最多保留 20 个会话的缓存 */
@@ -82,6 +86,8 @@ interface WorkflowState {
   currentSubAgentId: string | null;
   /** 子 Agent 工作流节点列表 */
   subAgentNodes: WorkflowNode[];
+  /** 当前会话的所有分支组信息，用于分支切换器渲染 */
+  branchGroups: BranchGroupInfo[];
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -93,7 +99,7 @@ interface WorkflowState {
   setConfirmHandler: (handler: ((approved: boolean, feedback?: string) => Promise<void>) | null) => void;
   /** 设置权限审批回调（与 setConfirmHandler 并存，permissionHandler 优先） */
   setPermissionHandler: (handler: ((response: 'once' | 'reject', feedback?: string) => Promise<void>) | null) => void;
-  loadFromMessages: (messages: Message[]) => void;
+  loadFromMessages: (messages: Message[], branchGroups: BranchGroupInfo[], activeBranchId: string) => void;
   /** 设置当前查看的子 Agent ID */
   setCurrentSubAgentId: (agentId: string | null) => void;
   /** 将子 Agent 消息转换为工作流节点，设置 subAgentNodes */
@@ -115,7 +121,7 @@ interface WorkflowState {
   /** 清除上下文窗口使用信息（新会话/切换会话时调用） */
   clearContextUsage: () => void;
   /** 将当前状态保存到指定会话的缓存 */
-  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => void;
+  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot, activeBranchId: string) => void;
   /** 从指定会话的缓存恢复状态，返回是否命中缓存 */
   restoreSessionFromCache: (sessionId: string) => boolean;
   /** 删除指定会话的缓存 */
@@ -158,7 +164,11 @@ function evictCacheIfNeeded(cache: Map<string, SessionCacheEntry>) {
 }
 
 /** 将消息列表转换为工作流节点列表的核心逻辑（供 loadFromMessages 和 loadSubAgentMessages 复用） */
-function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
+function convertMessagesToNodes(
+  messages: Message[],
+  branchGroups: BranchGroupInfo[] = [],
+  activeBranchId: string = ""
+): WorkflowNode[] {
   nodeCounter = 0;
   const nodes: WorkflowNode[] = [];
   let iterationCounter = 0;
@@ -194,12 +204,36 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
         size: att.size,
         mimeType: att.mimeType,
       }));
+
+      // 计算分支切换器信息
+      let branchIndex: number | undefined;
+      let branchTotal: number | undefined;
+      if (msg.branchGroupId && activeBranchId) {
+        const group = branchGroups.find((g) => g.branchGroupId === msg.branchGroupId);
+        if (group && group.branches.length > 1) {
+          branchTotal = group.branches.length;
+          // 找到 activeBranchId 在组内的位置（1-based）
+          const idx = group.branches.findIndex((b) => b.branchId === activeBranchId);
+          if (idx >= 0) {
+            branchIndex = idx + 1;
+          }
+        }
+      }
+
       nodes.push({
         id: `node_${++nodeCounter}`,
         type: "user",
         status: "completed",
         timestamp: msgTimestamp,
-        data: { content: msg.content, attachments: nodeAttachments, messageId: msg.id },
+        data: {
+          content: msg.content,
+          attachments: nodeAttachments,
+          messageId: msg.id,
+          branchId: msg.branchId,
+          branchGroupId: msg.branchGroupId,
+          branchIndex,
+          branchTotal,
+        } as UserNodeData,
         isExpanded: true,
       });
     } else if (msg.role === "assistant") {
@@ -359,6 +393,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   sessionCache: new Map(),
   currentSubAgentId: null,
   subAgentNodes: [],
+  branchGroups: [],
 
   addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
@@ -421,9 +456,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ permissionHandler: handler });
   },
 
-  loadFromMessages: (messages) => {
-    const nodes = convertMessagesToNodes(messages);
-    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null });
+  loadFromMessages: (messages, branchGroups, activeBranchId) => {
+    const nodes = convertMessagesToNodes(messages, branchGroups, activeBranchId);
+    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups });
   },
 
   setCurrentSubAgentId: (agentId) => {
@@ -678,7 +713,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   // 将当前状态保存到指定会话的缓存
-  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => {
+  saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot, activeBranchId: string) => {
     const state = get();
     const cache = new Map(state.sessionCache);
 
@@ -702,6 +737,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       bgLastClosedStreamingNodeId: cache.get(sessionId)?.bgLastClosedStreamingNodeId ?? null,
       bgCompactionNodeId: cache.get(sessionId)?.bgCompactionNodeId ?? null,
       lastAccessedAt: Date.now(),
+      activeBranchId,
+      branchGroups: state.branchGroups,
     });
 
     evictCacheIfNeeded(cache);
@@ -722,6 +759,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       contextUsage: entry.contextUsage,
       confirmHandler: null,
       permissionHandler: null,
+      branchGroups: entry.branchGroups,
     });
 
     // 更新缓存访问时间
