@@ -452,7 +452,7 @@
   :root:not(.light) .wf-user-node .wf-node-card {
     background: var(--color-bg-sub);
   }
-  :root:not(.light) .wf-user-node .wf-user-msg-wrapper .wf-node-card {
+  :root:not(.light) .wf-user-msg-wrapper .wf-node-card {
     background: var(--color-bg-sub);
   }
   :root:not(.light) .wf-user-node .wf-user-text {
@@ -481,7 +481,7 @@
 .dark .wf-user-node .wf-node-card {
   background: var(--color-bg-sub);
 }
-.dark .wf-user-node .wf-user-msg-wrapper .wf-node-card {
+.dark .wf-user-msg-wrapper .wf-node-card {
   background: var(--color-bg-sub);
 }
 .dark .wf-user-node .wf-user-text {
@@ -536,13 +536,14 @@
 }
 
 .wf-user-node {
-  justify-content: flex-end;
+  /* 垂直排列消息框与底部操作行，右对齐，避免底部行撑开消息框宽度 */
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .wf-user-node .wf-node-card {
   width: auto;
   flex: none;
-  max-width: 66.67%;
   border: none;
   background: #eeeeee;
 }
@@ -600,37 +601,36 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
+  /* 明确宽度跟随内容，避免子元素 max-width 百分比循环引用导致宽度计算为 0 */
+  width: fit-content;
   max-width: 66.67%;
 }
 
-.wf-user-node .wf-user-msg-wrapper .wf-node-card {
-  width: 100%;
-  flex: none;
+/* 消息卡片宽度跟随内容，但不超过 wrapper 宽度（长文字时换行） */
+.wf-user-msg-wrapper .wf-node-card {
   max-width: 100%;
-  border: none;
-  background: #eeeeee;
 }
 
-/* 用户消息底部行：水平排列分支切换器与操作按钮，分支切换器在创建分支按钮左边 */
+/* 用户消息底部行：水平排列分支切换器与操作按钮，hover 消息框时显示 */
 .wf-user-bottom-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-}
-
-/* 消息操作按钮容器：水平排列，hover 时显示 */
-.wf-msg-actions-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.wf-user-msg-wrapper:hover .wf-msg-actions-row,
-.wf-msg-actions-row.wf-copy-visible {
+.wf-user-node:hover .wf-user-bottom-row,
+.wf-user-bottom-row.wf-copy-visible {
   opacity: 1;
+}
+
+/* 消息操作按钮容器：水平排列 */
+.wf-msg-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 /* 消息复制按钮容器共用样式 */

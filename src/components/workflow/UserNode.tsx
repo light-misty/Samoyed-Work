@@ -274,87 +274,88 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
             )}
           </div>
         </div>
-        {showActions && (
-          isEditing ? (
-            <div className="wf-edit-actions-row">
-              <button
-                className="wf-edit-confirm-button"
-                onClick={() => void handleConfirmCreateBranch()}
-                title={t('workflow.confirmCreateBranch')}
-              >
-                <Icon name="check" size={12} />
-              </button>
-              <button
-                className="wf-edit-cancel-button"
-                onClick={handleCancelEdit}
-                title={t('workflow.cancelCreateBranch')}
-              >
-                <Icon name="close" size={12} />
-              </button>
-            </div>
-          ) : (
-            <div className="wf-user-bottom-row">
-              {/* 分支切换器：仅当存在分支组且分支数 > 1 时显示，位于创建分支按钮左边 */}
-              {data.branchGroupId && data.branchTotal && data.branchTotal > 1 && (
-                <div className="wf-branch-switcher">
-                  <button
-                    className="wf-branch-arrow"
-                    onClick={() => handleSwitchBranch(-1)}
-                    disabled={isAgentRunning}
-                    title={t('workflow.previousBranch')}
-                  >
-                    <Icon name="chevron-left" size={12} />
-                  </button>
-                  <span className="wf-branch-counter">
-                    {data.branchIndex}/{data.branchTotal}
-                  </span>
-                  <button
-                    className="wf-branch-arrow"
-                    onClick={() => handleSwitchBranch(1)}
-                    disabled={isAgentRunning}
-                    title={t('workflow.nextBranch')}
-                  >
-                    <Icon name="chevron-right" size={12} />
-                  </button>
-                </div>
-              )}
-              <div className={`wf-msg-actions-row${copied ? " wf-copy-visible" : ""}`}>
-                {!isAgentRunning && (
-                  <button
-                    className="wf-branch-button"
-                    onClick={handleStartEdit}
-                    title={t('workflow.createBranch')}
-                  >
-                    <Icon name="git-compare" size={12} />
-                  </button>
-                )}
-                {!isAgentRunning && (
-                  <button
-                    className="wf-delete-button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    title={t('workflow.deleteMessage')}
-                  >
-                    <Icon name="trash" size={12} />
-                  </button>
-                )}
-                <div className="wf-msg-copy-btn">
-                  <button
-                    className="wf-copy-button"
-                    onClick={handleCopy}
-                    title={copied ? t('common.copied') : t('common.copy')}
-                  >
-                    {copied ? (
-                      <Icon name="check" size={12} />
-                    ) : (
-                      <Icon name="copy" size={12} />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
+        {showActions && isEditing && (
+          <div className="wf-edit-actions-row">
+            <button
+              className="wf-edit-confirm-button"
+              onClick={() => void handleConfirmCreateBranch()}
+              title={t('workflow.confirmCreateBranch')}
+            >
+              <Icon name="check" size={12} />
+            </button>
+            <button
+              className="wf-edit-cancel-button"
+              onClick={handleCancelEdit}
+              title={t('workflow.cancelCreateBranch')}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
         )}
       </div>
+
+      {/* 非编辑模式下，底部行（分支切换器 + 操作按钮）在 wrapper 外，避免撑开消息框宽度 */}
+      {showActions && !isEditing && (
+        <div className={`wf-user-bottom-row${copied ? " wf-copy-visible" : ""}`}>
+          {/* 分支切换器：仅当存在分支组且分支数 > 1 时显示，位于创建分支按钮左边 */}
+          {data.branchGroupId && data.branchTotal && data.branchTotal > 1 && (
+            <div className="wf-branch-switcher">
+              <button
+                className="wf-branch-arrow"
+                onClick={() => handleSwitchBranch(-1)}
+                disabled={isAgentRunning}
+                title={t('workflow.previousBranch')}
+              >
+                <Icon name="chevron-left" size={12} />
+              </button>
+              <span className="wf-branch-counter">
+                {data.branchIndex}/{data.branchTotal}
+              </span>
+              <button
+                className="wf-branch-arrow"
+                onClick={() => handleSwitchBranch(1)}
+                disabled={isAgentRunning}
+                title={t('workflow.nextBranch')}
+              >
+                <Icon name="chevron-right" size={12} />
+              </button>
+            </div>
+          )}
+          <div className="wf-msg-actions-row">
+            {!isAgentRunning && (
+              <button
+                className="wf-branch-button"
+                onClick={handleStartEdit}
+                title={t('workflow.modifyAndCreateBranch')}
+              >
+                <Icon name="edit" size={12} />
+              </button>
+            )}
+            {!isAgentRunning && (
+              <button
+                className="wf-delete-button"
+                onClick={() => setShowDeleteConfirm(true)}
+                title={t('workflow.deleteMessage')}
+              >
+                <Icon name="trash" size={12} />
+              </button>
+            )}
+            <div className="wf-msg-copy-btn">
+              <button
+                className="wf-copy-button"
+                onClick={handleCopy}
+                title={copied ? t('common.copied') : t('common.copy')}
+              >
+                {copied ? (
+                  <Icon name="check" size={12} />
+                ) : (
+                  <Icon name="copy" size={12} />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteConfirm && createPortal(
         <div className="wf-del-overlay" onClick={() => setShowDeleteConfirm(false)}>
