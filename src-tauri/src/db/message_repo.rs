@@ -201,3 +201,32 @@ pub fn delete_messages_by_session(conn: &Connection, session_id: &str) -> Result
     )?;
     Ok(())
 }
+
+/// 按 ID 列表批量删除会话中的指定消息
+/// 使用参数化 IN 查询防止 SQL 注入
+pub fn delete_messages_by_ids(
+    conn: &Connection,
+    session_id: &str,
+    message_ids: &[String],
+) -> Result<(), CommandError> {
+    if message_ids.is_empty() {
+        return Ok(());
+    }
+    // 构建参数化占位符 (?1, ?2, ...)
+    let placeholders: Vec<String> = (0..message_ids.len())
+        .map(|i| format!("?{}", i + 1))
+        .collect();
+    let sql = format!(
+        "DELETE FROM session_messages WHERE session_id = ?{} AND id IN ({})",
+        message_ids.len() + 1,
+        placeholders.join(", ")
+    );
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    for id in message_ids {
+        params.push(Box::new(id.clone()));
+    }
+    params.push(Box::new(session_id.to_string()));
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.execute(&sql, rusqlite::params_from_iter(param_refs))?;
+    Ok(())
+}

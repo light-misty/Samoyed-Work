@@ -67,7 +67,9 @@
     "startNewSessionCode": "Code with Samoyed Work",
     "emptySession": "空会话",
     "timeline": "工作流时间线",
-    "thinking": "思考过程"
+    "thinking": "思考过程",
+    "deleteMessage": "删除消息",
+    "deleteMessageConfirm": "确定要删除这条消息及其回复吗？删除后不可恢复。"
   },
   "provider": {
     "selectModel": "选择模型",

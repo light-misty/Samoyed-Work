@@ -15,17 +15,23 @@ export interface Attachment {
 export interface UserNodeData {
   content: string;
   attachments: Attachment[];
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface ThinkingNodeData {
   content: string;
   duration: number;
   isStreaming?: boolean;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface ContentNodeData {
   content: string;
   isStreaming?: boolean;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface ToolNodeData {
@@ -38,6 +44,8 @@ export interface ToolNodeData {
   error?: string;
   /** 工具执行结果（如 bash 的 stdout/stderr/exit_code），成功时填充 */
   result?: Record<string, unknown>;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface ConfirmNodeData {
@@ -52,6 +60,8 @@ export interface ConfirmNodeData {
   riskLevel?: string;
   /** 权限审批回复（once/reject） */
   permissionResponse?: 'once' | 'reject' | null;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface ErrorNodeData {
@@ -59,6 +69,8 @@ export interface ErrorNodeData {
   message: string;
   recoverable: boolean;
   module: string;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 /** 上下文压缩节点数据 */
@@ -87,6 +99,8 @@ export interface SubAgentNodeData {
   toolCalls: Array<{ toolName: string; arguments: Record<string, unknown> }>;
   /** 附加消息（错误信息或结果摘要） */
   message?: string;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 /** 提问节点数据 */
@@ -108,6 +122,8 @@ export interface QuestionNodeData {
   answers?: Array<{ questionIndex: number; selectedOptions: string[] }>;
   /** 是否已回答 */
   answered: boolean;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
 }
 
 export interface NodeDataMap {

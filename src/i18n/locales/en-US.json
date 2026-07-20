@@ -67,7 +67,9 @@
     "startNewSessionCode": "Code with Samoyed Work",
     "emptySession": "Empty Session",
     "timeline": "Workflow Timeline",
-    "thinking": "Thinking"
+    "thinking": "Thinking",
+    "deleteMessage": "Delete message",
+    "deleteMessageConfirm": "Are you sure you want to delete this message and its reply? This action cannot be undone."
   },
   "provider": {
     "selectModel": "Select Model",

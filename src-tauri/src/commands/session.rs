@@ -222,6 +222,49 @@ pub async fn clear_all_sessions(
     Ok(count)
 }
 
+/// 批量删除会话中的指定消息
+#[tauri::command]
+pub async fn delete_session_messages(
+    session_id: String,
+    message_ids: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), CommandError> {
+    log::info!(
+        "delete_session_messages 请求: session_id={}, ids={:?}",
+        session_id,
+        message_ids
+    );
+
+    if message_ids.is_empty() {
+        return Ok(());
+    }
+
+    // 检查会话是否有 Agent 正在运行，防止数据不一致
+    {
+        let active = state.active_agents.lock().await;
+        if active.contains_key(&session_id) {
+            log::warn!(
+                "delete_session_messages 失败: 会话 '{}' 的 Agent 正在运行",
+                session_id
+            );
+            return Err(CommandError::agent(
+                crate::errors::AGENT_ALREADY_RUNNING,
+                format!("会话 '{}' 的 Agent 正在运行，无法删除消息", session_id),
+            ));
+        }
+    }
+
+    let conn = state.db.conn()?;
+    message_repo::delete_messages_by_ids(&conn, &session_id, &message_ids)?;
+    log::info!(
+        "delete_session_messages 成功: session_id={}, 已删除 {} 条消息",
+        session_id,
+        message_ids.len()
+    );
+
+    Ok(())
+}
+
 /// 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话）
 #[tauri::command]
 pub async fn update_session_workspace(

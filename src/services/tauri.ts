@@ -151,6 +151,12 @@ export async function clearWorkspaceSessions(workspaceId: string): Promise<numbe
   return result.data;
 }
 
+/** 批量删除会话中的指定消息 */
+export async function deleteSessionMessages(sessionId: string, messageIds: string[]): Promise<void> {
+  const result = await safeInvoke(() => invoke("delete_session_messages", { sessionId, messageIds }), { context: "deleteSessionMessages" });
+  if (!result.ok) throw result.error.raw;
+}
+
 /** 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话） */
 export async function updateSessionWorkspace(sessionId: string, workspaceId: string): Promise<void> {
   const result = await safeInvoke(() => invoke("update_session_workspace", { sessionId, workspaceId }), { context: "updateSessionWorkspace" });

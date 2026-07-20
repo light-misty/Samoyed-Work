@@ -611,22 +611,30 @@
   background: #eeeeee;
 }
 
+/* 消息操作按钮容器：水平排列，hover 时显示 */
+.wf-msg-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wf-user-msg-wrapper:hover .wf-msg-actions-row,
+.wf-msg-actions-row.wf-copy-visible {
+  opacity: 1;
+}
+
 /* 消息复制按钮容器共用样式 */
 .wf-msg-copy-btn,
 .wf-content-copy-btn {
   display: flex;
   justify-content: flex-start;
+}
+
+.wf-content-copy-btn {
   margin-top: 8px;
-}
-
-.wf-msg-copy-btn {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.wf-user-msg-wrapper:hover .wf-msg-copy-btn,
-.wf-msg-copy-btn.wf-copy-visible {
-  opacity: 1;
 }
 
 .wf-copy-button {
@@ -647,6 +655,137 @@
 
 .wf-copy-button:active {
   opacity: 0.5;
+}
+
+/* 消息删除按钮：垃圾桶图标，hover 变红 */
+.wf-delete-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-delete-button:hover {
+  color: var(--color-error);
+}
+
+.wf-delete-button:active {
+  opacity: 0.5;
+}
+
+/* 消息删除确认弹窗（通过 Portal 渲染到 document.body） */
+.wf-del-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-overlay);
+  animation: wf-del-fade-in 0.15s ease-out;
+}
+
+@keyframes wf-del-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.wf-del-dialog {
+  min-width: 340px;
+  max-width: 420px;
+  background: var(--color-bg-elevated, #fff);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  animation: wf-del-dialog-in 0.2s ease-out;
+}
+
+@keyframes wf-del-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.wf-del-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.wf-del-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.wf-del-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.wf-del-body {
+  margin-bottom: 18px;
+  padding-left: 42px;
+}
+
+.wf-del-message {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.wf-del-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.wf-del-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 4px);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.wf-del-btn-cancel {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+
+.wf-del-btn-cancel:hover {
+  background: var(--color-bg-sub);
+}
+
+.wf-del-btn-danger {
+  background: var(--color-error);
+  color: #fff;
+}
+
+.wf-del-btn-danger:hover {
+  opacity: 0.9;
 }
 
 .wf-thinking-block {

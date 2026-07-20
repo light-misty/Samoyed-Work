@@ -199,7 +199,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
         type: "user",
         status: "completed",
         timestamp: msgTimestamp,
-        data: { content: msg.content, attachments: nodeAttachments },
+        data: { content: msg.content, attachments: nodeAttachments, messageId: msg.id },
         isExpanded: true,
       });
     } else if (msg.role === "assistant") {
@@ -215,6 +215,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
             message: (msg.metadata.message as string) ?? msg.content,
             recoverable: (msg.metadata.recoverable as boolean) ?? false,
             module: "",
+            messageId: msg.id,
           },
           isExpanded: true,
         });
@@ -231,7 +232,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
           type: "thinking",
           status: "completed",
           timestamp: msgTimestamp,
-          data: { content: msg.reasoningContent, duration: 0, isStreaming: false },
+          data: { content: msg.reasoningContent, duration: 0, isStreaming: false, messageId: msg.id },
           isExpanded: true,
           iteration: currentIteration,
         });
@@ -243,7 +244,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
           type: "content",
           status: "completed",
           timestamp: msgTimestamp,
-          data: { content: msg.content },
+          data: { content: msg.content, messageId: msg.id },
           isExpanded: true,
           iteration: currentIteration,
         });
@@ -280,6 +281,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
                 iteration: subIteration,
                 toolCalls: subToolCalls,
                 message: subMessage,
+                messageId: msg.id,
               } as SubAgentNodeData,
               isExpanded: true,
             });
@@ -295,6 +297,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
                 questions: (metadata.questions as any[]) ?? [],
                 answers: (metadata.answers as any[]) ?? [],
                 answered: true,
+                messageId: msg.id,
               },
               isExpanded: true,
               iteration: currentIteration,
@@ -313,6 +316,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
                 cancelLabel: "取消",
                 confirmed: (metadata.approved as boolean) ?? false,
                 riskLevel: (metadata.riskLevel as string) ?? "normal",
+                messageId: msg.id,
               },
               isExpanded: true,
               iteration: currentIteration,
@@ -330,6 +334,7 @@ function convertMessagesToNodes(messages: Message[]): WorkflowNode[] {
                 input: (tc.arguments ?? {}) as Record<string, unknown>,
                 callId: tc.id,
                 success,
+                messageId: msg.id,
                 ...(error ? { error } : {}),
               },
               isExpanded: true,
