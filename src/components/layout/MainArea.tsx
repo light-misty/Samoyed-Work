@@ -132,6 +132,13 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
         .main-area-empty::before {
           transition: none;
         }
+        /* 切换会话时临时禁用所有过渡，防止收缩动画闪烁 */
+        .no-transitions,
+        .no-transitions *,
+        .no-transitions *::before,
+        .no-transitions *::after {
+          transition: none !important;
+        }
       `}</style>
     </div>
   );
