@@ -125,6 +125,13 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
           right: 240px;
           opacity: 1;
         }
+        /* 空会话时禁用过渡动画，避免从侧边栏展开状态切换时出现拉伸效果 */
+        .main-area-empty .input-area-wrapper {
+          transition: padding-right 0s;
+        }
+        .main-area-empty::before {
+          transition: none;
+        }
       `}</style>
     </div>
   );
