@@ -513,17 +513,15 @@
 .workflow-right-sidebar {
   width: 240px;
   flex-shrink: 0;
-  border-left: 1px solid var(--color-border);
   background: var(--color-bg);
   overflow: hidden;
   /* width 过渡动画：显示时宽度从 0 扩展到 240px，隐藏时从 240px 收缩到 0 */
-  transition: width 0.3s ease, border-left-color 0.3s ease;
+  transition: width 0.3s ease;
 }
 
-/* 收起状态：宽度为 0，去除左边框避免残留线条 */
+/* 收起状态：宽度为 0 */
 .workflow-right-sidebar.collapsed {
   width: 0;
-  border-left-color: transparent;
 }
 
 /* 内层容器：固定宽度 240px，外层 overflow: hidden 配合 width 动画自然裁剪显示 */

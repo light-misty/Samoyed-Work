@@ -52,6 +52,7 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
           flex-direction: column;
           flex: 1;
           min-height: 0;
+          position: relative;
         }
         .main-area-empty {
           justify-content: center;
@@ -99,31 +100,29 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
         .workflow-right-sidebar-toggle:hover {
           color: var(--color-text-primary);
         }
-        /* 右侧边栏展开时，InputArea 也跟随收缩宽度（侧边栏 240px 宽度 + 1px 左边框） */
+        /* 右侧边栏展开时，InputArea 也跟随收缩宽度 */
         .main-area-sidebar-expanded > .input-area-wrapper {
           padding-right: 265px;
           transition: padding-right 0.3s ease;
         }
         .input-area-wrapper {
           transition: padding-right 0.3s ease;
-          /* 为边框线伪元素提供定位上下文 */
-          position: relative;
         }
-        /* 输入框区域的右侧竖线：与侧边栏左边框对齐，使框线延伸到输入框区域 */
-        .input-area-wrapper::before {
+        /* 单一竖线：跟随侧边栏一起滑动，收起时位于右边缘，展开时停在 left: 240px */
+        .main-area::before {
           content: '';
           position: absolute;
           top: 0;
           bottom: 0;
-          right: 240px;
+          right: 0;
           width: 1px;
           background: var(--color-border);
           pointer-events: none;
           opacity: 0;
-          transition: opacity 0.3s ease;
+          transition: right 0.3s ease, opacity 0.3s ease;
         }
-        /* 侧边栏展开时显示竖线，与侧边栏 border-left-color 过渡同步 */
-        .main-area-sidebar-expanded > .input-area-wrapper::before {
+        .main-area-sidebar-expanded::before {
+          right: 240px;
           opacity: 1;
         }
       `}</style>
