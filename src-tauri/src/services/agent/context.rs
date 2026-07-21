@@ -1929,7 +1929,7 @@ mod tests {
     /// 测试小上下文窗口 (8K Ollama)
     #[test]
     fn test_small_context_window_budget() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 8192);
+        let mut ctx = AgentContext::new("session-1".to_string(), "test-branch".to_string(), "你是助手".to_string(), 8192);
         ctx.function_definitions_tokens = 200;
         let usage = ctx.calculate_context_usage(0, "llama3".to_string(), String::new(), None);
         assert_eq!(usage.context_window, 8192);
@@ -1939,7 +1939,7 @@ mod tests {
     /// 测试大上下文窗口 (1M)
     #[test]
     fn test_large_context_window_budget() {
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 1_000_000);
+        let mut ctx = AgentContext::new("session-1".to_string(), "test-branch".to_string(), "你是助手".to_string(), 1_000_000);
         ctx.function_definitions_tokens = 1000;
         let usage =
             ctx.calculate_context_usage(0, "gemini-1.5-pro".to_string(), String::new(), None);
@@ -1964,7 +1964,7 @@ mod tests {
     #[test]
     fn test_calculate_context_usage_high_usage() {
         // 使用最小上下文窗口（4096），添加足够多消息使 token 使用率超过 95%
-        let mut ctx = AgentContext::new("session-1".to_string(), "你是助手".to_string(), 4096);
+        let mut ctx = AgentContext::new("session-1".to_string(), "test-branch".to_string(), "你是助手".to_string(), 4096);
         ctx.function_definitions_tokens = 200;
         // 添加消息使总 token 使用率超过 95%（4096*0.95=3891 tokens）
         for i in 0..200 {
