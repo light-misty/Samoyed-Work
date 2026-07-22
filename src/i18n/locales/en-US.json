@@ -358,7 +358,6 @@
       "modelName": "Model Name",
       "modelNamePlaceholder": "e.g., gpt-4o, claude-3-5-sonnet, gemini-1.5-pro",
       "contextWindowSize": "Context Window Size",
-      "contextWindowHint": "Supports K/M suffixes, e.g., 128K, 1M; leave empty for auto-detection",
       "contextWindowPlaceholder": "e.g., 128K, 200K, 1M",
       "visionCapability": "Vision Capability (Image Understanding)",
       "notSupported": "Not Supported",

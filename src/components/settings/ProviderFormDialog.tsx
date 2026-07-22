@@ -51,6 +51,8 @@ const CONTEXT_PRESETS = [
   { label: "32K", value: 32768 },
   { label: "128K", value: 128000 },
   { label: "200K", value: 200000 },
+  { label: "400K", value: 400000 },
+  { label: "600K", value: 600000 },
   { label: "1M", value: 1000000 },
 ];
 
@@ -90,7 +92,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
     formatContextWindow(provider?.contextWindow)
   );
   const [supportsVision, setSupportsVision] = useState<boolean>(
-    provider?.supportsVision ?? true
+    provider?.supportsVision ?? false
   );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -258,7 +260,6 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
           <div className="form-group">
             <label className="form-label">
               {t('settings.providerForm.contextWindowSize')}
-              <span className="form-label-hint">{t('settings.providerForm.contextWindowHint')}</span>
             </label>
             <input
               className="form-input form-input-mono"
@@ -390,11 +391,6 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
           display: flex;
           align-items: center;
           gap: 6px;
-        }
-        .form-label-hint {
-          font-size: 11px;
-          font-weight: 400;
-          color: var(--color-text-quaternary);
         }
         .form-input {
           padding: 8px 12px;

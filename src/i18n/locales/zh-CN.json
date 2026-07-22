@@ -358,7 +358,6 @@
       "modelName": "模型名称",
       "modelNamePlaceholder": "例如：gpt-4o、claude-3-5-sonnet、gemini-1.5-pro",
       "contextWindowSize": "上下文窗口大小",
-      "contextWindowHint": "支持 K/M 后缀，如 128K、1M；留空则自动推断",
       "contextWindowPlaceholder": "例如：128K、200K、1M",
       "visionCapability": "视觉能力 (图片理解)",
       "notSupported": "不支持",

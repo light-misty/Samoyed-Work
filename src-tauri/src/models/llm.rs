@@ -12,9 +12,9 @@ pub enum ContentPart {
     Image { mime_type: String, data: String },
 }
 
-/// supports_vision 默认值：true（默认支持视觉）
+/// supports_vision 默认值：false（默认不支持视觉，由用户手动开启）
 fn default_supports_vision() -> bool {
-    true
+    false
 }
 
 /// LLM Provider 配置
@@ -29,7 +29,7 @@ pub struct ProviderConfig {
     pub api_key: String,
     pub model: String,
     pub extra_params: Option<HashMap<String, serde_json::Value>>,
-    /// 上下文窗口大小 (tokens)，None 表示自动推断
+    /// 上下文窗口大小 (tokens)，None 表示使用默认值 (200K)
     #[serde(default)]
     pub context_window: Option<usize>,
     /// 是否支持视觉/图片多模态

@@ -270,9 +270,9 @@ impl AgentContext {
         }
     }
 
-    /// 使用默认上下文窗口大小创建（128K），仅用于测试
+    /// 使用默认上下文窗口大小创建（200K），仅用于测试
     pub fn new_default(session_id: String, system_prompt: String) -> Self {
-        Self::new(session_id, String::new(), system_prompt, 128_000)
+        Self::new(session_id, String::new(), system_prompt, 200_000)
     }
 
     /// 设置 Scratchpad 共享状态引用（由 executor 在初始化时注入）
@@ -1917,7 +1917,7 @@ mod tests {
         ctx.function_definitions_tokens = 500;
 
         let usage = ctx.calculate_context_usage(0, "gpt-4o".to_string(), String::new(), None);
-        assert_eq!(usage.context_window, 128_000);
+        assert_eq!(usage.context_window, 200_000);
         assert_eq!(usage.model_name, "gpt-4o");
         assert!(usage.system_prompt_tokens > 0);
         assert!(usage.conversation_tokens > 0);

@@ -37,9 +37,9 @@ impl TokenBudgetManager {
         }
     }
 
-    /// 使用默认上下文窗口大小创建（128K）
+    /// 使用默认上下文窗口大小创建（200K）
     pub fn default_context() -> Self {
-        Self::new(128_000)
+        Self::new(200_000)
     }
 
     /// 计算各部分 Token 配额
@@ -122,11 +122,11 @@ mod tests {
         let manager = TokenBudgetManager::default_context();
         let budget = manager.budget();
 
-        // 128K 上下文窗口的预算分配
-        assert_eq!(budget.system_prompt, 19200); // 15%
-        assert_eq!(budget.tool_definitions, 12800); // 10%
-        assert_eq!(budget.conversation, 64000); // 50%
-        assert_eq!(budget.response, 32000); // 25%
+        // 200K 上下文窗口的预算分配
+        assert_eq!(budget.system_prompt, 30000); // 15%
+        assert_eq!(budget.tool_definitions, 20000); // 10%
+        assert_eq!(budget.conversation, 100000); // 50%
+        assert_eq!(budget.response, 50000); // 25%
     }
 
     #[test]

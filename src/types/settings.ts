@@ -76,7 +76,7 @@ export interface ProviderConfig {
   apiKey: string;
   model: string;
   extraParams?: Record<string, unknown>;
-  /** 上下文窗口大小 (tokens)，undefined 表示自动推断 */
+  /** 上下文窗口大小 (tokens)，留空则使用默认值 (200K) */
   contextWindow?: number;
   /** 是否支持视觉/图片多模态 */
   supportsVision: boolean;

@@ -384,7 +384,7 @@ pub async fn get_context_usage(
         let cache_type = router.current_cache_type();
         match main_provider {
             Some(p) => (p.context_window, p.model.clone(), cache_type.to_string()),
-            None => (128_000, String::new(), cache_type.to_string()),
+            None => (200_000, String::new(), cache_type.to_string()),
         }
     };
 
@@ -1212,13 +1212,13 @@ async fn run_agent(
                     cw
                 }
                 None => {
-                    log::warn!("无可用 Provider，使用默认上下文窗口 128K");
-                    128_000
+                    log::warn!("无可用 Provider，使用默认上下文窗口 200K");
+                    200_000
                 }
             },
             Err(e) => {
-                log::warn!("加载 LLM 配置失败: {}, 使用默认上下文窗口 128K", e.message);
-                128_000
+                log::warn!("加载 LLM 配置失败: {}, 使用默认上下文窗口 200K", e.message);
+                200_000
             }
         }
     };

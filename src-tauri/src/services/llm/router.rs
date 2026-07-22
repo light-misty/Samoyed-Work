@@ -764,8 +764,8 @@ impl LlmRouter {
                         is_available: self.is_provider_available(id),
                         created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                         is_connected: None,
-                        context_window: m.map(|m| m.context_window).unwrap_or(128_000),
-                        supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
+                        context_window: m.map(|m| m.context_window).unwrap_or(200_000),
+                        supports_vision: m.map(|m| m.supports_vision).unwrap_or(false),
                     }
                 })
                 .collect(),
@@ -784,8 +784,8 @@ impl LlmRouter {
                             is_available: true,
                             created_at: m.map(|m| m.created_at.clone()).unwrap_or_default(),
                             is_connected: None,
-                            context_window: m.map(|m| m.context_window).unwrap_or(128_000),
-                            supports_vision: m.map(|m| m.supports_vision).unwrap_or(true),
+                            context_window: m.map(|m| m.context_window).unwrap_or(200_000),
+                            supports_vision: m.map(|m| m.supports_vision).unwrap_or(false),
                         }
                     })
                     .collect()

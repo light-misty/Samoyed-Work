@@ -66,7 +66,7 @@ pub struct AdvancedConfig {
     /// false: 支持 reasoning_content 输入的 Provider（DeepSeek），保持原样发送
     #[serde(default = "default_reasoning_in_content")]
     pub reasoning_in_content: bool,
-    /// 上下文窗口大小 (tokens)，None 表示使用自动推断
+    /// 上下文窗口大小 (tokens)，None 表示使用默认值 (200K)
     /// 与 max_tokens 不同：max_tokens 是 LLM 最大输出 token 数，context_window 是模型上下文窗口总大小
     #[serde(default)]
     pub context_window: Option<usize>,
@@ -92,9 +92,9 @@ impl Default for AdvancedConfig {
     }
 }
 
-/// supports_vision 默认值：true（默认支持视觉）
+/// supports_vision 默认值：false（默认不支持视觉，由用户手动开启）
 fn default_supports_vision() -> bool {
-    true
+    false
 }
 
 /// LLM Provider 配置项
@@ -123,22 +123,9 @@ pub struct LlmProvider {
 
 impl LlmProvider {
     /// 解析上下文窗口大小
-    /// 优先使用手动配置的 context_window，否则从预设表推断
+    /// 优先使用手动配置的 context_window，否则返回默认值 128K
     pub fn resolve_context_window(&self) -> usize {
-        if let Some(cw) = self.advanced.context_window {
-            return cw;
-        }
-        let provider_type_str = match &self.provider_type {
-            ProviderType::OpenAI => "openai",
-            ProviderType::Anthropic => "anthropic",
-            ProviderType::Ollama => "ollama",
-            ProviderType::Gemini => "gemini",
-            ProviderType::Custom => "custom",
-        };
-        crate::services::llm::context_presets::resolve_context_window(
-            &self.model,
-            Some(provider_type_str),
-        )
+        self.advanced.context_window.unwrap_or(200_000)
     }
 }
 
