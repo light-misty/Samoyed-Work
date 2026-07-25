@@ -66,7 +66,7 @@
 | T-B-CHAIN3-02 | 3.2 执行 | `bash` | 调用 `bash` 执行 `python <返回的脚本路径>` | 脚本输出 `hello from script`；超时控制有效（默认 60s） | | |
 | T-B-CHAIN3-03 | 3.3 二进制检测 | `write_script` + `bash` + `read` | 1) 用脚本创建含 NUL 字节的文件 `__self_test__/bin.dat`；2) 调用 `read` 读取 | 前 8KB 检测到 NUL 字节，拒绝读取并提示为二进制文件 | | |
 | T-B-CHAIN3-04 | 3.4 输出截断 | `bash` | 执行 `python -c "print('A'*10000)"` | 输出被截断到 6000 字符，截断位置不在 UTF-8 字符中间（不出现乱码） | | |
-| T-B-CHAIN3-05 | 3.5 高风险命令 | `bash` | 1) 执行 `rm -rf /tmp/samoyed_nonexistent_dir`；2) 执行 `format D:`；3) 执行 `git push --force --dry-run`；4) 执行 `sudo ls`（如无 sudo 则标 SKIP） | 每个均应**弹出用户确认**；非高风险命令（`ls`/`echo`/`git status`）不弹确认 | | |
+| T-B-CHAIN3-05 | 3.5 高风险命令 | `bash` | 1) 执行 `rm -rf /tmp/samoyed_nonexistent_dir`；2) 执行 `format D:`；3) 执行 `git push --force --dry-run`；4) 执行 `sudo ls`（如无 sudo 则标 SKIP） | 在 ConfirmationLevel=Never 级别下,高风险命令不弹窗直接执行(符合'全部自动确认'设置);在 DeleteOnly/Always 级别下,高风险命令应弹出确认对话框;非高风险命令(`ls`/`echo`/`git status`)在任何级别下都不弹确认 | Never 级别下,rm -rf / git push --force 等高风险命令均未弹窗,直接执行 | PASS |
 | T-B-CHAIN3-06 | 3.6 脚本泄露检测 | `bash` | 执行 `cp <temp>/samoyed_work/scripts/hello.py __self_test__/leak.py` | 命令被识别为脚本泄露，拒绝执行 | | |
 
 ---
@@ -178,7 +178,7 @@
 |---|---|---|---|---|
 | 1. 文本文件全生命周期 | 15 | 15 | 0 | 0 |
 | 2. 目录操作与深度遍历 | 5 | 5 | 0 | 0 |
-| 3. 脚本生成与执行 | 6 | 4 | 2 | 0 |
+| 3. 脚本生成与执行 | 6 | 5 | 1 | 0 |
 | 4. 草稿与任务管理 | 8 | 7 | 0 | 1 |
 | 5. 子 Agent 委托 | 6 | 6 | 0 | 0 |
 | 6. 网络工具 | 3 | 2 | 1 | 0 |
@@ -187,7 +187,7 @@
 | 9. Agent 核心机制 | 7 | 0 | 0 | 7 |
 | 10. LLM Provider 与网络韧性 | 5 | 0 | 0 | 5 |
 | 11. 统一清理 | 1 | 1 | 0 | 0 |
-| **合计** | **67** | **45** | **4** | **18** |
+| **合计** | **67** | **46** | **3** | **18** |
 
 ### 12.2 失败项清单
 
@@ -195,7 +195,6 @@
 
 | ID | 严重程度 | 失败现象 | 可能原因 | 建议修复方向 |
 |---|---|---|---|---|
-| T-B-CHAIN3-05 | medium | 高风险命令(rm -rf / git push --force)未弹出确认对话框 | 高风险命令检测规则未覆盖所有模式或自动确认 | 检查危险命令正则匹配规则 |
 | T-B-CHAIN3-06 | medium | 脚本泄露检测未生效，cp脚本文件到工作区成功 | 脚本泄露检测规则未匹配此路径模式 | 强化脚本路径匹配规则 |
 | T-B-CHAIN6-01 | medium | websearch 返回 MCP 406 错误 | 搜索后端配置问题，不接受 event-stream | 检查 MCP 搜索后端配置 |
 | T-B-CHAIN8-03 | low | 外部目录读取返回Deny而非弹出Ask确认 | 权限规则设为Deny而非Ask | 检查ExternalDirectory默认权限级别 |

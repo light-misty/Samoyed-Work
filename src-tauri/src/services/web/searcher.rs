@@ -120,9 +120,12 @@ impl WebSearcher {
         });
 
         // 发送 POST 请求
+        // 显式设置 Accept 头，符合 MCP 协议规范要求（application/json, text/event-stream），
+        // 避免严格 MCP 服务器（如 Exa AI）返回 406 Not Acceptable
         let response = self
             .client
             .post(&self.config.mcp_endpoint)
+            .header("Accept", "application/json, text/event-stream")
             .json(&request_body)
             .send()
             .await

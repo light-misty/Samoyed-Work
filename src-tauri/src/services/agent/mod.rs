@@ -105,7 +105,7 @@ pub use sub_executor::{SubAgentExecTrait, SubAgentExecutor};
 
 /// 文档 Handler 名称列表（仅在 Document 模式下暴露给 LLM）
 /// executor.rs 和 sub_executor.rs 共享此常量，避免重复定义导致维护不一致
-pub const DOCUMENT_HANDLER_NAMES: &[&str] = &["docx", "xlsx", "pptx", "pdf"];
+pub const DOCUMENT_HANDLER_NAMES: &[&str] = &["docx", "xlsx", "pptx", "pdf", "validator"];
 
 /// 判断工具名是否为文档 Handler
 pub fn is_document_handler(name: &str) -> bool {

@@ -2920,7 +2920,7 @@ mod tests {
         // 日志中的实际命令：cp 脚本到工作区（Windows 风格路径）
         let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/samoyed_work/scripts/modify_resume_pdf.py\" \"D:/DeskTop/test/modify_resume_pdf.py\" && cd \"D:/DeskTop/test\" && python modify_resume_pdf.py 2>&1";
         assert!(
-            is_script_leak_command(cmd, workspace_root),
+            is_script_leak_command(cmd, "", workspace_root),
             "Windows 风格路径的 cp 命令应被识别为脚本泄露"
         );
     }
@@ -2933,7 +2933,7 @@ mod tests {
         // 日志中的实际命令：cp 脚本到工作区（Git Bash 风格路径 /d/DeskTop/test）
         let cmd = "cp \"C:/Users/a1926/AppData/Local/Temp/samoyed_work/scripts/fix_resume.py\" \"/d/DeskTop/test/fix_resume.py\" && cd /d/DeskTop/test && python -u fix_resume.py 2>&1";
         assert!(
-            is_script_leak_command(cmd, workspace_root),
+            is_script_leak_command(cmd, "", workspace_root),
             "Git Bash 风格路径的 cp 命令应被识别为脚本泄露"
         );
     }
@@ -2945,7 +2945,7 @@ mod tests {
 
         let cmd = "mv /tmp/samoyed_work/scripts/script.py /d/DeskTop/test/script.py";
         assert!(
-            is_script_leak_command(cmd, workspace_root),
+            is_script_leak_command(cmd, "", workspace_root),
             "mv 命令将脚本移动到工作区应被识别为脚本泄露"
         );
     }
@@ -2958,14 +2958,14 @@ mod tests {
         // 使用 echo + 重定向写入脚本文件
         let cmd = "echo \"print('hello')\" > /d/DeskTop/test/hello.py";
         assert!(
-            is_script_leak_command(cmd, workspace_root),
+            is_script_leak_command(cmd, "", workspace_root),
             "重定向写入脚本到工作区应被识别为脚本泄露"
         );
 
         // 使用 cat + 重定向
         let cmd2 = "cat > /d/DeskTop/test/script.py << EOF\nprint('hello')\nEOF";
         assert!(
-            is_script_leak_command(cmd2, workspace_root),
+            is_script_leak_command(cmd2, "", workspace_root),
             "cat 重定向写入脚本到工作区应被识别为脚本泄露"
         );
     }
@@ -2979,35 +2979,35 @@ mod tests {
         let cmd1 =
             "python \"C:/Users/a1926/AppData/Local/Temp/samoyed_work/scripts/script.py\" 2>&1";
         assert!(
-            !is_script_leak_command(cmd1, workspace_root),
+            !is_script_leak_command(cmd1, "", workspace_root),
             "直接执行 temp 目录脚本不应被识别为脚本泄露"
         );
 
         // 列出工作区文件
         let cmd2 = "ls -la /d/DeskTop/test/";
         assert!(
-            !is_script_leak_command(cmd2, workspace_root),
+            !is_script_leak_command(cmd2, "", workspace_root),
             "ls 命令不应被识别为脚本泄露"
         );
 
         // 在工作区内执行 python -c 内联代码
         let cmd3 = "cd /d/DeskTop/test && python -c \"print('hello')\"";
         assert!(
-            !is_script_leak_command(cmd3, workspace_root),
+            !is_script_leak_command(cmd3, "", workspace_root),
             "python -c 内联代码不应被识别为脚本泄露"
         );
 
         // 复制非脚本文件到工作区
         let cmd4 = "cp /tmp/data.csv /d/DeskTop/test/data.csv";
         assert!(
-            !is_script_leak_command(cmd4, workspace_root),
+            !is_script_leak_command(cmd4, "", workspace_root),
             "复制非脚本文件不应被识别为脚本泄露"
         );
 
         // workspace_root 为空
         let cmd5 = "cp /tmp/script.py /workspace/script.py";
         assert!(
-            !is_script_leak_command(cmd5, ""),
+            !is_script_leak_command(cmd5, "", ""),
             "workspace_root 为空时不应识别为脚本泄露"
         );
     }
@@ -3020,22 +3020,51 @@ mod tests {
         // .sh 脚本
         assert!(is_script_leak_command(
             "cp /tmp/script.sh /d/DeskTop/test/script.sh",
+            "",
             workspace_root
         ));
         // .bash 脚本
         assert!(is_script_leak_command(
             "cp /tmp/script.bash /d/DeskTop/test/script.bash",
+            "",
             workspace_root
         ));
         // .ps1 脚本
         assert!(is_script_leak_command(
             "cp /tmp/script.ps1 /d/DeskTop/test/script.ps1",
+            "",
             workspace_root
         ));
         // .bat 脚本
         assert!(is_script_leak_command(
             "cp /tmp/script.bat /d/DeskTop/test/script.bat",
+            "",
             workspace_root
+        ));
+    }
+
+    /// 测试 is_script_leak_command 函数：working_dir 等于 workspace_root 时，相对路径目标被识别
+    /// 验证 T-B-CHAIN3-06 修复：命令中使用相对路径目标（如 __self_test__/leak.py），
+    /// 当 working_dir 等于 workspace_root 时，应识别为脚本泄露
+    #[test]
+    fn test_is_script_leak_command_working_dir_equals_workspace() {
+        // working_dir 等于 workspace_root 时，相对路径目标被识别
+        assert!(is_script_leak_command(
+            "cp /tmp/samoyed_work/scripts/hello.py __self_test__/leak.py",
+            "/workspace",
+            "/workspace"
+        ));
+        // working_dir 不等于 workspace_root 时，不触发检测
+        assert!(!is_script_leak_command(
+            "cp /tmp/script.py /other/dir/leak.py",
+            "/other/dir",
+            "/workspace"
+        ));
+        // working_dir 为空时，保持现有行为(回归)
+        assert!(!is_script_leak_command(
+            "cp /tmp/samoyed_work/scripts/hello.py __self_test__/leak.py",
+            "",
+            "/workspace"
         ));
     }
 
@@ -4013,9 +4042,11 @@ impl Tool for WriteTextFileTool {
 // / get_file_hash
 // ============================================================
 
-/// 校验已存在的路径是否在工作区内
-/// 返回 Ok((canonical_path, canonical_root)) 表示通过校验
-/// 返回 Err(error_message) 表示校验失败
+/// 校验已存在的路径是否合法
+/// 仅检测路径遍历攻击（`..` 越界），不拦截工作区外路径
+/// 外部目录访问由权限系统（check_permission）决策，避免职责重叠
+/// 返回 Ok((canonical_path, canonical_root)) 表示通过校验（路径可能在工作区外）
+/// 返回 Err(error_message) 表示校验失败（路径越界或不存在）
 /// 用于需要路径安全校验的工具，减少重复代码
 fn validate_existing_path_in_workspace(
     resolved_path: &str,
@@ -4051,16 +4082,10 @@ fn validate_existing_path_in_workspace(
     let canonical_path = crate::utils::canonicalize(std::path::Path::new(resolved_path))
         .map_err(|_| format!("Path does not exist or is invalid: {}", resolved_path))?;
 
-    // 安全防线 3：组件级 starts_with 比较（避免字符串前缀匹配的绕过风险）
-    // 防止符号链接等文件系统层面的绕过
-    if !canonical_path.starts_with(&canonical_root) {
-        return Err(format!(
-            "Path is outside the workspace, access denied: {} (workspace: {})",
-            canonical_path.display(),
-            canonical_root.display()
-        ));
-    }
-
+    // 注：原安全防线 3（组件级 starts_with 比较）已移除
+    // 该防线会拒绝所有工作区外路径，与权限系统（check_permission 中的
+    // ExternalDirectory 检查）职责重叠。外部目录访问由权限系统决策（Ask/Deny）
+    // canonical_path 可能位于工作区外（如符号链接逃逸），交由权限系统处理
     Ok((canonical_path, canonical_root))
 }
 
@@ -5964,7 +5989,7 @@ fn infer_script_language(filename: &str, language: &str) -> (String, &'static st
 /// 路径格式兼容：
 /// - Windows 风格：D:\DeskTop\test 或 D:/DeskTop/test
 /// - Git Bash 风格：/d/DeskTop/test（盘符 D: 转换为 /d/）
-fn is_script_leak_command(command: &str, workspace_root: &str) -> bool {
+fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str) -> bool {
     if workspace_root.is_empty() {
         return false;
     }
@@ -5986,8 +6011,19 @@ fn is_script_leak_command(command: &str, workspace_root: &str) -> bool {
     let cmd_normalized = lower.replace('\\', "/");
     let mentions_workspace =
         cmd_normalized.contains(&ws_windows) || cmd_normalized.contains(&ws_gitbash);
+
+    // 新增逻辑：当命令中未直接出现工作区路径时，结合 working_dir 判定
+    // 若 working_dir 等于 workspace_root（命令在工作区内执行），
+    // 相对路径目标（如 __self_test__/leak.py）视为工作区内路径，构成泄露
+    // working_dir 为空或不等于 workspace_root 时，不触发检测（保持现有行为）
     if !mentions_workspace {
-        return false;
+        if working_dir.is_empty() {
+            return false;
+        }
+        let wd_normalized = working_dir.to_lowercase().replace('\\', "/");
+        if wd_normalized != ws_windows {
+            return false;
+        }
     }
 
     // 命令中是否出现脚本文件扩展名（作为子字符串）
@@ -6117,7 +6153,7 @@ impl Tool for RunCommandTool {
 
         // 安全校验：阻止将脚本文件复制/移动到工作区目录
         // 脚本文件应只在系统临时目录中创建和执行，不允许通过 cp/mv/重定向等方式泄露到工作区
-        if is_script_leak_command(&command, workspace_root) {
+        if is_script_leak_command(&command, working_dir, workspace_root) {
             log::warn!("bash: 检测到脚本泄露命令，已拒绝执行: {}", command);
             return ToolResult {
                 success: false,

@@ -238,7 +238,7 @@
     "authorInfoTooltip": "Author info only applies in Document mode, used for auto-filling generated document metadata",
     "confirmLevel": "Confirmation Level",
     "confirmAlways": "Always confirm",
-      "confirmEditOnly": "Confirm delete only",
+      "confirmDeleteOnly": "Confirm delete only",
     "confirmNever": "Auto-confirm all"
   },
   "contextWindow": {
@@ -278,7 +278,7 @@
       "confirmLevel": "Confirmation Level",
       "confirmLevelDesc": "Confirmation policy for Agent file operations",
       "confirmAlways": "Always confirm",
-    "confirmEditOnly": "Confirm delete only",
+    "confirmDeleteOnly": "Confirm delete only",
       "confirmNever": "Auto-confirm all",
       "codeExecutionTitle": "Code Execution Environment",
       "gitBashPath": "Git Bash Path",

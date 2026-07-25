@@ -13,7 +13,7 @@ export function AgentInfoSection() {
   // 确认级别选项（移入组件内部以使用 t() 翻译）
   const confirmationLevelOptions: { value: string; label: string }[] = [
     { value: "always", label: t('agentInfo.confirmAlways') },
-    { value: "deleteOnly", label: t('agentInfo.confirmEditOnly') },
+    { value: "deleteOnly", label: t('agentInfo.confirmDeleteOnly') },
     { value: "never", label: t('agentInfo.confirmNever') },
   ];
   // 优先显示用户选择的首选 Provider，回退到默认 Provider，与 InputArea/TopBar 显示逻辑一致

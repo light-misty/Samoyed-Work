@@ -238,7 +238,7 @@
     "authorInfoTooltip": "作者信息仅在文档模式下生效，用于自动填充生成的文档元数据",
     "confirmLevel": "确认级别",
     "confirmAlways": "全部需确认",
-    "confirmEditOnly": "仅删除确认",
+    "confirmDeleteOnly": "仅删除确认",
     "confirmNever": "全部自动确认"
   },
   "contextWindow": {
@@ -278,7 +278,7 @@
       "confirmLevel": "操作确认级别",
       "confirmLevelDesc": "Agent执行文件操作时的确认策略",
       "confirmAlways": "全部需确认",
-      "confirmEditOnly": "仅删除操作确认",
+      "confirmDeleteOnly": "仅删除操作确认",
       "confirmNever": "全部自动确认",
       "codeExecutionTitle": "代码执行环境",
       "gitBashPath": "Git Bash 路径",
