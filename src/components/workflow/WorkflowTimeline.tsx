@@ -138,7 +138,6 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
   const handleScroll = useCallback(() => {
     // 更新当前可见节点（throttle 内部控制频率）
     throttledCompute();
-    if (isProgrammaticScrollRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;

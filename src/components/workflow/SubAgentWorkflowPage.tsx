@@ -48,7 +48,6 @@ export function SubAgentWorkflowPage({ agentId }: SubAgentWorkflowPageProps) {
 
   // 检测用户是否手动上滚，决定是否自动跟随
   const handleScroll = useCallback(() => {
-    if (isProgrammaticScrollRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
