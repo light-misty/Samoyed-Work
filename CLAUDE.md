@@ -59,7 +59,7 @@ pip install -r sidecar/requirements.txt
 # 编译（不运行）
 cargo build -p samoyed_work_lib
 
-# 运行所有 Rust 测试（现有 13 个 #[cfg(test)] 模块 + Python 测试）
+# 运行所有 Rust 测试（现有 170 个测试，19 个 #[cfg(test)] 模块）
 cargo test
 
 # 运行特定测试
@@ -89,23 +89,28 @@ src/                     React 前端 (TypeScript)
   components/
     layout/              布局组件: TopBar, MainArea, LeftSidebar, Sidebar,
                             InputArea, MainLayout, NetworkStatusBanner,
-                            WorkspaceSelector, WindowControls
-    workflow/            工作流时间线: WorkflowTimeline, WorkflowNode
-                            (User/Thinking/Content/Tool/Confirm/Error)
+                            WorkspaceSelector, WindowControls,
+                            WorkspaceGitStatus
+    workflow/            工作流时间线: WorkflowTimeline, WorkflowNode,
+                            WorkflowRightSidebar, SubAgentWorkflowPage
+                            (User/Thinking/Content/Tool/Confirm/Error/
+                             Compaction/Question/SubAgent)
     sidebar/             侧边栏: FileTreeSection, AgentInfoSection,
                             SessionListSection
     preview/             文档预览浮层: PreviewOverlay, MarkdownPreview,
                             PdfCanvasViewer, VersionHistoryPanel
-    settings/            设置弹窗: SettingsDialog + 8 标签页
+    settings/            设置弹窗: SettingsDialog + 10 标签页
                             (LLMConfig, WorkspaceTab, HandlersTab, TemplatesTab,
-                             AppearanceTab, ShortcutsTab, GeneralTab, HelpTab)
+                             AppearanceTab, ShortcutsTab, GeneralTab, HelpTab,
+                             LspStatusPanel, PermissionTab)
                             + 子弹窗 (ProviderFormDialog, AddWorkspaceDialog,
                               TemplateEditDialog)
-    common/              通用组件: Button, Icon, ContextMenu, DeleteConfirmDialog,
-                            ErrorBoundary, ProviderSelector, Toast(ToastContainer),
-                            UpdateNotification
+    common/              通用组件: Button, Icon, ContextMenu, CustomScrollArea,
+                            DeleteConfirmDialog, ErrorBoundary, ProviderSelector,
+                            Toast(ToastContainer), UpdateNotification
   stores/                Zustand stores: workflow, session, settings, workspace,
-                            fileTree, toast, attachment, network, update
+                            fileTree, toast, attachment, network, update,
+                            agentMode
   i18n/                  国际化: index.ts, locales/zh-CN.json, locales/en-US.json
   services/              前端服务层: tauri.ts (invoke封装), event.ts (事件监听),
                             errorHandler.ts
@@ -120,23 +125,36 @@ src-tauri/               Rust 后端
   src/
     lib.rs               入口, AppState定义 (含 network_monitor), 命令注册,
                            初始化流程
-    commands/            Tauri命令层 (12个模块): llm, session, workspace, document,
-                            handler, settings, agent, template, log, lsp, update (desktop)
+    commands/            Tauri命令层 (13个模块): llm, session, workspace, document,
+                            handler, settings, agent, template, log, lsp,
+                            permission, update (desktop)
     services/
-      agent/             Agent调度引擎: executor, context (对话上下文管理)
-        prompts/         System Prompt: document_design, prompt_loader,
+      agent/             Agent调度引擎: executor, context (对话上下文管理),
+                            sub_executor, compaction
+        prompts/         System Prompt: agents_md_loader (AGENTS.md规则加载),
                             task_type, token_budget
       llm/               LLM多Provider适配: router, provider (trait),
                             openai_adapter, anthropic_adapter, gemini_adapter,
                             context_presets (30+模型上下文窗口预设表)
-      handler/           Handler引擎: registry (注册表), builtin (文档处理器)
-      tool/              Tool引擎: registry, builtin (16个工具), trait_def
+      handler/           Handler引擎: registry (注册表), builtin (5个文档处理器)
+      tool/              Tool引擎: registry, builtin (25个工具), trait_def
       document/          Python Sidecar进程管理 (自动重启、超时、重试)
+      permission/        权限系统: registry (注册表), evaluator (评估器),
+                            doom_loop (死循环检测), wildcard (通配符), types
+      skill/             Skill引擎: loader (加载器), registry (注册表),
+                            tool (SkillTool 按需加载)
+      code/              代码解析与搜索: parser (tree-sitter解析), search (语义搜索)
+      lsp/               LSP系统: manager (服务器管理), client (协议客户端),
+                            cache (结果缓存), router (语言路由)
+      web/               网络服务: fetcher (网页抓取), searcher (网络搜索),
+                            url_validator (URL安全校验)
       attachment.rs      文件附件处理
       network_monitor.rs 网络状态监控
       fs_watcher.rs      文件系统监听
-    db/                  数据库层: init, session_repo, message_repo, snapshot_repo,
-                            template_repo, session_summary_repo, user_preference_repo
+    db/                  数据库层: init, session_repo, message_repo,
+                            snapshot_repo, template_repo, session_summary_repo,
+                            user_preference_repo, branch_repo, permission_repo,
+                            skill_repo, sub_agent_message_repo, todo_repo
     config/              配置管理: app_settings, llm_config, workspace_config
     models/              数据模型: message, session, document, llm, handler,
                             workspace, template, tool, context_memory
@@ -147,8 +165,9 @@ src-tauri/               Rust 后端
 sidecar/                 Python 文档处理引擎
   main.py                stdin/stdout JSON 行协议入口
   handlers/              文档处理器: word, excel, ppt, pdf, markdown,
-                            font_utils, validator (文档验证)
-  tests/                 test_skills_integration.py (645行集成测试)
+                            font_utils (字体工具), validator (文档验证)
+  requirements.txt       Python 依赖 (python-docx, openpyxl, python-pptx,
+                            PyMuPDF, reportlab 等 10 个包)
 
 shared/                  前后端共享TypeScript类型
   types.ts
@@ -192,17 +211,18 @@ docs/                    详细开发文档
 
 ### Handler 系统（文档处理，始终启用）
 - 每个 Handler 实现 `Handler` trait: `handler_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
-- 内置 4 个文档类型 Handler（均通过 Python Sidecar 执行）:
+- 内置 5 个文档处理器（均通过 Python Sidecar 执行）:
   - `docx_handler`: Word 文档处理（读取/转换/分析）
   - `xlsx_handler`: Excel 文档处理（读取/转换/分析）
   - `pptx_handler`: PPT 文档处理（读取/转换/分析）
-  - `pdf_handler`: PDF 文档处理（读取/转换/分析）
+  - `pdf_handler`: PDF 文档处理（读取/转换/分析/修改，含 17 种子操作）
+  - `validator_handler`: 文档质量验证（检测常见质量问题，返回警告列表）
 - Handler 始终启用，前端 HandlersTab 仅展示信息
 
 ### Tool 系统（基础操作，始终启用）
 - Tool 是轻量级、始终启用的基础操作工具，与 Handler 平行但不可禁用
 - 每个 Tool 实现 `Tool` trait（与 Handler 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
-- 内置 24 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）（实验性开关开启时为 25 个）:
+- 内置 25 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）（实验性开关开启 LSP 时为 26 个）:
   - `list_directory`: 列出目录内容（支持深度控制、扩展名过滤、排序，含路径遍历安全校验）
   - `search_files`: 按文件名/内容搜索文件（支持扩展名过滤、内容预览）
   - `read_file`: 读取纯文本文件（.txt/.md/.csv/.json 等，1MB 上限，含路径校验）
@@ -223,6 +243,7 @@ docs/                    详细开发文档
   - `run_command`: 通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制（LLM 通过 timeout 参数自主控制，最大 300 秒）；高风险命令（rm -rf、format、shutdown 等）需用户确认；Git Bash 路径优先使用用户配置，为空时从 PATH 自动检测（先查找 bash.exe，再从 git.exe 推断 `<git_root>/bin/bash.exe`）
   - `todo_write`: 结构化任务管理（按 session_id 隔离并持久化到数据库）
   - `source_code`: 基于 tree-sitter 的代码语义搜索（支持按符号类型和名称通配符查询）
+  - `skill`: 按需加载领域能力（通过 SkillRegistry 管理，支持 list/load 两个 action，系统提示词中仅注入 Skill 清单，Agent 通过此工具加载实际内容）
   - `task`: 委托子任务给子 Agent 执行（阶段 4，支持 single/batch 模式，子 Agent 拥有独立上下文，继承父 Agent 配置；嵌套深度限制 3 层，默认禁止递归调用）
   - `webfetch`: 获取 URL 内容并转为 Markdown（阶段 4，受权限系统控制，URL 验证拒绝内网地址和非 HTTP 协议）
   - `websearch`: 网络搜索（阶段 4，支持 MCP/Tavily/SerpAPI 后端，受权限系统控制）
@@ -268,7 +289,6 @@ AppState {
     permission_channels: Arc<Mutex<HashMap<String, oneshot::Sender<PermissionDecision>>>>,
     question_channels: QuestionChannels,
     permission_registry: Arc<PermissionRegistry>,
-    session_whitelist: Arc<SessionWhitelist>,
     doom_loop_detector: Arc<DoomLoopDetector>,
     agent_mode_manager: Arc<AgentModeManager>,
     doc_service: Arc<DocumentService>,
@@ -306,10 +326,10 @@ AppState {
 - Sidecar 健康检查: 每 3 分钟执行一次，不健康时记录警告日志
 - 网络状态监控: `NetworkMonitor` 定时检测网络连通性，状态变化时发射 `system:network_change` 事件；断网时自动暂停 LLM 请求并在恢复后重试
 
-### 文档设计提示
-`src-tauri/src/services/agent/prompts/document_design.rs` 包含专业的文档生成规范（作为 System Prompt 注入 Agent），覆盖：
-- Word: 页面尺寸 DXA 计算、EMU 单位、样式规范、表格/列表/图片/页眉页脚规范
-- Excel/PPT/PDF 类似的结构化设计指导
+### 系统 Prompt 系统
+- `agents_md_loader`: 从工作区递归向上查找 AGENTS.md/CLAUDE.md 规则，合并全局规则（`~/.agent/AGENTS.md`），注入到 System Prompt
+- `task_type`: 任务类型推断（Docx/Xlsx/Pptx/Pdf/Md/FileSystem/Unknown），根据用户消息和工具调用自动识别，生成对应提示
+- `token_budget`: Token 预算管理（支持 30+ 模型预设上下文窗口），用于估算和分配 token 资源
 
 ### 错误码体系
 统一通过 `CommandError` 结构体（定义在 `errors.rs`）返回给前端，结构为 `{ code: u32, message: String }`。Rust 标准错误类型通过 `From` trait 自动转换：
@@ -350,7 +370,7 @@ AppState {
 - `useNetworkStore` 同步前端网络状态，Agent 可在断网时暂停并自动重试 LLM 请求
 
 ### 应用设置
-`AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 8 个标签页：
+`AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 10 个标签页：
 - `GeneralSettings`: 作者名、作者邮箱、作者公司、确认级别(Always/DeleteOnly/Never)、`git_bash_path`（String，空表示自动检测）→ **GeneralTab**（含"代码执行环境"区域）
 - `AppearanceSettings`: 主题模式(light/dark/system)、界面语言(language)、跟随系统语言(languageFollowSystem) → **AppearanceTab**
 - `VersionSnapshot`: 保留策略(ByCount/ByDays/Both)、最大数量/天数
@@ -375,6 +395,7 @@ AppState {
 - `useAttachmentStore`: 当前待发送附件管理（添加/移除/清空）
 - `useNetworkStore`: 网络状态跟踪（online/offline，前端状态同步）
 - `useUpdateStore`: 更新状态管理（待安装更新包路径）
+- `useAgentModeStore`: Agent 模式管理（Plan/Build/Document）
 
 ### 数据存储
 - SQLite: 会话、消息、版本快照、Prompt 模板、会话摘要、用户偏好
@@ -393,7 +414,7 @@ AppState {
 - CSP 限制严格: 仅允许 `http://localhost:*` 和 `http://127.0.0.1:*` 的 connect-src（用于 LLM API 调用）
 - 使用 `capabilities/` 目录配置插件权限（shell、dialog 等）
 - Tauri 插件: `tauri-plugin-shell`, `tauri-plugin-dialog`；桌面端额外注册 `tauri-plugin-updater` + `tauri-plugin-process`
-- 40+ 注册命令覆盖 LLM 管理、会话 CRUD、工作区操作、文档处理、Handler 管理、工具管理、设置、模板 CRUD、日志读取、DevTools 切换、更新检查/安装等
+- 70+ 注册命令覆盖 LLM 管理、会话 CRUD（含分支）、工作区操作、文档处理、Handler 管理、工具管理、设置、模板 CRUD、权限规则管理、日志读取、LSP 管理、更新检查/安装等
 
 ### 自动更新
 - 通过 `tauri-plugin-updater` 实现自动更新，NSIS 安装器打包
@@ -426,7 +447,7 @@ AppState {
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
 - `PRD_Samoyed-Work.md` — 产品需求文档
-- `plans/` — 设计文档 (上下文窗口设计、LLM 缓存优化等)
+- `plans/` — 设计文档 (上下文窗口设计、LLM 缓存优化、编程 Agent 重构等)
 - `tests/e2e_test.md` — E2E 测试计划
 - `tests/tools_handlers_validation.md` — Tools/Handlers 验证方案
 
@@ -454,5 +475,5 @@ AppState {
 - 版本历史: `VersionHistoryPanel` 组件展示文档版本快照列表，支持版本对比（diff）和回滚操作
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
 - 命令超时由 LLM 通过 run_command 的 `timeout` 参数自主控制，最大 300 秒（无全局超时配置）
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/session_whitelist/doom_loop_detector/agent_mode_manager）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置后传入 `register_builtin_tools`，含 task/webfetch/websearch/question 工具）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → Skill 注册表 → LSP 服务器管理器/路由器/缓存（阶段 5，读取 `lsp` 配置后初始化，注册服务器配置并传入 `register_builtin_tools`，仅在 `lsp.experimental_enabled=true` 时注册 LspTool；启动 LSP 健康检查后台任务） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控、LSP 按配置间隔）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/doom_loop_detector/agent_mode_manager）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置后传入 `register_builtin_tools`，含 task/webfetch/websearch/question/skill 工具）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → Skill 注册表 → LSP 服务器管理器/路由器/缓存（读取 `lsp` 配置后初始化，注册服务器配置并传入 `register_builtin_tools`，仅在 `lsp.experimental_enabled=true` 时注册 LspTool；启动 LSP 健康检查后台任务） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控、LSP 按配置间隔）
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

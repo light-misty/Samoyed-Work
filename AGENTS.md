@@ -27,12 +27,14 @@ Explicitly write out your entire deliberation process, documenting every interme
 | Command | What it does |
 |---------|-------------|
 | `npm run dev` | Vite dev server on **port 9527** (not 1420) |
-| `npm run tauri:dev` | Full Tauri app (Vite + Rust backend) |
+| `npm run preview` | Preview production build |
+| `npm run tauri:dev` | Full Tauri app (Vite + Rust backend, auto syncs sidecar) |
 | `npm run build` | `tsc -b && vite build` |
-| `npm run tauri:build` | Production build (NSIS installer) |
+| `npm run tauri:build` | Production build (NSIS installer, auto builds sidecar) |
 | `cargo build -p samoyed_work_lib` | Compile Rust only |
-| `cargo test` | Runs Rust unit tests (these exist — see `#[cfg(test)]` modules across source) |
+| `cargo test` | Runs Rust unit tests (170 tests, 19 `#[cfg(test)]` modules) |
 | `cargo clippy` | Rust lint |
+| `cargo fmt --check` | Rust format check |
 | `pip install -r sidecar/requirements.txt` | Python deps |
 
 Env `SAMOYED_WORK_PYTHON` overrides the Python interpreter path for the Sidecar.
