@@ -609,6 +609,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-behavior: smooth;
+}
+.right-sidebar-tabs::-webkit-scrollbar {
+  display: none;
 }
 .right-sidebar-tab {
   display: inline-flex;
@@ -623,6 +632,8 @@
   color: var(--color-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .right-sidebar-tab:hover {
   color: var(--color-text-primary);
@@ -718,6 +729,145 @@
   color: var(--color-text-tertiary);
   font-size: 12px;
   padding: 24px 0;
+}
+
+/* 右侧栏工作区文件面板 */
+.workspace-files-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.workspace-files-panel .ft-search {
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  margin-bottom: 0;
+  background: transparent;
+}
+.workspace-files-panel .ft-search:focus-within {
+  border: none;
+  box-shadow: none;
+}
+
+/* 右侧栏工作区文件头部：搜索行 + 更多按钮 */
+.workspace-files-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  position: relative;
+  min-height: 32px;
+}
+.workspace-files-header-spacer {
+  flex: 1;
+}
+.workspace-files-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.workspace-files-search-icon {
+  color: var(--color-text-quaternary);
+  flex-shrink: 0;
+}
+.workspace-files-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  padding: 2px 0;
+}
+.workspace-files-search-input::placeholder {
+  color: var(--color-text-quaternary);
+}
+.workspace-files-search-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.workspace-files-search-close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+.workspace-files-actions {
+  position: relative;
+  flex-shrink: 0;
+}
+.workspace-files-more-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.workspace-files-more-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+/* 更多下拉菜单 */
+.workspace-files-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 140px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  padding: 4px;
+  animation: dropdown-in 0.12s ease-out;
+}
+.workspace-files-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: background 0.12s;
+  text-align: left;
+}
+.workspace-files-dropdown-item:hover {
+  background: var(--color-bg-hover);
+}
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* 搜索区域与节点列表之间的间距 */

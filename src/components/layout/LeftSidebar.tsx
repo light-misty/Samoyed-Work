@@ -332,7 +332,6 @@ export function LeftSidebar({
           align-items: center;
           justify-content: space-between;
           padding: 10px 12px;
-          border-bottom: 1px solid var(--color-border-light);
           flex-shrink: 0;
         }
         .file-tree-back-btn {

@@ -84,7 +84,8 @@
     "emptyWorkflow": "暂无工作流节点",
     "attachmentMessage": "[附件消息]",
     "searchUserMessages": "搜索用户消息",
-    "noSearchResults": "未找到匹配的消息"
+    "noSearchResults": "未找到匹配的消息",
+    "workspaceFiles": "工作区文件"
   },
   "provider": {
     "selectModel": "选择模型",

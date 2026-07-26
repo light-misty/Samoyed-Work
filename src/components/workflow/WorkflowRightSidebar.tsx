@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkflowStore } from '../../stores/useWorkflowStore';
 import { useSessionStore } from '../../stores/useSessionStore';
+import { useFileTreeStore } from '../../stores/useFileTreeStore';
 import { listAllBranchUserMessages } from '../../services/tauri';
 import { Icon } from '../common/Icon';
 import { CustomScrollArea } from '../common/CustomScrollArea';
+import { FileTreeSection } from '../sidebar/FileTreeSection';
 import type { UserNodeData } from '../../types/workflow';
 import type { BranchUserMessage } from '../../types/session';
 
@@ -129,7 +131,7 @@ function ContextPanel() {
   );
 }
 
-type RightSidebarTab = "branches" | "context";
+type RightSidebarTab = "branches" | "context" | "files";
 
 interface WorkflowRightSidebarProps {
   /** 是否处于收起状态（由父组件控制，用于触发滑入/滑出动画） */
@@ -154,12 +156,20 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
   const executionStatus = useWorkflowStore((s) => s.executionStatus);
   const branchGroups = useWorkflowStore((s) => s.branchGroups);
   const activeBranchId = useWorkflowStore((s) => s.activeBranchId);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [allBranchMessages, setAllBranchMessages] = useState<BranchUserMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [showRightFileSearch, setShowRightFileSearch] = useState(false);
+  const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const moreDropdownRef = useRef<HTMLDivElement>(null);
+  const fileSearchKeyword = useFileTreeStore((s) => s.searchKeyword);
+  const setFileSearchKeyword = useFileTreeStore((s) => s.setSearchKeyword);
+  const fileSearchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isSearching) return;
@@ -204,6 +214,60 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
       console.error('[WorkflowRightSidebar] 切换分支失败:', err);
     }
   };
+
+  /* 更多下拉菜单：搜索文件 */
+  const handleMoreSearch = useCallback(() => {
+    setShowRightFileSearch(true);
+    setMoreDropdownOpen(false);
+  }, []);
+
+  /* 关闭文件搜索框 */
+  const handleCloseFileSearch = useCallback(() => {
+    setShowRightFileSearch(false);
+    setFileSearchKeyword('');
+  }, [setFileSearchKeyword]);
+
+  /* 搜索框显示时自动聚焦 */
+  useEffect(() => {
+    if (showRightFileSearch && fileSearchInputRef.current) {
+      fileSearchInputRef.current.focus();
+    }
+  }, [showRightFileSearch]);
+
+  /* 更多下拉菜单：刷新文件树 */
+  const handleMoreRefresh = useCallback(() => {
+    const { activeWorkspaceId, loadTree } = useFileTreeStore.getState();
+    if (activeWorkspaceId) {
+      loadTree(activeWorkspaceId);
+    }
+    setMoreDropdownOpen(false);
+  }, []);
+
+  /* 点击外部关闭更多下拉菜单 */
+  useEffect(() => {
+    if (!moreDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        moreBtnRef.current?.contains(e.target as Node) ||
+        moreDropdownRef.current?.contains(e.target as Node)
+      ) {
+        return;
+      }
+      setMoreDropdownOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreDropdownOpen(false);
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick);
+      document.addEventListener('keydown', handleKey);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [moreDropdownOpen]);
 
   const handleCloseSearch = () => {
     setIsSearching(false);
@@ -253,7 +317,15 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
       <div className="workflow-right-sidebar-inner">
         {/* 顶部 Tab 栏 */}
         <div className="branch-graph-header">
-          <div className="right-sidebar-tabs">
+          <div
+            className="right-sidebar-tabs"
+            ref={tabsRef}
+            onWheel={(e) => {
+              if (tabsRef.current) {
+                tabsRef.current.scrollLeft += e.deltaY;
+              }
+            }}
+          >
             <button
               className={`right-sidebar-tab${activeTab === "branches" ? " active" : ""}`}
               onClick={() => setActiveTab("branches")}
@@ -267,6 +339,13 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
             >
               <Icon name="chart" size={12} />
               <span>{t('workflow.contextWindow')}</span>
+            </button>
+            <button
+              className={`right-sidebar-tab${activeTab === "files" ? " active" : ""}`}
+              onClick={() => setActiveTab("files")}
+            >
+              <Icon name="folder" size={12} />
+              <span>{t('workflow.workspaceFiles')}</span>
             </button>
           </div>
           <div className="branch-graph-header-actions">
@@ -411,10 +490,68 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
               </div>
             )}
           </CustomScrollArea>
-        ) : (
+        ) : activeTab === "context" ? (
           <CustomScrollArea className="branch-graph-content">
             <ContextPanel />
           </CustomScrollArea>
+        ) : (
+          <div className="workspace-files-panel">
+            <div className="workspace-files-header">
+              {showRightFileSearch ? (
+                <div className="workspace-files-search-row">
+                  <Icon name="search" size={12} className="workspace-files-search-icon" />
+                  <input
+                    type="text"
+                    className="workspace-files-search-input"
+                    placeholder={t('fileTree.searchPlaceholder')}
+                    aria-label={t('fileTree.searchFile')}
+                    value={fileSearchKeyword}
+                    onChange={(e) => setFileSearchKeyword(e.target.value)}
+                    ref={fileSearchInputRef}
+                  />
+                  <button
+                    className="workspace-files-search-close"
+                    onClick={handleCloseFileSearch}
+                    title={t('common.close')}
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div className="workspace-files-header-spacer" />
+              )}
+              <div className="workspace-files-actions">
+                <button
+                  className="workspace-files-more-btn"
+                  ref={moreBtnRef}
+                  onClick={() => setMoreDropdownOpen((v) => !v)}
+                  title={t('common.more')}
+                  aria-label={t('common.more')}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="12" cy="19" r="2" />
+                  </svg>
+                </button>
+                {moreDropdownOpen && (
+                  <div className="workspace-files-dropdown" ref={moreDropdownRef}>
+                    <button className="workspace-files-dropdown-item" onClick={handleMoreSearch}>
+                      <Icon name="search" size={12} />
+                      <span>{t('fileTree.searchFile')}</span>
+                    </button>
+                    <button className="workspace-files-dropdown-item" onClick={handleMoreRefresh}>
+                      <Icon name="refresh" size={12} />
+                      <span>{t('fileTree.refreshTree')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <CustomScrollArea className="branch-graph-content">
+              <FileTreeSection hideSearchBar />
+            </CustomScrollArea>
+          </div>
         )}
       </div>
     </div>

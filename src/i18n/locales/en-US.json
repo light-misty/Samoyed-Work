@@ -84,7 +84,8 @@
     "emptyWorkflow": "No workflow nodes yet",
     "attachmentMessage": "[Attachment Message]",
     "searchUserMessages": "Search user messages",
-    "noSearchResults": "No matching messages found"
+    "noSearchResults": "No matching messages found",
+    "workspaceFiles": "Workspace Files"
   },
   "provider": {
     "selectModel": "Select Model",

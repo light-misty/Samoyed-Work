@@ -388,7 +388,7 @@ function NewItemInput({
 }
 
 /* ---- 主组件 ---- */
-export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpenPreview?: (filePath: string, fileName: string) => void; onOpenVersionHistory?: (filePath: string, fileName: string) => void }) {
+export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearchBar }: { onOpenPreview?: (filePath: string, fileName: string) => void; onOpenVersionHistory?: (filePath: string, fileName: string) => void; hideSearchBar?: boolean }) {
   const { t } = useTranslation();
   const { searchKeyword, setSearchKeyword, getFilteredTree, loadTree, isLoading, activeWorkspaceId } = useFileTreeStore();
   const { workspaces } = useWorkspaceStore();
@@ -584,7 +584,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory }: { onOpe
   return (
     <div className="ft-section">
       {/* 搜索栏 */}
-      <div className="ft-search">
+      <div className="ft-search" style={{ display: hideSearchBar ? 'none' : undefined }}>
         <Icon name="search" size={14} className="ft-search-icon" />
         <input
           type="text"
