@@ -18,7 +18,7 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
 
       {/* 主界面区：通过 margin-left 留出侧边栏空间，收缩时扩张覆盖侧边栏 */}
       <div className={`main-area-wrap${sidebarVisible ? '' : ' sb-collapsed'}`}>
-        <div className={`flex-1 flex flex-col min-w-0 min-h-0 pr-3${!sidebarVisible ? ' pl-3' : ''}`}>
+        <div className={`flex-1 flex flex-col min-w-0 min-h-0${sidebarVisible ? ' pr-3' : ''}`}>
           <div className="flex-1 flex flex-col bg-bg rounded-md border-[0.5px] border-border overflow-hidden">
             {mainArea}
           </div>
@@ -60,11 +60,11 @@ export function MainLayout({ mainArea, sidebar, sidebarVisible = true }: MainLay
           margin-left: 260px;
           position: relative;
           z-index: 2;
-          padding: 0 6px 6px 0;
           transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .main-area-wrap.sb-collapsed {
           margin-left: 0;
+          padding: 0 6px 6px 6px;
         }
         @media (max-width: 900px) {
           .sb-container { width: 200px; }
