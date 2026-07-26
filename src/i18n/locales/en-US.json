@@ -578,7 +578,9 @@
       "closeSessionDesc": "Close the current conversation session",
       "sendMessageDesc": "Send the message in the input box",
       "toggleSidebarDesc": "Show or hide the sidebar",
-      "quickPromptDesc": "Open the Prompt template picker"
+      "quickPromptDesc": "Open the Prompt template picker",
+      "switchMode": "Switch Mode",
+      "switchModeDesc": "Switch Agent mode (Build/Plan/Document)"
     },
     "help": {
       "sectionTitle": "Help",
@@ -605,6 +607,8 @@
       "toggleSidebarDesc": "Toggle Sidebar",
       "quickPromptDesc": "Quick Prompt",
       "openSettingsDesc": "Open Settings",
+      "switchModeDesc": "Switch Agent mode (Build/Plan/Document)",
+      "createBranchDesc": "Create branch (confirm edit)",
       "handlerDocx": "Word document operations (generate/read/modify/convert/analyze)",
       "handlerXlsx": "Excel document operations (generate/read/modify/convert/analyze)",
       "handlerPptx": "PPT document operations (generate/read/modify/convert/analyze)",

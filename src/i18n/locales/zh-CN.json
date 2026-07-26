@@ -578,7 +578,9 @@
       "closeSessionDesc": "关闭当前对话会话",
       "sendMessageDesc": "发送输入框中的消息",
       "toggleSidebarDesc": "显示或隐藏侧边栏",
-      "quickPromptDesc": "打开 Prompt 模板选择器"
+      "quickPromptDesc": "打开 Prompt 模板选择器",
+      "switchMode": "切换模式",
+      "switchModeDesc": "切换 Agent 模式（构建/规划/文档）"
     },
     "help": {
       "sectionTitle": "帮助",
@@ -605,6 +607,8 @@
       "toggleSidebarDesc": "切换侧边栏",
       "quickPromptDesc": "快速提示",
       "openSettingsDesc": "打开设置",
+      "switchModeDesc": "切换 Agent 模式（构建/规划/文档）",
+      "createBranchDesc": "创建分支（编辑确认）",
       "handlerDocx": "Word 文档操作（生成/读取/修改/转换/分析）",
       "handlerXlsx": "Excel 文档操作（生成/读取/修改/转换/分析）",
       "handlerPptx": "PPT 文档操作（生成/读取/修改/转换/分析）",

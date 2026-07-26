@@ -21,6 +21,7 @@ export function ShortcutsTab() {
     { key: "sendMessage", label: t('settings.shortcuts.sendMessage'), description: t('settings.shortcuts.sendMessageDesc') },
     { key: "toggleSidebar", label: t('settings.shortcuts.toggleSidebar'), description: t('settings.shortcuts.toggleSidebarDesc') },
     { key: "quickPrompt", label: t('settings.shortcuts.quickPrompt'), description: t('settings.shortcuts.quickPromptDesc') },
+    { key: "switchMode", label: t('settings.shortcuts.switchMode'), description: t('settings.shortcuts.switchModeDesc') },
   ];
 
   // 重置所有快捷键为默认值
@@ -32,6 +33,7 @@ export function ShortcutsTab() {
         sendMessage: "Enter",
         toggleSidebar: "Ctrl+B",
         quickPrompt: "Ctrl+/",
+        switchMode: "Tab",
       },
     });
   };

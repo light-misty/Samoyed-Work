@@ -169,6 +169,8 @@ pub struct Shortcuts {
     pub toggle_sidebar: String,
     #[serde(default = "default_quick_prompt")]
     pub quick_prompt: String,
+    #[serde(default = "default_switch_mode")]
+    pub switch_mode: String,
 }
 
 fn default_new_session() -> String {
@@ -186,6 +188,9 @@ fn default_toggle_sidebar() -> String {
 fn default_quick_prompt() -> String {
     "Ctrl+/".to_string()
 }
+fn default_switch_mode() -> String {
+    "Tab".to_string()
+}
 
 impl Default for Shortcuts {
     fn default() -> Self {
@@ -195,6 +200,7 @@ impl Default for Shortcuts {
             send_message: default_send_message(),
             toggle_sidebar: default_toggle_sidebar(),
             quick_prompt: default_quick_prompt(),
+            switch_mode: default_switch_mode(),
         }
     }
 }
@@ -576,6 +582,11 @@ pub fn merge_with_defaults(
                 default_settings.shortcuts.quick_prompt.clone()
             } else {
                 user_settings.shortcuts.quick_prompt.clone()
+            },
+            switch_mode: if user_settings.shortcuts.switch_mode.is_empty() {
+                default_settings.shortcuts.switch_mode.clone()
+            } else {
+                user_settings.shortcuts.switch_mode.clone()
             },
         },
         update: UpdateSettings {

@@ -11,6 +11,7 @@ export function HelpTab() {
   const fixedShortcuts = [
     { keys: "Escape", desc: t('settings.help.closeDialogDesc') },
     { keys: "Ctrl+V", desc: t('settings.help.pasteImageDesc') },
+    { keys: "Ctrl+Enter", desc: t('settings.help.createBranchDesc') },
   ];
 
   // 常见问题
@@ -41,6 +42,7 @@ export function HelpTab() {
     { keys: newLineShortcut, desc: t('settings.help.newLineDesc') },
     { keys: shortcuts.toggleSidebar, desc: t('settings.help.toggleSidebarDesc') },
     { keys: shortcuts.quickPrompt, desc: t('settings.help.quickPromptDesc') },
+    { keys: shortcuts.switchMode, desc: t('settings.help.switchModeDesc') },
     { keys: "Ctrl+,", desc: t('settings.help.openSettingsDesc') },
   ];
 

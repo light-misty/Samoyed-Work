@@ -71,6 +71,7 @@ const defaultSettings: AppSettings = {
     sendMessage: "Enter",
     toggleSidebar: "Ctrl+B",
     quickPrompt: "Ctrl+/",
+    switchMode: "Tab",
   },
   update: {
     autoCheck: true,

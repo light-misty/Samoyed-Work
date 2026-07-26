@@ -45,6 +45,7 @@ export interface Shortcuts {
   sendMessage: string;
   toggleSidebar: string;
   quickPrompt: string;
+  switchMode: string;
 }
 
 export interface UpdateSettings {
