@@ -525,8 +525,8 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
                   className="workspace-files-more-btn"
                   ref={moreBtnRef}
                   onClick={() => setMoreDropdownOpen((v) => !v)}
-                  title={t('common.more')}
-                  aria-label={t('common.more')}
+                  title={t('sidebar.more')}
+                  aria-label={t('sidebar.more')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="12" cy="5" r="2" />
