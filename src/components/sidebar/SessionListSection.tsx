@@ -2,6 +2,7 @@ import type { MouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { ContextMenu } from "../common/ContextMenu";
 import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 import { Icon } from "../common/Icon";
 import { useSessionStore } from "../../stores/useSessionStore";
@@ -80,6 +81,19 @@ export function SessionListSection({
   const [activeDropdownWsId, setActiveDropdownWsId] = useState<string | null>(null);
   const [clearSessionWsId, setClearSessionWsId] = useState<string | null>(null);
   const [clearSessionWsName, setClearSessionWsName] = useState("");
+  // 右键上下文菜单位置与目标工作区
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    workspace: WorkspaceInfo;
+  } | null>(null);
+
+  const handleWorkspaceContextMenu = (e: React.MouseEvent, workspace: WorkspaceInfo) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, workspace });
+  };
+
   // 每个工作区已展开的会话数量（默认 10），用于"显示更多"分步加载
   const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
 
@@ -326,6 +340,46 @@ export function SessionListSection({
         document.body
       )}
 
+      {contextMenu && createPortal(
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={[
+            {
+              label: t("sessionList.newSessionForWorkspace", { workspace: contextMenu.workspace.name }),
+              icon: "plus",
+              onClick: () => onCreateSession(contextMenu.workspace.id),
+            },
+            {
+              label: t("sessionList.showFiles"),
+              icon: "folder",
+              onClick: () => onShowFiles(contextMenu.workspace.id),
+            },
+            { separator: true },
+            {
+              label: t("workspace.removeWorkspace"),
+              icon: "trash",
+              danger: true,
+              onClick: () => {
+                setDeleteWorkspaceId(contextMenu.workspace.id);
+                setDeleteWorkspaceName(contextMenu.workspace.name);
+              },
+            },
+            {
+              label: t("sessionList.clearSessionHistory"),
+              icon: "history",
+              danger: true,
+              onClick: () => {
+                setClearSessionWsId(contextMenu.workspace.id);
+                setClearSessionWsName(contextMenu.workspace.name);
+              },
+            },
+          ]}
+          onClose={() => setContextMenu(null)}
+        />,
+        document.body
+      )}
+
       <div className={`session-list-section ${collapsed ? "session-list-section-collapsed" : ""}`}>
         <div
           className="session-list-header"
@@ -381,6 +435,7 @@ export function SessionListSection({
                     role="button"
                     aria-expanded={isExpanded}
                     onClick={() => toggleWorkspace(workspace.id)}
+                    onContextMenu={(e) => handleWorkspaceContextMenu(e, workspace)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();

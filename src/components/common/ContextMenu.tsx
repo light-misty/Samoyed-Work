@@ -2,9 +2,9 @@ import { useEffect, useRef, useCallback } from "react";
 import { Icon } from "./Icon";
 
 export interface ContextMenuItem {
-  label: string;
+  label?: string;
   icon?: string;
-  onClick: () => void;
+  onClick?: () => void;
   danger?: boolean;
   separator?: boolean;
 }
@@ -102,7 +102,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               key={`item-${idx}`}
               className={`ctx-menu-item ${item.danger ? "ctx-menu-item-danger" : ""}`}
               onClick={() => {
-                item.onClick();
+                item.onClick?.();
                 onClose();
               }}
             >
@@ -111,7 +111,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                   <Icon name={item.icon as never} size={14} />
                 </span>
               )}
-              <span className="ctx-menu-item-label">{item.label}</span>
+              <span className="ctx-menu-item-label">{item.label ?? ""}</span>
             </button>
           );
         })}
@@ -163,23 +163,26 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         .ctx-menu-item:hover {
           background: var(--color-bg-hover);
         }
-        .ctx-menu-item-danger {
-          color: var(--color-error);
-        }
+        .ctx-menu-item-danger {}
         .ctx-menu-item-danger:hover {
-          background: var(--color-error-bg);
+          background: var(--color-bg-hover);
         }
         .ctx-menu-item-icon {
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 16px;
-          height: 16px;
+          width: 20px;
+          height: 20px;
+          border-radius: var(--radius-sm, 4px);
           flex-shrink: 0;
           color: var(--color-text-tertiary);
+          transition: all 0.12s;
         }
         .ctx-menu-item-danger .ctx-menu-item-icon {
           color: var(--color-error);
+        }
+        .ctx-menu-item-danger:hover .ctx-menu-item-icon {
+          background: var(--color-error-bg);
         }
         .ctx-menu-item-label {
           flex: 1;
