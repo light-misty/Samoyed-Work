@@ -1427,60 +1427,6 @@
   50% { opacity: 0.85; }
 }
 
-/* 节点高亮：跳转后平滑呼吸光效 + 左侧指示条（1.5 秒自动消失） */
-.wf-node-highlight {
-  position: relative;
-  border-radius: var(--radius-sm);
-  animation: wf-highlight-glow 1.5s ease-in-out;
-}
-
-/* 左侧指示条 */
-.wf-node-highlight::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
-  background: var(--color-accent);
-  border-radius: 0 2px 2px 0;
-  opacity: 0;
-  animation: wf-indicator-pulse 1.5s ease-in-out forwards;
-}
-
-@keyframes wf-highlight-glow {
-  0% {
-    background-color: transparent;
-  }
-  10% {
-    background-color: var(--color-accent-bg);
-  }
-  50% {
-    background-color: var(--color-accent-bg);
-  }
-  75% {
-    background-color: var(--color-accent-bg);
-  }
-  100% {
-    background-color: transparent;
-  }
-}
-
-@keyframes wf-indicator-pulse {
-  0% {
-    opacity: 0;
-  }
-  15% {
-    opacity: 1;
-  }
-  70% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 /* ===== 代码预览卡片样式 ===== */
 
 /* 工具节点内容容器 */

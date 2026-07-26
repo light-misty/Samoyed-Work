@@ -108,8 +108,6 @@ interface WorkflowState {
   // 节点 DOM ref 注册表已移至模块级 nodeRefsMap，不作为 store state（避免触发重渲染）
   /** 当前可见节点 ID */
   currentVisibleNodeId: string | null;
-  /** 跳转后高亮节点 ID */
-  highlightNodeId: string | null;
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
@@ -436,7 +434,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   rightSidebarVisible: false,
   // nodeRefs 已移至模块级 nodeRefsMap，不作为 store state
   currentVisibleNodeId: null,
-  highlightNodeId: null,
 
   addNode: (type, data, status = "completed", iteration) => {
     const id = `node_${++nodeCounter}`;
@@ -1352,18 +1349,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     nodeRefsMap.delete(nodeId);
   },
 
-  // 跳转到指定节点：滚动到视图中央并高亮 1.5 秒
+  // 跳转到指定节点：滚动到视图中央
   jumpToNode: (nodeId) => {
     const el = nodeRefsMap.get(nodeId);
     if (!el) return false;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
-    set({ highlightNodeId: nodeId });
-    setTimeout(() => {
-      // 仅当当前仍高亮本节点时才清空，避免连续跳转时竞态
-      if (get().highlightNodeId === nodeId) {
-        set({ highlightNodeId: null });
-      }
-    }, 1500);
     return true;
   },
 

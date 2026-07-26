@@ -21,8 +21,6 @@ interface WorkflowNodeRendererProps {
 
 export function WorkflowNodeRenderer({ node, onRetry, hideCopy, nodeRef }: WorkflowNodeRendererProps) {
   const { toggleNode } = useWorkflowStore();
-  // 跳转后高亮节点 ID（jumpToNode 设置，1.5 秒后清空）
-  const highlightNodeId = useWorkflowStore((s) => s.highlightNodeId);
   const nt = node.type as WorkflowNodeType;
 
   let content: ReactNode;
@@ -59,10 +57,8 @@ export function WorkflowNodeRenderer({ node, onRetry, hideCopy, nodeRef }: Workf
   }
 
   // 传入 nodeRef 时包裹一个 div 作为根元素应用 ref；不传时保持原有渲染结果
-  // 高亮 class 加在该外层 div 上（jumpToNode 仅对已注册 ref 的节点生效，故无 nodeRef 分支无需处理）
-  const highlightClass = highlightNodeId === node.id ? "wf-node-highlight" : "";
   if (nodeRef) {
-    return <div ref={nodeRef} className={highlightClass}>{content}</div>;
+    return <div ref={nodeRef}>{content}</div>;
   }
   return content;
 }
