@@ -19,6 +19,7 @@ import { useWorkspaceStore } from "./stores/useWorkspaceStore";
 import { useFileTreeStore } from "./stores/useFileTreeStore";
 import { useUpdateStore } from "./stores/useUpdateStore";
 import { useToastStore } from "./stores/useToastStore";
+import { useAgentModeStore } from "./stores/useAgentModeStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
 import { extractToolPath } from "./utils/format";
@@ -1040,6 +1041,15 @@ export default function App() {
       if (e.ctrlKey && e.key === "b") {
         e.preventDefault();
         setSidebarVisible((prev) => !prev);
+      }
+      // Tab: 在新建会话页面切换 Agent 模式
+      if (e.key === "Tab" && nodes.length === 0) {
+        e.preventDefault();
+        const modes = ['build', 'plan', 'document'] as const;
+        const currentMode = useAgentModeStore.getState().mode;
+        const currentIndex = modes.indexOf(currentMode);
+        const nextMode = modes[(currentIndex + 1) % modes.length];
+        useAgentModeStore.getState().setMode(nextMode);
       }
       // Ctrl+,: 打开设置（仅在非输入框聚焦时生效）
       if (e.ctrlKey && e.key === "," && !isInputFocused) {
