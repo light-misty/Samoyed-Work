@@ -11,8 +11,6 @@ interface SlashCommandMenuProps {
   onSelect: (command: SlashCommand) => void;
   /** 关闭菜单的回调（Esc 或点击外部） */
   onClose: () => void;
-  /** 是否在新建会话页（true=输入框居中，false=历史会话页输入框在底部） */
-  centered: boolean;
   /** Agent 是否正在运行（用于禁用某些命令的显示） */
   agentRunning: boolean;
 }
@@ -27,7 +25,7 @@ interface SlashCommandMenuProps {
  * 定位：菜单始终从输入框上方弹出（centered 与非 centered 两种布局位置相同）。
  */
 export function SlashCommandMenu(props: SlashCommandMenuProps) {
-  const { commands, highlightIndex, onSelect, onClose, centered, agentRunning } = props;
+  const { commands, highlightIndex, onSelect, onClose, agentRunning } = props;
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   // 命令项 ref 数组，用于自动滚动到高亮项
@@ -68,7 +66,7 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
   return (
     <div
       ref={containerRef}
-      className={`slash-menu-container ${centered ? "slash-menu-container-centered" : ""}`}
+      className="slash-menu-container"
       role="listbox"
       aria-label={t("slash.menu.title")}
     >
@@ -128,10 +126,6 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           overflow: hidden;
           display: flex;
           flex-direction: column;
-        }
-        /* 当前两种布局位置相同，保留 centered 修饰符以备未来扩展 */
-        .slash-menu-container-centered {
-          /* no-op */
         }
         @keyframes slash-menu-in {
           from {

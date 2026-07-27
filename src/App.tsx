@@ -1033,7 +1033,7 @@ export default function App() {
       }
       case "compact": {
         if (!currentSessionId) {
-          useToastStore.getState().addToast("warning", t("slash.toast.noSessionToRename"));
+          useToastStore.getState().addToast("warning", t("slash.toast.noSessionToCompact"));
           return;
         }
         // 插入 transient /compact 用户节点（仅前端，不持久化）

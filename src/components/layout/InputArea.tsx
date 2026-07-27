@@ -369,7 +369,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             highlightIndex={highlightIndex}
             onSelect={handleSlashCommandSelect}
             onClose={() => setSlashMenuOpen(false)}
-            centered={centered}
             agentRunning={executionStatus === "running"}
           />
         )}

@@ -219,3 +219,164 @@ Requirements:\n\
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 测试 token 数低于阈值时不应触发压缩
+    #[test]
+    fn test_should_compact_below_threshold() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 2000,
+        };
+        let compactor = ContextCompactor::new(config);
+        // 7999 < 8000(阈值),不应触发压缩
+        assert!(!compactor.should_compact(7999, 10000));
+    }
+
+    /// 测试 token 数恰好等于阈值时应触发压缩
+    #[test]
+    fn test_should_compact_at_threshold() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 2000,
+        };
+        let compactor = ContextCompactor::new(config);
+        // 8000 == 8000(阈值),应触发压缩
+        assert!(compactor.should_compact(8000, 10000));
+    }
+
+    /// 测试 token 数高于阈值时应触发压缩
+    #[test]
+    fn test_should_compact_above_threshold() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 2000,
+        };
+        let compactor = ContextCompactor::new(config);
+        // 9000 > 8000(阈值),应触发压缩
+        assert!(compactor.should_compact(9000, 10000));
+    }
+
+    /// 测试禁用压缩时无论 token 数多大都不应触发
+    #[test]
+    fn test_should_compact_disabled() {
+        let config = CompactionConfig {
+            enabled: false,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 2000,
+        };
+        let compactor = ContextCompactor::new(config);
+        // 即使 token 数远超阈值,禁用时也不触发
+        assert!(!compactor.should_compact(99999, 10000));
+    }
+
+    /// 测试工具输出超过最大字符数时会被截断并追加标记
+    #[test]
+    fn test_prune_tool_output_truncates_long_content() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 10,
+        };
+        let compactor = ContextCompactor::new(config);
+        let mut msg = ChatMessage {
+            role: "tool".to_string(),
+            content: "abcdefghijk".to_string(), // 11 个字符
+            content_parts: None,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+            attachments: None,
+            metadata: None,
+        };
+        compactor.prune_tool_output(&mut msg);
+        // 应包含截断标记
+        assert!(
+            msg.content.contains("truncated, original length 11 chars"),
+            "应包含截断标记,实际内容: {}",
+            msg.content
+        );
+        // 应以截断后的前 10 个字符开头
+        assert!(
+            msg.content.starts_with("abcdefghij"),
+            "应以截断后的前 10 个字符开头,实际内容: {}",
+            msg.content
+        );
+    }
+
+    /// 测试工具输出未超过最大字符数时保持不变
+    #[test]
+    fn test_prune_tool_output_keeps_short_content() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 100,
+        };
+        let compactor = ContextCompactor::new(config);
+        let mut msg = ChatMessage {
+            role: "tool".to_string(),
+            content: "short".to_string(), // 5 个字符
+            content_parts: None,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+            attachments: None,
+            metadata: None,
+        };
+        compactor.prune_tool_output(&mut msg);
+        // 内容应保持不变
+        assert_eq!(msg.content, "short");
+    }
+
+    /// 测试非 tool 角色的消息不会被截断
+    #[test]
+    fn test_prune_tool_output_skips_non_tool_messages() {
+        let config = CompactionConfig {
+            enabled: true,
+            trigger_threshold: 0.8,
+            keep_recent_messages: 10,
+            keep_system_tokens: 4000,
+            compact_tool_outputs: true,
+            tool_output_max_chars: 10,
+        };
+        let compactor = ContextCompactor::new(config);
+        let long_content = "a".repeat(100);
+        let mut msg = ChatMessage {
+            role: "user".to_string(),
+            content: long_content.clone(),
+            content_parts: None,
+            tool_calls: None,
+            tool_call_id: None,
+            reasoning_content: None,
+            attachments: None,
+            metadata: None,
+        };
+        compactor.prune_tool_output(&mut msg);
+        // 非 tool 消息内容应保持不变
+        assert_eq!(msg.content, long_content);
+    }
+}

@@ -484,7 +484,7 @@ export interface ManualCompactionResult {
 export async function manualCompactSession(sessionId: string): Promise<ManualCompactionResult> {
   const result = await safeInvoke(() => invoke<ManualCompactionResult>("manual_compact_session", { sessionId }), {
     context: "manualCompactSession",
-    showToast: true,
+    showToast: false, // 错误由调用方（App.tsx executeSlashCommand）统一处理
   });
   if (!result.ok) throw result.error.raw;
   return result.data;

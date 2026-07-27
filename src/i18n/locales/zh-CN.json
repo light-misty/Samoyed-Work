@@ -967,6 +967,7 @@
       "noMessageToRetry": "没有可重试的消息",
       "workspaceNotFound": "未找到工作区 {{name}}",
       "noSessionToRename": "当前无会话可重命名",
+      "noSessionToCompact": "当前无会话可压缩",
       "compactNoNeed": "无需压缩（当前 {{tokens}} tokens）",
       "compactFailed": "压缩失败：{{error}}",
       "compactDone": "压缩完成（{{before}} → {{after}} tokens）"

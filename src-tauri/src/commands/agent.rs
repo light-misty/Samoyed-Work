@@ -2031,3 +2031,57 @@ fn create_version_snapshot(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 测试 ManualCompactionResult 在 error 和 message 均为 None 时的序列化行为
+    // 验证 skip_serializing_if 生效：error 和 message 字段不应出现在 JSON 中
+    // 验证字段名使用 camelCase（tokensBefore / tokensAfter）
+    #[test]
+    fn test_manual_compaction_result_serialization_minimal() {
+        let result = ManualCompactionResult {
+            compacted: false,
+            tokens_before: 100,
+            tokens_after: 100,
+            error: None,
+            message: None,
+        };
+
+        let json_str = serde_json::to_string(&result).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        // error 和 message 为 None 时应当被跳过
+        assert!(json.get("error").is_none());
+        assert!(json.get("message").is_none());
+        // 基础字段保持正确
+        assert_eq!(json.get("compacted").unwrap(), false);
+        assert_eq!(json.get("tokensBefore").unwrap(), 100);
+        assert_eq!(json.get("tokensAfter").unwrap(), 100);
+    }
+
+    // 测试 ManualCompactionResult 在所有字段均有值时的序列化行为
+    // 验证 error 和 message 字段正常输出
+    // 关键验证：所有字段名均为 camelCase（tokensBefore 而非 tokens_before，tokensAfter 而非 tokens_after）
+    #[test]
+    fn test_manual_compaction_result_serialization_full() {
+        let result = ManualCompactionResult {
+            compacted: true,
+            tokens_before: 500,
+            tokens_after: 200,
+            error: Some("test error".to_string()),
+            message: Some("test message".to_string()),
+        };
+
+        let json_str = serde_json::to_string(&result).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        // 所有字段均正常输出，字段名为 camelCase
+        assert_eq!(json.get("compacted").unwrap(), true);
+        assert_eq!(json.get("tokensBefore").unwrap(), 500);
+        assert_eq!(json.get("tokensAfter").unwrap(), 200);
+        assert_eq!(json.get("error").unwrap(), "test error");
+        assert_eq!(json.get("message").unwrap(), "test message");
+    }
+}
