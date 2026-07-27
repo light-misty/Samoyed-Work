@@ -167,6 +167,14 @@ pub async fn start_agent(
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
+    // 从 options 提取 skillContent（斜杠命令加载的 Skill 完整内容）
+    let skill_content = options
+        .as_ref()
+        .and_then(|o| o.get("skillContent"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     let agent_mode = match agent_mode_str.as_str() {
         "plan" => AgentMode::Plan,
         "build" => AgentMode::Build,
@@ -206,6 +214,9 @@ pub async fn start_agent(
 
     let config = Arc::clone(&state.config);
     let doc_service = Arc::clone(&state.doc_service);
+
+    // 在进入 async move 闭包前克隆 skill_content（用于标题生成）
+    let skill_content_for_title = skill_content.clone();
 
     // 同步前端传入的 Agent 模式，确保待机状态切换后新会话使用正确模式
     state
@@ -262,6 +273,7 @@ pub async fn start_agent(
             &agent_mode_manager,
             &skill_registry,
             branch_group_id.as_deref(),
+            skill_content.as_deref(),
         )
         .await;
 
@@ -286,7 +298,7 @@ pub async fn start_agent(
     // 仅当会话标题为默认值（"新会话"开头）时才生成
     {
         let title_sid = session_id.clone();
-        let title_prompt = prompt.clone();
+        let title_prompt = skill_content_for_title.unwrap_or_else(|| prompt.clone());
         let title_db = Arc::clone(&state.db);
         let title_emitter = AgentEmitter::new(app_handle.clone());
         let title_llm_router = Arc::clone(&state.llm_router);
@@ -1388,6 +1400,7 @@ async fn run_agent(
     agent_mode_manager: &Arc<crate::services::agent::AgentModeManager>,
     skill_registry: &Arc<crate::services::skill::registry::SkillRegistry>,
     branch_group_id: Option<&str>,
+    skill_content: Option<&str>,
 ) -> Result<(), CommandError> {
     log::info!(
         "run_agent 开始: session_id={}, workspace={}",
@@ -1724,6 +1737,18 @@ async fn run_agent(
     } else {
         content_parts.clone()
     };
+
+    // 注入 Skill 内容到系统提示词（斜杠命令加载的 Skill）
+    if let Some(skill_content) = skill_content {
+        ctx.system_prompt = format!(
+            "{}\n\n<skill_content>\n{}\n</skill_content>",
+            ctx.system_prompt, skill_content
+        );
+        log::info!(
+            "已注入 Skill 内容到系统提示词, session_id={}",
+            session_id
+        );
+    }
 
     ctx.add_user_message_with_attachments(
         prompt,

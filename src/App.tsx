@@ -1043,7 +1043,7 @@ export default function App() {
     };
 
     try {
-      await sendMessage(skillContent, options);
+      await sendMessage(`/${skillName}`, { ...options, skillContent });
     } catch (err) {
       console.error("[App] 发送 Skill 失败:", err);
       setExecutionStatus("failed");
