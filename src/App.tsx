@@ -1016,7 +1016,7 @@ export default function App() {
 
   // 斜杠命令分发器：根据命令名执行对应 handler
   // 命令节点（user 节点）是 transient 的：仅添加到前端工作流，不持久化到 DB（不调用 startAgent）
-  const executeSlashCommand = useCallback(async (commandName: string, args: string) => {
+  const executeSlashCommand = useCallback(async (commandName: string, _args: string) => {
     const cmd = getCommandByName(commandName);
     if (!cmd) return;
 
@@ -1096,37 +1096,7 @@ export default function App() {
         openStatsOverlay();
         break;
       }
-      case "ws": {
-        if (!args || !args.trim()) {
-          useToastStore.getState().addToast("warning", t("slash.commands.ws.argHint"));
-          return;
-        }
-        const wsName = args.trim();
-        const ws = workspaces.find((w) => w.name === wsName);
-        if (!ws) {
-          useToastStore.getState().addToast("error", t("slash.toast.workspaceNotFound", { name: wsName }));
-          return;
-        }
-        await switchWorkspace(ws.id);
-        break;
-      }
-      case "rename": {
-        if (!args || !args.trim()) {
-          useToastStore.getState().addToast("warning", t("slash.commands.rename.argHint"));
-          return;
-        }
-        if (!currentSessionId) {
-          useToastStore.getState().addToast("warning", t("slash.toast.noSessionToRename"));
-          return;
-        }
-        const newTitle = args.trim();
-        try {
-          await useSessionStore.getState().updateSessionTitle(currentSessionId, newTitle);
-        } catch (err) {
-          console.error("[App] 重命名会话失败:", err);
-        }
-        break;
-      }
+
     }
   }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, openStatsOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace]);
 

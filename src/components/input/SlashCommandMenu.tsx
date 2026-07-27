@@ -166,7 +166,6 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           white-space: nowrap;
         }
         .slash-menu-list {
-          max-height: 180px;
           overflow-y: auto;
           padding: 4px;
           display: flex;

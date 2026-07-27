@@ -31,7 +31,7 @@ interface InputAreaProps {
 }
 
 // 新建会话页面隐藏的斜杠命令（这些命令在空会话状态下无意义）
-const NEW_SESSION_HIDDEN_COMMANDS = new Set(["compact", "retry", "stop", "new", "rename", "stats"]);
+const NEW_SESSION_HIDDEN_COMMANDS = new Set(["compact", "retry", "stop", "new", "stats"]);
 
 export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false, onSlashCommand }: InputAreaProps) {
   const { t } = useTranslation();

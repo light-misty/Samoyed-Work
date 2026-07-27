@@ -935,14 +935,6 @@
       "stats": {
         "desc": "Show token usage statistics for current session",
         "argHint": ""
-      },
-      "ws": {
-        "desc": "Switch to the specified workspace",
-        "argHint": "Please provide workspace name, usage: /ws <workspace-name>"
-      },
-      "rename": {
-        "desc": "Rename the current session",
-        "argHint": "Please provide a new title, usage: /rename <title>"
       }
     },
     "menu": {
@@ -965,8 +957,6 @@
       "agentRunning": "Agent is running, cannot execute this command",
       "noAgentRunning": "No running Agent",
       "noMessageToRetry": "No message to retry",
-      "workspaceNotFound": "Workspace not found: {{name}}",
-      "noSessionToRename": "No session to rename",
       "noSessionToCompact": "No session to compact",
       "compactNoNeed": "No compaction needed (current {{tokens}} tokens)",
       "compactFailed": "Compaction failed: {{error}}",

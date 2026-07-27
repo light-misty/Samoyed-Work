@@ -6,7 +6,7 @@ export interface SlashCommand {
   name: string;
   /** 命令描述（用于菜单显示，存储 i18n key，由组件使用 t() 函数翻译） */
   description: string;
-  /** 完整用法示例，如 "/ws <工作区名称>" */
+  /** 完整用法示例，如 "/compact" */
   usage: string;
   /** Agent 运行中是否允许执行 */
   allowedInAgent: boolean;
@@ -63,27 +63,11 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     allowedInAgent: true,
     requiresArgs: false,
   },
-  {
-    name: "ws",
-    description: "slash.commands.ws.desc",
-    usage: "/ws <工作区名称>",
-    allowedInAgent: true,
-    requiresArgs: true,
-    argHint: "slash.commands.ws.argHint",
-  },
-  {
-    name: "rename",
-    description: "slash.commands.rename.desc",
-    usage: "/rename <新标题>",
-    allowedInAgent: true,
-    requiresArgs: true,
-    argHint: "slash.commands.rename.argHint",
-  },
 ];
 
 /**
  * 匹配斜杠命令
- * @param input 用户输入的完整文本（如 "/compact"、"/co"、"/ws my-project"）
+ * @param input 用户输入的完整文本（如 "/compact"、"/co"）
  * @returns { exactMatch?: SlashCommand; fuzzyMatches: SlashCommand[] }
  *   - exactMatch: 精确匹配到的命令（输入恰好是 /command 形式，无额外参数）
  *   - fuzzyMatches: 模糊匹配的命令列表（命令名包含输入的子串）
@@ -123,7 +107,7 @@ export function matchCommand(input: string): {
 
 /**
  * 解析斜杠命令的参数
- * @param input 用户输入的完整文本（如 "/ws my-project"）
+ * @param input 用户输入的完整文本（如 "/compact my-project"）
  * @returns { command: string; args: string } | null
  *   - command: 命令名（不含 /）
  *   - args: 参数部分（命令名后的所有文本，已 trim）
