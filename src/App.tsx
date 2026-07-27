@@ -29,6 +29,7 @@ import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event"
 import * as tauriCmd from "./services/tauri";
 // 斜杠命令相关导入
 import { SlashCommandHelp } from "./components/input/SlashCommandHelp";
+import { StatsOverlay } from "./components/input/StatsOverlay";
 import { useSlashCommandStore } from "./stores/useSlashCommandStore";
 import { getCommandByName } from "./commands/slashCommands";
 
@@ -95,7 +96,7 @@ export default function App() {
   const settings = useSettingsStore((s) => s.settings);
   const { loadWorkspaces, switchWorkspace, currentWorkspaceId, workspaces, handleWorkspaceDirectoryDeleted } = useWorkspaceStore();
   // 斜杠命令 help 覆盖层控制
-  const { openHelpOverlay } = useSlashCommandStore();
+  const { openHelpOverlay, openStatsOverlay } = useSlashCommandStore();
   const { loadTree, clearTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
 
   const {
@@ -1088,25 +1089,11 @@ export default function App() {
         break;
       }
       case "new": {
-        addNode("user", { content: "/new", attachments: [] });
         handleNewSession();
         break;
       }
       case "stats": {
-        addNode("user", { content: "/stats", attachments: [] });
-        // 插入 stats 节点，初始数据为 null，等待后端返回后更新
-        const statsNodeId = addNode("stats", { usageInfo: null });
-        try {
-          if (currentSessionId) {
-            const usage = await tauriCmd.getContextUsage(currentSessionId);
-            updateNode(statsNodeId, { data: { usageInfo: usage } });
-          } else {
-            updateNode(statsNodeId, { data: { usageInfo: null } });
-          }
-        } catch (err) {
-          console.error("[App] 获取上下文使用情况失败:", err);
-          updateNode(statsNodeId, { data: { usageInfo: null } });
-        }
+        openStatsOverlay();
         break;
       }
       case "ws": {
@@ -1120,7 +1107,6 @@ export default function App() {
           useToastStore.getState().addToast("error", t("slash.toast.workspaceNotFound", { name: wsName }));
           return;
         }
-        addNode("user", { content: `/ws ${wsName}`, attachments: [] });
         await switchWorkspace(ws.id);
         break;
       }
@@ -1134,7 +1120,6 @@ export default function App() {
           return;
         }
         const newTitle = args.trim();
-        addNode("user", { content: `/rename ${newTitle}`, attachments: [] });
         try {
           await useSessionStore.getState().updateSessionTitle(currentSessionId, newTitle);
         } catch (err) {
@@ -1143,7 +1128,7 @@ export default function App() {
         break;
       }
     }
-  }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace]);
+  }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, openStatsOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace]);
 
   // 监听键盘快捷键
   useEffect(() => {
@@ -1275,6 +1260,8 @@ export default function App() {
       </Suspense>
       {/* 斜杠命令帮助覆盖层（由 useSlashCommandStore 控制显隐） */}
       <SlashCommandHelp />
+      {/* Token 用量统计覆盖层（由 useSlashCommandStore 控制显隐） */}
+      <StatsOverlay />
       <Suspense fallback={<LazyFallback />}>
         {versionHistoryOpen && currentWorkspaceId && (
           <VersionHistoryPanel
