@@ -30,6 +30,9 @@ interface InputAreaProps {
   onSlashCommand?: (commandName: string, args: string) => void;
 }
 
+// 新建会话页面隐藏的斜杠命令（这些命令在空会话状态下无意义）
+const NEW_SESSION_HIDDEN_COMMANDS = new Set(["compact", "retry", "stop", "new", "rename", "stats"]);
+
 export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false, onSlashCommand }: InputAreaProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
@@ -100,8 +103,11 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     // 检测斜杠命令：以 / 开头时弹出命令菜单
     if (newText.startsWith("/")) {
       const { fuzzyMatches } = matchCommand(newText);
-      if (fuzzyMatches.length > 0) {
-        setSlashMenuCommands(fuzzyMatches);
+      const filtered = centered
+        ? fuzzyMatches.filter((cmd) => !NEW_SESSION_HIDDEN_COMMANDS.has(cmd.name))
+        : fuzzyMatches;
+      if (filtered.length > 0) {
+        setSlashMenuCommands(filtered);
         setHighlightIndex(0);
         setSlashMenuOpen(true);
       } else {
@@ -110,7 +116,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     } else {
       setSlashMenuOpen(false);
     }
-  }, []);
+  }, [centered]);
 
   // 命令选择回调：从菜单选择命令时执行
   const handleSlashCommandSelect = useCallback((cmd: SlashCommand) => {
@@ -131,7 +137,10 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   // / 按钮点击：弹出完整命令列表
   const handleSlashTrigger = useCallback(() => {
-    setSlashMenuCommands(SLASH_COMMANDS);
+    const commands = centered
+      ? SLASH_COMMANDS.filter((cmd) => !NEW_SESSION_HIDDEN_COMMANDS.has(cmd.name))
+      : SLASH_COMMANDS;
+    setSlashMenuCommands(commands);
     setHighlightIndex(0);
     setSlashMenuOpen(true);
     // 若当前输入不以 / 开头，则在前面插入 / 并聚焦输入框
@@ -139,7 +148,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
       setText("/" + text);
       textareaRef.current?.focus();
     }
-  }, [text]);
+  }, [text, centered]);
 
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
