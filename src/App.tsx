@@ -833,15 +833,7 @@ export default function App() {
     if (hasMessages) {
       loadContextUsage(sessionId);
     }
-    // 切换会话前禁止 CSS 过渡动画，避免右侧栏收缩动画闪烁
-    document.documentElement.classList.add('no-transitions');
-    setRightSidebarVisible(false);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.documentElement.classList.remove('no-transitions');
-      });
-    });
-  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces, setRightSidebarVisible]);
+  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
 
   // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
   // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
