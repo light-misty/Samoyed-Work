@@ -22,6 +22,13 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   // 创建分支原位编辑模式状态
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [contentExpanded, setContentExpanded] = useState(false);
+
+  const MAX_PREVIEW_LENGTH = 300;
+  const shouldTruncate = data.content.length > MAX_PREVIEW_LENGTH;
+  const displayContent = shouldTruncate && !contentExpanded
+    ? data.content.slice(0, MAX_PREVIEW_LENGTH) + "..."
+    : data.content;
 
   const executionStatus = useWorkflowStore((s) => s.executionStatus);
   const isAgentRunning = executionStatus === "running";
@@ -274,7 +281,17 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
                 rows={3}
               />
             ) : (
-              <div className="wf-user-text">{data.content}</div>
+              <>
+                <div className="wf-user-text">{displayContent}</div>
+                {shouldTruncate && (
+                  <button
+                    className="wf-user-expand-btn"
+                    onClick={() => setContentExpanded(!contentExpanded)}
+                  >
+                    {contentExpanded ? t('workflow.collapse') : t('workflow.expand')}
+                  </button>
+                )}
+              </>
             )}
             {hasAttachments && !isEditing && (
               <div className="wf-user-attachments">

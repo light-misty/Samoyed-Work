@@ -85,7 +85,9 @@
     "attachmentMessage": "[附件消息]",
     "searchUserMessages": "搜索用户消息",
     "noSearchResults": "未找到匹配的消息",
-    "workspaceFiles": "工作区文件"
+    "workspaceFiles": "工作区文件",
+    "expand": "展开查看全部",
+    "collapse": "收起"
   },
   "provider": {
     "selectModel": "选择模型",

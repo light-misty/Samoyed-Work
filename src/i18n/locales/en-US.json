@@ -85,7 +85,9 @@
     "attachmentMessage": "[Attachment Message]",
     "searchUserMessages": "Search user messages",
     "noSearchResults": "No matching messages found",
-    "workspaceFiles": "Workspace Files"
+    "workspaceFiles": "Workspace Files",
+    "expand": "View all",
+    "collapse": "Collapse"
   },
   "provider": {
     "selectModel": "Select Model",

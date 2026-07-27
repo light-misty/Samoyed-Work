@@ -1098,6 +1098,22 @@
   white-space: pre-wrap;
 }
 
+.wf-user-expand-btn {
+  display: block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.wf-user-expand-btn:hover {
+  color: var(--color-text-secondary);
+}
+
 .wf-user-attachments {
   display: flex;
   flex-wrap: wrap;
