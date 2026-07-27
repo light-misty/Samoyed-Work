@@ -137,7 +137,8 @@ pub fn list_branch_groups(
                 } else {
                     log::warn!(
                         "[list_branch_groups] parent_branch 不存在: parent_id={}, group_id={}",
-                        parent_id, group_id
+                        parent_id,
+                        group_id
                     );
                 }
             }

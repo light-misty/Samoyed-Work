@@ -1,8 +1,10 @@
+import type { ContextUsageInfo } from "./settings";
+
 export type NodeStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export type ExecutionStatus = "idle" | "running" | "stopping" | "paused" | "completed" | "failed" | "cancelled";
 
-export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question";
+export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question" | "stats";
 
 export interface Attachment {
   id: string;
@@ -25,6 +27,8 @@ export interface UserNodeData {
   branchIndex?: number;
   /** 组内分支总数 */
   branchTotal?: number;
+  /** 从斜杠命令加载的 Skill 名称，非空时渲染为深色标签而非文本 */
+  skillName?: string;
 }
 
 export interface ThinkingNodeData {
@@ -134,6 +138,16 @@ export interface QuestionNodeData {
   messageId?: string;
 }
 
+/** Token 用量统计节点数据 */
+export interface StatsNodeData {
+  /** 统计前的 token 数（可选，用于上下文压缩前后对比等场景） */
+  tokensBefore?: number;
+  /** 统计后的 token 数（可选） */
+  tokensAfter?: number;
+  /** 上下文使用信息，可能为 null（数据未就绪时） */
+  usageInfo: ContextUsageInfo | null;
+}
+
 export interface NodeDataMap {
   user: UserNodeData;
   thinking: ThinkingNodeData;
@@ -144,6 +158,7 @@ export interface NodeDataMap {
   compaction: CompactionNodeData;
   sub_agent: SubAgentNodeData;
   question: QuestionNodeData;
+  stats: StatsNodeData;
 }
 
 export interface WorkflowNode<T extends WorkflowNodeType = WorkflowNodeType> {

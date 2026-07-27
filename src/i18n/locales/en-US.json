@@ -909,5 +909,81 @@
     "showMoreSessions": "Show more sessions ({{count}})"
   },
   "inputArea.removeAttachment": "Remove {{name}}",
-  "update.checkFailedWithError": "Update check failed: {{error}}"
+  "update.checkFailedWithError": "Update check failed: {{error}}",
+  "slash": {
+    "commands": {
+      "help": {
+        "desc": "Show slash command help",
+        "argHint": ""
+      },
+      "compact": {
+        "desc": "Manually trigger context compaction",
+        "argHint": ""
+      },
+      "retry": {
+        "desc": "Re-execute the last user message",
+        "argHint": ""
+      },
+      "stop": {
+        "desc": "Stop the currently running Agent",
+        "argHint": ""
+      },
+      "new": {
+        "desc": "Create a new session",
+        "argHint": ""
+      },
+      "stats": {
+        "desc": "Show token usage statistics for current session",
+        "argHint": ""
+      },
+      "skills": {
+        "desc": "Load a Skill into the agent",
+        "argHint": "Skill name"
+      }
+    },
+    "menu": {
+      "title": "Slash Commands",
+      "empty": "No matching commands",
+      "hint": "Arrow keys to select, Enter to execute, Esc to close",
+      "disabledInAgent": "Unavailable while Agent is running"
+    },
+    "help": {
+      "title": "Slash Command Help",
+      "command": "Command",
+      "usage": "Usage",
+      "description": "Description",
+      "availability": "During Agent",
+      "allowed": "Allowed",
+      "disabled": "Disabled",
+      "close": "Close"
+    },
+    "toast": {
+      "agentRunning": "Agent is running, cannot execute this command",
+      "noAgentRunning": "No running Agent",
+      "noMessageToRetry": "No message to retry",
+      "noSessionToCompact": "No session to compact",
+      "compactNoNeed": "No compaction needed (current {{tokens}} tokens)",
+      "compactFailed": "Compaction failed: {{error}}",
+      "compactDone": "Compaction complete ({{before}} → {{after}} tokens)",
+      "skillNotFound": "Skill not found: {{name}}"
+    },
+    "stats": {
+      "title": "Token Usage Statistics",
+      "noData": "No data available",
+      "model": "Model",
+      "contextWindow": "Context Window",
+      "totalTokens": "Total Tokens",
+      "inputTokens": "Input Tokens",
+      "outputTokens": "Output Tokens",
+      "systemPrompt": "System Prompt",
+      "functionDefs": "Function Definitions",
+      "conversation": "Conversation",
+      "usageRatio": "Usage Ratio",
+      "cacheHitRate": "Cache Hit Rate",
+      "messageCount": "Message Count"
+    },
+    "button": {
+      "tooltip": "Slash Commands"
+    }
+  }
 }

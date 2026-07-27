@@ -59,13 +59,31 @@ impl Tool for SkillTool {
     async fn execute(&self, params: Value) -> ToolResult {
         let start = std::time::Instant::now();
         let action = params.get("action").and_then(|v| v.as_str()).unwrap_or("");
+        let workspace_path = params
+            .get("_workspace_path")
+            .and_then(|v| v.as_str())
+            .filter(|p| !p.is_empty());
 
         let result = match action {
-            // 列出所有可用 Skill
+            // 列出所有可用 Skill（含工作区 Skill）
             "list" => {
-                let skills = self.registry.list_all();
-                let total = skills.len();
-                let summary: Vec<Value> = skills
+                let mut all_skills = self.registry.list_all();
+                if let Some(ws_path) = workspace_path {
+                    let ws_skills =
+                        crate::services::skill::loader::SkillLoader::load_workspace_skills(ws_path);
+                    // 合并工作区 Skill，同名不覆盖（工作区优先级低于注册表 Skill）
+                    let registry_names: std::collections::HashSet<String> = all_skills
+                        .iter()
+                        .map(|s| s.frontmatter.name.clone())
+                        .collect();
+                    for skill in ws_skills {
+                        if !registry_names.contains(&skill.frontmatter.name) {
+                            all_skills.push(skill);
+                        }
+                    }
+                }
+                let total = all_skills.len();
+                let summary: Vec<Value> = all_skills
                     .iter()
                     .map(|s| {
                         json!({
@@ -84,25 +102,52 @@ impl Tool for SkillTool {
                     "total": total,
                 }))
             }
-            // 加载指定 Skill 的完整内容
+            // 加载指定 Skill 的完整内容（先查注册表，再查工作区）
             "load" => match params.get("name").and_then(|v| v.as_str()) {
-                Some(name) => match self.registry.get_by_name(name) {
-                    Some(skill) => Ok(json!({
-                        "name": skill.frontmatter.name,
-                        "description": skill.frontmatter.description,
-                        "when": skill.frontmatter.when,
-                        "modes": skill.frontmatter.modes,
-                        "tags": skill.frontmatter.tags,
-                        "readOnly": skill.frontmatter.read_only,
-                        "source": format!("{:?}", skill.source),
-                        "content": skill.content,
-                        "filePath": skill.file_path.to_string_lossy(),
-                    })),
-                    None => Err(CommandError::tool(
-                        errors::TOOL_NOT_FOUND,
-                        format!("Skill 不存在: {}", name),
-                    )),
-                },
+                Some(name) => {
+                    // 先查注册表
+                    if let Some(skill) = self.registry.get_by_name(name) {
+                        Ok(json!({
+                            "name": skill.frontmatter.name,
+                            "description": skill.frontmatter.description,
+                            "when": skill.frontmatter.when,
+                            "modes": skill.frontmatter.modes,
+                            "tags": skill.frontmatter.tags,
+                            "readOnly": skill.frontmatter.read_only,
+                            "source": format!("{:?}", skill.source),
+                            "content": skill.content,
+                            "filePath": skill.file_path.to_string_lossy(),
+                        }))
+                    } else if let Some(ws_path) = workspace_path {
+                        // 再查工作区
+                        let ws_skills =
+                            crate::services::skill::loader::SkillLoader::load_workspace_skills(
+                                ws_path,
+                            );
+                        match ws_skills.into_iter().find(|s| s.frontmatter.name == name) {
+                            Some(skill) => Ok(json!({
+                                "name": skill.frontmatter.name,
+                                "description": skill.frontmatter.description,
+                                "when": skill.frontmatter.when,
+                                "modes": skill.frontmatter.modes,
+                                "tags": skill.frontmatter.tags,
+                                "readOnly": skill.frontmatter.read_only,
+                                "source": format!("{:?}", skill.source),
+                                "content": skill.content,
+                                "filePath": skill.file_path.to_string_lossy(),
+                            })),
+                            None => Err(CommandError::tool(
+                                errors::TOOL_NOT_FOUND,
+                                format!("Skill 不存在: {}", name),
+                            )),
+                        }
+                    } else {
+                        Err(CommandError::tool(
+                            errors::TOOL_NOT_FOUND,
+                            format!("Skill 不存在: {}", name),
+                        ))
+                    }
+                }
                 None => Err(CommandError::tool(
                     errors::TOOL_INVALID_PARAMS,
                     "load 操作需要 name 参数".to_string(),

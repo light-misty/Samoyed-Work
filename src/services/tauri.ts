@@ -38,6 +38,7 @@ import type {
   AddPermissionRuleParams,
   UpdatePermissionRuleParams,
   LspServerInfo,
+  SkillInfo,
 } from "../types";
 
 // ================================================================
@@ -357,6 +358,24 @@ export async function listHandlers(): Promise<HandlerInfo[]> {
 }
 
 // ================================================================
+// Skill 命令
+// ================================================================
+
+/** 列出所有可用 Skill */
+export async function listSkills(workspacePath?: string): Promise<SkillInfo[]> {
+  const result = await safeInvoke(() => invoke<SkillInfo[]>("list_skills", { workspacePath }), { context: "listSkills" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 获取指定 Skill 的完整 markdown 内容 */
+export async function getSkillContent(name: string, workspacePath?: string): Promise<string> {
+  const result = await safeInvoke(() => invoke<{ content: string }>("get_skill_content", { name, workspacePath }), { context: "getSkillContent" });
+  if (!result.ok) throw result.error.raw;
+  return result.data.content;
+}
+
+// ================================================================
 // 设置命令
 // ================================================================
 
@@ -462,6 +481,30 @@ export async function submitQuestionAnswer(
 /** 查询指定子 Agent 的所有持久化消息 */
 export async function listSubAgentMessages(agentId: string): Promise<Message[]> {
   const result = await safeInvoke(() => invoke<Message[]>("list_sub_agent_messages", { agentId }), { context: "listSubAgentMessages" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 手动压缩会话上下文返回结果，与 Rust ManualCompactionResult 对齐 */
+export interface ManualCompactionResult {
+  /** 是否实际执行了压缩 */
+  compacted: boolean;
+  /** 压缩前 token 数 */
+  tokensBefore: number;
+  /** 压缩后 token 数 */
+  tokensAfter: number;
+  /** 压缩失败时的错误信息 */
+  error?: string;
+  /** 附加提示信息（如"无需压缩"） */
+  message?: string;
+}
+
+/** 手动触发会话上下文压缩 */
+export async function manualCompactSession(sessionId: string): Promise<ManualCompactionResult> {
+  const result = await safeInvoke(() => invoke<ManualCompactionResult>("manual_compact_session", { sessionId }), {
+    context: "manualCompactSession",
+    showToast: false, // 错误由调用方（App.tsx executeSlashCommand）统一处理
+  });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }

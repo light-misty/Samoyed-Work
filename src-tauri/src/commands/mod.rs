@@ -7,6 +7,7 @@ pub mod lsp;
 pub mod permission;
 pub mod session;
 pub mod settings;
+pub mod skill;
 pub mod template;
 #[cfg(desktop)]
 pub mod update;

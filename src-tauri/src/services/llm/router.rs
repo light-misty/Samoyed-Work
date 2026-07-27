@@ -801,9 +801,10 @@ impl LlmRouter {
     /// 按 provider_id 查询上下文窗口大小
     /// 若 provider_id 为 None 或空，回退到默认 Provider
     pub fn context_window_for(&self, provider_id: Option<&str>) -> usize {
-        let pid = provider_id.filter(|s| !s.is_empty()).or(self.default_id.as_deref());
-        pid
-            .and_then(|id| self.meta.get(id))
+        let pid = provider_id
+            .filter(|s| !s.is_empty())
+            .or(self.default_id.as_deref());
+        pid.and_then(|id| self.meta.get(id))
             .map(|m| m.context_window)
             .unwrap_or(200_000)
     }
@@ -811,9 +812,10 @@ impl LlmRouter {
     /// 按 provider_id 查询模型名称
     /// 若 provider_id 为 None 或空，回退到默认 Provider
     pub fn model_name_for(&self, provider_id: Option<&str>) -> String {
-        let pid = provider_id.filter(|s| !s.is_empty()).or(self.default_id.as_deref());
-        pid
-            .and_then(|id| self.meta.get(id))
+        let pid = provider_id
+            .filter(|s| !s.is_empty())
+            .or(self.default_id.as_deref());
+        pid.and_then(|id| self.meta.get(id))
             .map(|m| m.model.clone())
             .unwrap_or_default()
     }
@@ -822,9 +824,10 @@ impl LlmRouter {
     /// 若 provider_id 为 None 或空，回退到默认 Provider
     /// 返回 "deepseek" | "anthropic" | "gemini" | "none"
     pub fn cache_type_for(&self, provider_id: Option<&str>) -> &str {
-        let pid = provider_id.filter(|s| !s.is_empty()).or(self.default_id.as_deref());
-        pid
-            .and_then(|id| self.meta.get(id))
+        let pid = provider_id
+            .filter(|s| !s.is_empty())
+            .or(self.default_id.as_deref());
+        pid.and_then(|id| self.meta.get(id))
             .map(|m| match m.provider_type.as_str() {
                 "openai" | "custom" | "anthropic" => {
                     // DeepSeek 可通过 OpenAI ChatCompletions 或 Anthropic Messages 两种接口访问，
@@ -847,9 +850,10 @@ impl LlmRouter {
     /// 按 provider_id 查询是否支持视觉/图片多模态
     /// 若 provider_id 为 None 或空，回退到默认 Provider
     pub fn supports_vision_for(&self, provider_id: Option<&str>) -> bool {
-        let pid = provider_id.filter(|s| !s.is_empty()).or(self.default_id.as_deref());
-        pid
-            .and_then(|id| self.meta.get(id))
+        let pid = provider_id
+            .filter(|s| !s.is_empty())
+            .or(self.default_id.as_deref());
+        pid.and_then(|id| self.meta.get(id))
             .map(|m| m.supports_vision)
             .unwrap_or(false)
     }

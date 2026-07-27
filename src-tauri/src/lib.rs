@@ -763,6 +763,10 @@ pub fn run() {
             commands::agent::is_agent_running,
             commands::agent::submit_question_answer,
             commands::agent::list_sub_agent_messages,
+            commands::agent::manual_compact_session,
+            // Skill 命令
+            commands::skill::list_skills,
+            commands::skill::get_skill_content,
             // 模板命令
             commands::template::list_templates,
             commands::template::get_template,

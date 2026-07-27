@@ -964,6 +964,30 @@ impl<R: Runtime> AgentExecutor<R> {
             }
         }
 
+        // 追加工作区 Skill 清单到系统提示词
+        // 扫描 {workspace_path}/.agent/skills/ 目录下的 Skill，使其对 Agent 可见
+        if !ctx.workspace_path.is_empty() {
+            let ws_skills = crate::services::skill::loader::SkillLoader::load_workspace_skills(
+                &ctx.workspace_path,
+            );
+            if !ws_skills.is_empty() {
+                let mut ws_summary = String::from("\n\n## Workspace Skills\n\n");
+                for skill in &ws_skills {
+                    ws_summary.push_str(&skill.to_summary_line());
+                    ws_summary.push('\n');
+                }
+                ws_summary.push_str(
+                    "\nUse the `skill` tool with action=load to load a skill's full content.",
+                );
+                ctx.system_prompt.push_str(&ws_summary);
+                log::info!(
+                    "已注入工作区 Skill 清单到系统提示词, session_id={}, count={}",
+                    ctx.session_id,
+                    ws_skills.len()
+                );
+            }
+        }
+
         // 保存基础系统提示词（含 Skill 清单，不含动态 TodoList 摘要）
         // 每轮迭代从此基础重建 system_prompt，追加最新的 TodoList 摘要
         // 避免 TodoList 摘要在多轮迭代中重复追加
@@ -2155,6 +2179,11 @@ impl<R: Runtime> AgentExecutor<R> {
                             super::AgentMode::Document => "document",
                         };
                         safe_params["_agent_mode"] = json!(mode_str);
+                    }
+
+                    // 为 skill 工具注入 _workspace_path，使 SkillTool 能加载工作区 Skill
+                    if tool_call.name == "skill" && !ctx.workspace_path.is_empty() {
+                        safe_params["_workspace_path"] = json!(ctx.workspace_path);
                     }
 
                     // 在文件修改/删除操作前自动创建版本快照

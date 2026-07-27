@@ -400,8 +400,8 @@ fn build_file_tree(
     for entry in entries {
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // 跳过隐藏文件和目录
-        if name.starts_with('.') {
+        // 跳过隐藏文件和目录（保留 .agent 以便智能体感知工作区 Skill）
+        if name.starts_with('.') && name != ".agent" {
             continue;
         }
 
@@ -469,7 +469,8 @@ fn search_files_recursive(
         }
 
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with('.') {
+        // 跳过隐藏文件和目录（保留 .agent 以便智能体感知工作区 Skill）
+        if name.starts_with('.') && name != ".agent" {
             continue;
         }
 

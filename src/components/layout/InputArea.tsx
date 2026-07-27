@@ -4,15 +4,19 @@ import { Icon } from "../common/Icon";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 import { WorkspaceGitStatus } from "./WorkspaceGitStatus";
+import { SlashCommandMenu } from "../input/SlashCommandMenu";
+import { SLASH_COMMANDS, matchCommand, parseCommandArgs, type SlashCommand } from "../../commands/slashCommands";
 import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
+import type { SkillInfo } from "../../types";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useAgentModeStore } from "../../stores/useAgentModeStore";
+import { useToastStore } from "../../stores/useToastStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
-import { switchAgentMode } from "../../services/tauri";
+import { switchAgentMode, listSkills } from "../../services/tauri";
 import type { PromptTemplate } from "../../types";
 
 interface InputAreaProps {
@@ -23,12 +27,24 @@ interface InputAreaProps {
   onStop?: () => void;
   /** 是否为居中布局（空会话状态）：居中时限制最大宽度 */
   centered?: boolean;
+  /** 斜杠命令执行回调：当用户选择或执行斜杠命令时调用 */
+  onSlashCommand?: (commandName: string, args: string) => void;
+  /** Skill 选择回调：当用户选择 Skill 时调用 */
+  onSkillSelect?: (skillName: string) => void;
 }
 
-export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false }: InputAreaProps) {
+// 新建会话页面隐藏的斜杠命令（这些命令在空会话状态下无意义）
+const NEW_SESSION_HIDDEN_COMMANDS = new Set(["compact", "retry", "stop", "new", "stats"]);
+
+export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false, onSlashCommand, onSkillSelect }: InputAreaProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  // 斜杠命令菜单状态
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuCommands, setSlashMenuCommands] = useState<SlashCommand[]>([]);
+  const [slashMenuSkills, setSlashMenuSkills] = useState<SkillInfo[]>([]);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 保存模板插入时的 focus/height 定时器，组件卸载时清理
@@ -85,15 +101,200 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     clearAttachments();
   }, [text, disabled, onSend, attachments.length, clearAttachments, configReady]);
 
+  // 文本变化处理：同步 textarea 值到 state，并检测斜杠命令
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
+    // 检测斜杠命令：以 / 开头时弹出命令菜单
+    if (newText.startsWith("/")) {
+      const { fuzzyMatches } = matchCommand(newText);
+
+      // 过滤命令
+      const filtered = centered
+        ? fuzzyMatches.filter((cmd) => !NEW_SESSION_HIDDEN_COMMANDS.has(cmd.name))
+        : fuzzyMatches;
+
+      // 过滤 Skills
+      const afterSlash = newText.slice(1);
+      const spaceIndex = afterSlash.indexOf(" ");
+      const query = spaceIndex === -1 ? afterSlash : afterSlash.slice(0, spaceIndex);
+      const lowerQuery = query.toLowerCase();
+      const filteredSkills = slashMenuSkills.filter((s) =>
+        s.name.toLowerCase().includes(lowerQuery)
+      );
+
+      // 只有在有命令或技能匹配时才打开菜单
+      const hasItems = filtered.length > 0 || filteredSkills.length > 0;
+      if (hasItems) {
+        setSlashMenuCommands(filtered);
+        setHighlightIndex(0);
+        setSlashMenuOpen(true);
+      } else {
+        setSlashMenuOpen(false);
+      }
+
+      // 首次输入 / 时异步获取 Skills
+      if (slashMenuSkills.length === 0 && query === "") {
+        const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+        if (ws?.path) {
+          listSkills(ws.path).then((skills) => {
+            setSlashMenuSkills(skills);
+          }).catch(() => {});
+        }
+      }
+    } else {
+      setSlashMenuOpen(false);
+    }
+  }, [centered, slashMenuSkills, workspaces, currentWorkspaceId]);
+
+  // 命令选择回调：从菜单选择命令时执行
+  const handleSlashCommandSelect = useCallback((cmd: SlashCommand) => {
+    const agentRunning = executionStatus === "running";
+    // 检查 Agent 运行状态
+    if (agentRunning && !cmd.allowedInAgent) {
+      useToastStore.getState().addToast("warning", t("slash.toast.agentRunning"));
+      setSlashMenuOpen(false);
+      return;
+    }
+    // 从当前 text 解析参数
+    const parsed = parseCommandArgs(text);
+    const args = parsed?.args ?? "";
+    onSlashCommand?.(cmd.name, args);
+    setText("");
+    setSlashMenuOpen(false);
+  }, [executionStatus, t, text, onSlashCommand]);
+
+  // / 按钮点击：弹出完整命令列表
+  const handleSlashTrigger = useCallback(() => {
+    const commands = centered
+      ? SLASH_COMMANDS.filter((cmd) => !NEW_SESSION_HIDDEN_COMMANDS.has(cmd.name))
+      : SLASH_COMMANDS;
+    setSlashMenuCommands(commands);
+    setSlashMenuSkills([]);
+    setHighlightIndex(0);
+    setSlashMenuOpen(true);
+    // 若当前输入不以 / 开头，则在前面插入 / 并聚焦输入框
+    if (!text.startsWith("/")) {
+      setText("/" + text);
+      textareaRef.current?.focus();
+    }
+    // 异步获取 Skills（不阻塞菜单打开）
+    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+    if (ws?.path) {
+      listSkills(ws.path).then((skills) => {
+        setSlashMenuSkills(skills);
+      }).catch(() => {
+        // Skills 获取失败不影响菜单使用
+      });
+    }
+  }, [text, centered, workspaces, currentWorkspaceId]);
+
+  /** 计算总 item 数量（含分隔线等不可选中项） */
+  const totalMenuItems = useCallback(() => {
+    let count = slashMenuCommands.length;
+    if (slashMenuSkills.length > 0) {
+      count += slashMenuSkills.length;
+      count += 1; // divider
+    }
+    return count || 1;
+  }, [slashMenuSkills, slashMenuCommands]);
+
+  /** 获取高亮索引对应的可选中项信息 */
+  const getHighlightedItem = useCallback((idx: number): { kind: "command"; cmd: SlashCommand } | { kind: "skill"; skill: SkillInfo } | null => {
+    if (slashMenuSkills.length > 0) {
+      if (idx < slashMenuSkills.length) {
+        return { kind: "skill", skill: slashMenuSkills[idx] };
+      }
+      if (idx === slashMenuSkills.length) return null; // divider
+      const cmdIdx = idx - slashMenuSkills.length - 1;
+      if (cmdIdx >= 0 && cmdIdx < slashMenuCommands.length) {
+        return { kind: "command", cmd: slashMenuCommands[cmdIdx] };
+      }
+    } else {
+      if (idx >= 0 && idx < slashMenuCommands.length) {
+        return { kind: "command", cmd: slashMenuCommands[idx] };
+      }
+    }
+    return null;
+  }, [slashMenuSkills, slashMenuCommands]);
+
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      // 斜杠命令菜单导航：菜单打开时拦截方向键/回车/Esc
+      if (slashMenuOpen && (slashMenuCommands.length > 0 || slashMenuSkills.length > 0)) {
+        const total = totalMenuItems();
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHighlightIndex((prev) => (prev + 1) % total);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHighlightIndex((prev) => (prev - 1 + total) % total);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSlashMenuOpen(false);
+          return;
+        }
+        if (e.key === "Enter" || matchesShortcut(e, sendMessageShortcut)) {
+          e.preventDefault();
+          const item = getHighlightedItem(highlightIndex);
+          if (item) {
+            if (item.kind === "command") {
+              handleSlashCommandSelect(item.cmd);
+            } else {
+              onSkillSelect?.(item.skill.name);
+              setText("");
+              setSlashMenuOpen(false);
+            }
+          }
+          return;
+        }
+      }
+
       // 发送消息快捷键（从设置中读取）
       if (matchesShortcut(e, sendMessageShortcut)) {
+        // 检查是否为斜杠命令
+        if (text.startsWith("/")) {
+          const { exactMatch, fuzzyMatches } = matchCommand(text);
+          if (exactMatch) {
+            // 精确匹配：直接执行命令
+            e.preventDefault();
+            const parsed = parseCommandArgs(text);
+            const command = parsed?.command ?? exactMatch.name;
+            const args = parsed?.args ?? "";
+            onSlashCommand?.(command, args);
+            setText("");
+            setSlashMenuOpen(false);
+            return;
+          }
+          if (fuzzyMatches.length === 0) {
+            // 检查是否有匹配的 Skill
+            const afterSlash = text.slice(1);
+            const spaceIndex = afterSlash.indexOf(" ");
+            const queryText = spaceIndex === -1 ? afterSlash : afterSlash.slice(0, spaceIndex);
+            const matchingSkill = slashMenuSkills.find((s) => s.name === queryText);
+            if (matchingSkill) {
+              e.preventDefault();
+              onSkillSelect?.(matchingSkill.name);
+              setText("");
+              setSlashMenuOpen(false);
+              return;
+            }
+            // 无匹配，走正常发送
+            handleSend();
+            return;
+          }
+          // 多匹配，保持菜单打开
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend, sendMessageShortcut]
+    [handleSend, sendMessageShortcut, slashMenuOpen, slashMenuCommands, slashMenuSkills, highlightIndex, text, onSlashCommand, handleSlashCommandSelect, onSkillSelect, totalMenuItems, getHighlightedItem]
   );
 
   // 输入框最大高度
@@ -255,7 +456,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   return (
     <div className={`input-area-wrapper ${centered ? "input-area-wrapper-centered" : ""}`} role="form" aria-label={t('inputArea.messageInput')}>
-      <div className="input-container-wrapper" style={{ position: "relative" }}>
+      <div className="input-container-wrapper">
         {/* 附件预览条 */}
         {attachments.length > 0 && (
           <div className="attachment-preview-bar">
@@ -284,86 +485,130 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           </div>
         )}
 
-        <div
-          className={`input-container ${hasContent ? "has-content" : ""} ${isDragOver ? "drag-over" : ""}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={SUPPORTED_ATTACHMENT_MIME_TYPES.join(",")}
-            style={{ display: "none" }}
-            onChange={handleFileChange}
-          />
+        <div className="input-relative-wrap" style={{ position: "relative" }}>
+          {/* 斜杠命令选择菜单（新建会话/居中模式下从下方弹出，历史会话模式从上方弹出） */}
+          {slashMenuOpen && (slashMenuCommands.length > 0 || slashMenuSkills.length > 0) && (
+            <SlashCommandMenu
+              commands={slashMenuCommands}
+              skills={slashMenuSkills}
+              highlightIndex={highlightIndex}
+              onSelect={handleSlashCommandSelect}
+              onSkillSelect={(skill) => {
+                onSkillSelect?.(skill.name);
+                setText("");
+                setSlashMenuOpen(false);
+              }}
+              onClose={() => setSlashMenuOpen(false)}
+              agentRunning={executionStatus === "running"}
+              dropdownUp={!centered}
+            />
+          )}
 
-          <textarea
-            ref={textareaRef}
-            className="input-textarea"
-            rows={1}
-            placeholder={t('inputArea.placeholder')}
-            aria-label={t('inputArea.messageInputBox')}
-            value={text}
-            onChange={(e) => { setText(e.target.value); handleInput(); }}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={disabled}
-          />
+          <div
+            className={`input-container ${hasContent ? "has-content" : ""} ${isDragOver ? "drag-over" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={SUPPORTED_ATTACHMENT_MIME_TYPES.join(",")}
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
 
-          <div className="input-inner-bottom">
-            <div className="input-inner-left">
-              {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
-            </div>
-            <div className="input-inner-right">
-              <ModeSelector dropdownUp={!centered} />
-              <ProviderSelector dropdownUp={!centered} />
-              <div className="input-actions-right">
-                <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
-                  <Icon name="attach" />
-                </button>
-                {executionStatus === "running" && onStop ? (
+            <textarea
+              ref={textareaRef}
+              className="input-textarea"
+              rows={1}
+              placeholder={t('inputArea.placeholder')}
+              aria-label={t('inputArea.messageInputBox')}
+              value={text}
+              onChange={(e) => { handleTextChange(e.target.value); handleInput(); }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              disabled={disabled}
+            />
+
+            <div className="input-inner-bottom">
+              <div className="input-inner-left">
+                {/* centered 模式下，/ 按钮放在 WorkspaceSelector 之前 */}
+                {centered && (
                   <button
-                    className="stop-btn"
-                    title={t('inputArea.stopExecution')}
-                    aria-label={t('inputArea.stopExecution')}
-                    onClick={onStop}
+                    className="input-btn slash-trigger-btn"
+                    title={t("slash.button.tooltip")}
+                    onClick={handleSlashTrigger}
+                    type="button"
+                    aria-label={t("slash.button.tooltip")}
                   >
-                    <Icon name="stop" />
-                  </button>
-                ) : executionStatus === "stopping" ? (
-                  <button
-                    className="stop-btn stop-btn-loading"
-                    title={t('inputArea.stopping')}
-                    disabled
-                  >
-                    <span className="loading-spinner"></span>
-                  </button>
-                ) : (
-                  <button
-                    className={`send-btn ${hasContent && !disabled && configReady ? "send-btn-active" : ""}`}
-                    title={configTip || t('inputArea.send')}
-                    aria-label={t('inputArea.sendMessage')}
-                    aria-disabled={disabled || !hasContent || !configReady}
-                    onClick={handleSend}
-                    disabled={disabled || !hasContent || !configReady}
-                  >
-                    <Icon name="send" />
+                    <Icon name="slash" />
                   </button>
                 )}
+                {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
+              </div>
+              <div className="input-inner-right">
+                {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前 */}
+                {!centered && (
+                  <button
+                    className="input-btn slash-trigger-btn"
+                    title={t("slash.button.tooltip")}
+                    onClick={handleSlashTrigger}
+                    type="button"
+                    aria-label={t("slash.button.tooltip")}
+                  >
+                    <Icon name="slash" />
+                  </button>
+                )}
+                <ModeSelector dropdownUp={!centered} />
+                <ProviderSelector dropdownUp={!centered} />
+                <div className="input-actions-right">
+                  <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
+                    <Icon name="attach" />
+                  </button>
+                  {executionStatus === "running" && onStop ? (
+                    <button
+                      className="stop-btn"
+                      title={t('inputArea.stopExecution')}
+                      aria-label={t('inputArea.stopExecution')}
+                      onClick={onStop}
+                    >
+                      <Icon name="stop" />
+                    </button>
+                  ) : executionStatus === "stopping" ? (
+                    <button
+                      className="stop-btn stop-btn-loading"
+                      title={t('inputArea.stopping')}
+                      disabled
+                    >
+                      <span className="loading-spinner"></span>
+                    </button>
+                  ) : (
+                    <button
+                      className={`send-btn ${hasContent && !disabled && configReady ? "send-btn-active" : ""}`}
+                      title={configTip || t('inputArea.send')}
+                      aria-label={t('inputArea.sendMessage')}
+                      aria-disabled={disabled || !hasContent || !configReady}
+                      onClick={handleSend}
+                      disabled={disabled || !hasContent || !configReady}
+                    >
+                      <Icon name="send" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 拖拽覆盖层 */}
-        {isDragOver && (
-          <div className="drag-overlay">
-            <Icon name="attach" />
-            <span>{t('inputArea.dropToAdd')}</span>
-          </div>
-        )}
+          {/* 拖拽覆盖层 */}
+          {isDragOver && (
+            <div className="drag-overlay">
+              <Icon name="attach" />
+              <span>{t('inputArea.dropToAdd')}</span>
+            </div>
+          )}
+        </div>
 
         {/* 模板卡片（空会话状态） */}
         {centered && (

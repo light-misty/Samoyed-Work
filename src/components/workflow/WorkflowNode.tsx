@@ -10,6 +10,7 @@ import { ErrorNode } from "./ErrorNode";
 import { CompactionNode } from "./CompactionNode";
 import { SubAgentNode } from "./SubAgentNode";
 import { QuestionNode } from "./QuestionNode";
+import { StatsNode } from "./StatsNode";
 
 interface WorkflowNodeRendererProps {
   node: WorkflowNode;
@@ -51,6 +52,9 @@ export function WorkflowNodeRenderer({ node, onRetry, hideCopy, nodeRef }: Workf
       break;
     case "question":
       content = <QuestionNode node={node as WorkflowNode<"question">} />;
+      break;
+    case "stats":
+      content = <StatsNode node={node as WorkflowNode<"stats">} />;
       break;
     default:
       content = null;
