@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useSlashCommandStore } from "@/stores/useSlashCommandStore";
-import { SLASH_COMMANDS } from "@/commands/slashCommands";
-import { Icon } from "@/components/common/Icon";
-import { Button } from "@/components/common/Button";
+import { useSlashCommandStore } from "../../stores/useSlashCommandStore";
+import { SLASH_COMMANDS } from "../../commands/slashCommands";
+import { Icon } from "../common/Icon";
+import { Button } from "../common/Button";
 
 /**
  * 斜杠命令帮助覆盖层
