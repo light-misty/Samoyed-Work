@@ -117,9 +117,15 @@ export function extractToolPath(
     return p ? resolveAbsolutePath(p, workspaceRoot) : undefined;
   }
 
+  // list：默认列出当前工作目录
+  if (toolName === 'list') {
+    const p = f('path');
+    return p ? resolveAbsolutePath(p, workspaceRoot) : workspaceRoot;
+  }
+
   // 统一使用 path 参数的工具
   const pathTools = new Set([
-    'list', 'read', 'write', 'edit', 'edit_lines', 'remove',
+    'read', 'write', 'edit', 'edit_lines', 'remove',
     'file_info', 'read_lines', 'remove_dir', 'mkdir', 'exists',
     'hash', 'source_code',
     'docx', 'xlsx', 'pptx', 'pdf',
