@@ -41,6 +41,33 @@ pub struct SkillFrontmatter {
     pub read_only: bool,
 }
 
+/// Skill 前端摘要信息（不含完整 markdown 正文）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInfo {
+    pub name: String,
+    pub description: String,
+    pub when: Option<String>,
+    pub modes: Vec<String>,
+    pub tags: Vec<String>,
+    pub read_only: bool,
+    pub source: String,
+}
+
+impl From<Skill> for SkillInfo {
+    fn from(s: Skill) -> Self {
+        Self {
+            name: s.frontmatter.name,
+            description: s.frontmatter.description,
+            when: s.frontmatter.when,
+            modes: s.frontmatter.modes,
+            tags: s.frontmatter.tags,
+            read_only: s.frontmatter.read_only,
+            source: format!("{:?}", s.source),
+        }
+    }
+}
+
 /// Skill 完整定义
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

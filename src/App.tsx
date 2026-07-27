@@ -1016,6 +1016,23 @@ export default function App() {
 
   // 斜杠命令分发器：根据命令名执行对应 handler
   // 命令节点（user 节点）是 transient 的：仅添加到前端工作流，不持久化到 DB（不调用 startAgent）
+  // 用户从斜杠菜单选择了 Skill
+  const handleSkillSelect = useCallback(async (skillName: string) => {
+    const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+    const workspacePath = currentWorkspace?.path;
+
+    let skillContent: string;
+    try {
+      skillContent = await tauriCmd.getSkillContent(skillName, workspacePath);
+    } catch {
+      useToastStore.getState().addToast("error", t("slash.toast.skillNotFound", { name: skillName }));
+      return;
+    }
+
+    const text = `[加载 Skill: ${skillName}]\n\n${skillContent}`;
+    handleSend(text);
+  }, [workspaces, currentWorkspaceId, handleSend, t]);
+
   const executeSlashCommand = useCallback(async (commandName: string, _args: string) => {
     const cmd = getCommandByName(commandName);
     if (!cmd) return;
@@ -1096,9 +1113,16 @@ export default function App() {
         openStatsOverlay();
         break;
       }
+      case "skills": {
+        // /skills <name> 直接指定 Skill 名称
+        if (_args.trim()) {
+          await handleSkillSelect(_args.trim());
+        }
+        break;
+      }
 
     }
-  }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, openStatsOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace]);
+  }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, openStatsOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace, handleSkillSelect]);
 
   // 监听键盘快捷键
   useEffect(() => {
@@ -1175,6 +1199,7 @@ export default function App() {
                     onStop={handleStop}
                     centered={nodes.length === 0}
                     onSlashCommand={executeSlashCommand}
+                    onSkillSelect={handleSkillSelect}
                   />
                 }
               />

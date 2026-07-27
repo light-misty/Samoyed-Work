@@ -38,6 +38,7 @@ import type {
   AddPermissionRuleParams,
   UpdatePermissionRuleParams,
   LspServerInfo,
+  SkillInfo,
 } from "../types";
 
 // ================================================================
@@ -354,6 +355,24 @@ export async function listHandlers(): Promise<HandlerInfo[]> {
   const result = await safeInvoke(() => invoke<HandlerInfo[]>("list_handlers"), { context: "listHandlers" });
   if (!result.ok) throw result.error.raw;
   return result.data;
+}
+
+// ================================================================
+// Skill 命令
+// ================================================================
+
+/** 列出所有可用 Skill */
+export async function listSkills(workspacePath?: string): Promise<SkillInfo[]> {
+  const result = await safeInvoke(() => invoke<SkillInfo[]>("list_skills", { workspacePath }), { context: "listSkills" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 获取指定 Skill 的完整 markdown 内容 */
+export async function getSkillContent(name: string, workspacePath?: string): Promise<string> {
+  const result = await safeInvoke(() => invoke<{ content: string }>("get_skill_content", { name, workspacePath }), { context: "getSkillContent" });
+  if (!result.ok) throw result.error.raw;
+  return result.data.content;
 }
 
 // ================================================================

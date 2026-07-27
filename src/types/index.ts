@@ -5,3 +5,4 @@ export type { PreviewContent, DocumentMetadata, VersionInfo } from "./document";
 export type { SettingsTab, ConfirmationLevel, RetentionPolicy, ThemeMode, GeneralSettings, AppearanceSettings, VersionSnapshotSettings, WorkspaceDefaults, Shortcuts, UpdateSettings, AppSettings, LLMProviderType, ProviderConfig, ProviderInfo, ConnectionResult, ModelInfo, HandlerInfo, ToolInfo, TemplateVariable, PromptTemplate, CreateTemplateParams, UpdateTemplateParams, ContextUsageInfo } from "./settings";
 export type { PermissionScope, PermissionAction, PermissionType, PermissionRule, AddPermissionRuleParams, UpdatePermissionRuleParams } from "./permission";
 export type { LspServerStatus, LspServerInfo } from "./lsp";
+export type { SkillInfo } from "./skill";

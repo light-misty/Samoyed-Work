@@ -935,6 +935,10 @@
       "stats": {
         "desc": "Show token usage statistics for current session",
         "argHint": ""
+      },
+      "skills": {
+        "desc": "Load a Skill into the agent",
+        "argHint": "Skill name"
       }
     },
     "menu": {
@@ -960,7 +964,8 @@
       "noSessionToCompact": "No session to compact",
       "compactNoNeed": "No compaction needed (current {{tokens}} tokens)",
       "compactFailed": "Compaction failed: {{error}}",
-      "compactDone": "Compaction complete ({{before}} → {{after}} tokens)"
+      "compactDone": "Compaction complete ({{before}} → {{after}} tokens)",
+      "skillNotFound": "Skill not found: {{name}}"
     },
     "stats": {
       "title": "Token Usage Statistics",

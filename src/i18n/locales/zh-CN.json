@@ -935,6 +935,10 @@
       "stats": {
         "desc": "展示当前会话的 Token 用量统计",
         "argHint": ""
+      },
+      "skills": {
+        "desc": "加载一个 Skill 到智能体",
+        "argHint": "Skill 名称"
       }
     },
     "menu": {
@@ -960,7 +964,8 @@
       "noSessionToCompact": "当前无会话可压缩",
       "compactNoNeed": "无需压缩（当前 {{tokens}} tokens）",
       "compactFailed": "压缩失败：{{error}}",
-      "compactDone": "压缩完成（{{before}} → {{after}} tokens）"
+      "compactDone": "压缩完成（{{before}} → {{after}} tokens）",
+      "skillNotFound": "Skill 不存在: {{name}}"
     },
     "stats": {
       "title": "Token 用量统计",
