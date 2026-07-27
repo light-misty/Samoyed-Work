@@ -11,7 +11,7 @@ export type IconName =
   | "refresh" | "edit" | "trash" | "stop" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "git-branch" | "undo"
-  | "theme" | "moon" | "keyboard" | "info" | "image" | "book" | "more-vertical"
+  | "theme" | "moon" | "keyboard" | "slash" | "info" | "image" | "book" | "more-vertical"
   // 空会话标题专用：规划模式清单图标、构建模式双尖括号图标
   | "plan-mode" | "code-brackets"
   // GitHub logo
@@ -393,6 +393,13 @@ const paths: Record<IconName, React.JSX.Element> = {
       <line x1="21" y1="12" x2="23" y2="12" />
       <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
       <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </g>
+  ),
+  // 斜杠命令触发图标（方框内含 /）
+  slash: (
+    <g key="slash">
+      <rect x="4" y="4" width="16" height="16" rx="4" />
+      <line x1="14" y1="7.5" x2="10" y2="16.5" strokeLinecap="round" />
     </g>
   ),
   // 键盘

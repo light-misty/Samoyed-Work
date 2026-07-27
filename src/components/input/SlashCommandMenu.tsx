@@ -13,6 +13,8 @@ interface SlashCommandMenuProps {
   onClose: () => void;
   /** Agent 是否正在运行（用于禁用某些命令的显示） */
   agentRunning: boolean;
+  /** 是否从上方弹出（历史会话页面为 true，新建会话页面为 false） */
+  dropdownUp?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ interface SlashCommandMenuProps {
  * 定位：菜单始终从输入框上方弹出（centered 与非 centered 两种布局位置相同）。
  */
 export function SlashCommandMenu(props: SlashCommandMenuProps) {
-  const { commands, highlightIndex, onSelect, onClose, agentRunning } = props;
+  const { commands, highlightIndex, onSelect, onClose, agentRunning, dropdownUp = true } = props;
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   // 命令项 ref 数组，用于自动滚动到高亮项
@@ -66,7 +68,7 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
   return (
     <div
       ref={containerRef}
-      className="slash-menu-container"
+      className={`slash-menu-container ${dropdownUp ? "slash-menu-up" : "slash-menu-down"}`}
       role="listbox"
       aria-label={t("slash.menu.title")}
     >
@@ -94,8 +96,10 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(cmd)}
               >
-                <div className="slash-menu-item-name">/{cmd.name}</div>
-                <div className="slash-menu-item-desc">{t(cmd.description)}</div>
+                <div className="slash-menu-item-row">
+                  <div className="slash-menu-item-name">/{cmd.name}</div>
+                  <div className="slash-menu-item-desc">{t(cmd.description)}</div>
+                </div>
                 {cmd.requiresArgs && (
                   <div className="slash-menu-item-usage">{cmd.usage}</div>
                 )}
@@ -111,8 +115,6 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
       <style>{`
         .slash-menu-container {
           position: absolute;
-          /* 菜单定位在输入框上方 */
-          bottom: calc(100% + 6px);
           left: 0;
           width: max-content;
           min-width: 320px;
@@ -122,20 +124,25 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           border-radius: var(--radius-md);
           box-shadow: var(--shadow-lg);
           z-index: 200;
-          animation: slash-menu-in 0.15s ease-out;
           overflow: hidden;
           display: flex;
           flex-direction: column;
         }
-        @keyframes slash-menu-in {
-          from {
-            opacity: 0;
-            transform: scale(0.96) translateY(4px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
+        .slash-menu-container.slash-menu-up {
+          bottom: calc(100% + 6px);
+          animation: slash-menu-in-up 0.15s ease-out;
+        }
+        .slash-menu-container.slash-menu-down {
+          top: calc(100% + 6px);
+          animation: slash-menu-in-down 0.15s ease-out;
+        }
+        @keyframes slash-menu-in-up {
+          from { opacity: 0; transform: scale(0.96) translateY(4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes slash-menu-in-down {
+          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
         }
         .slash-menu-header {
           display: flex;
@@ -159,24 +166,17 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           white-space: nowrap;
         }
         .slash-menu-list {
-          max-height: 320px;
+          max-height: 180px;
           overflow-y: auto;
           padding: 4px;
-          scrollbar-width: thin;
-          scrollbar-color: var(--color-border-strong) transparent;
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          scrollbar-width: none;
         }
         .slash-menu-list::-webkit-scrollbar {
-          width: 4px;
-        }
-        .slash-menu-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .slash-menu-list::-webkit-scrollbar-thumb {
-          background: var(--color-border-strong);
-          border-radius: 2px;
-        }
-        .slash-menu-list::-webkit-scrollbar-thumb:hover {
-          background: var(--color-text-quaternary);
+          display: none;
+          width: 0;
         }
         .slash-menu-empty {
           padding: 20px 16px;
@@ -185,10 +185,7 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           color: var(--color-text-quaternary);
         }
         .slash-menu-item {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-          padding: 8px 10px;
+          padding: 6px 10px;
           border-radius: var(--radius-sm);
           cursor: pointer;
           transition: background 0.12s;
@@ -206,25 +203,34 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
         .slash-menu-item.disabled:hover {
           background: transparent;
         }
+        .slash-menu-item-row {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+        }
         .slash-menu-item-name {
           font-family: var(--font-mono);
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: var(--color-text-primary);
+          flex-shrink: 0;
         }
         .slash-menu-item-desc {
-          font-size: 12px;
+          font-size: 11px;
           color: var(--color-text-secondary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .slash-menu-item-usage {
           font-family: var(--font-mono);
-          font-size: 11px;
+          font-size: 10px;
           color: var(--color-text-quaternary);
         }
         .slash-menu-item-disabled {
           font-size: 10px;
           color: var(--color-error);
-          margin-top: 2px;
+          margin-top: 1px;
         }
       `}</style>
     </div>

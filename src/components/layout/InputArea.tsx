@@ -361,17 +361,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   return (
     <div className={`input-area-wrapper ${centered ? "input-area-wrapper-centered" : ""}`} role="form" aria-label={t('inputArea.messageInput')}>
-      <div className="input-container-wrapper" style={{ position: "relative" }}>
-        {/* 斜杠命令选择菜单（绝对定位在输入框上方） */}
-        {slashMenuOpen && slashMenuCommands.length > 0 && (
-          <SlashCommandMenu
-            commands={slashMenuCommands}
-            highlightIndex={highlightIndex}
-            onSelect={handleSlashCommandSelect}
-            onClose={() => setSlashMenuOpen(false)}
-            agentRunning={executionStatus === "running"}
-          />
-        )}
+      <div className="input-container-wrapper">
         {/* 附件预览条 */}
         {attachments.length > 0 && (
           <div className="attachment-preview-bar">
@@ -400,110 +390,124 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           </div>
         )}
 
-        <div
-          className={`input-container ${hasContent ? "has-content" : ""} ${isDragOver ? "drag-over" : ""}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept={SUPPORTED_ATTACHMENT_MIME_TYPES.join(",")}
-            style={{ display: "none" }}
-            onChange={handleFileChange}
-          />
+        <div className="input-relative-wrap" style={{ position: "relative" }}>
+          {/* 斜杠命令选择菜单（新建会话/居中模式下从下方弹出，历史会话模式从上方弹出） */}
+          {slashMenuOpen && slashMenuCommands.length > 0 && (
+            <SlashCommandMenu
+              commands={slashMenuCommands}
+              highlightIndex={highlightIndex}
+              onSelect={handleSlashCommandSelect}
+              onClose={() => setSlashMenuOpen(false)}
+              agentRunning={executionStatus === "running"}
+              dropdownUp={!centered}
+            />
+          )}
 
-          <textarea
-            ref={textareaRef}
-            className="input-textarea"
-            rows={1}
-            placeholder={t('inputArea.placeholder')}
-            aria-label={t('inputArea.messageInputBox')}
-            value={text}
-            onChange={(e) => { handleTextChange(e.target.value); handleInput(); }}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            disabled={disabled}
-          />
+          <div
+            className={`input-container ${hasContent ? "has-content" : ""} ${isDragOver ? "drag-over" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={SUPPORTED_ATTACHMENT_MIME_TYPES.join(",")}
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+            />
 
-          <div className="input-inner-bottom">
-            <div className="input-inner-left">
-              {/* centered 模式下，/ 按钮放在 WorkspaceSelector 之前 */}
-              {centered && (
-                <button
-                  className="input-btn slash-trigger-btn"
-                  title={t("slash.button.tooltip")}
-                  onClick={handleSlashTrigger}
-                  type="button"
-                  aria-label={t("slash.button.tooltip")}
-                >
-                  <Icon name="keyboard" />
-                </button>
-              )}
-              {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
-            </div>
-            <div className="input-inner-right">
-              {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前 */}
-              {!centered && (
-                <button
-                  className="input-btn slash-trigger-btn"
-                  title={t("slash.button.tooltip")}
-                  onClick={handleSlashTrigger}
-                  type="button"
-                  aria-label={t("slash.button.tooltip")}
-                >
-                  <Icon name="keyboard" />
-                </button>
-              )}
-              <ModeSelector dropdownUp={!centered} />
-              <ProviderSelector dropdownUp={!centered} />
-              <div className="input-actions-right">
-                <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
-                  <Icon name="attach" />
-                </button>
-                {executionStatus === "running" && onStop ? (
+            <textarea
+              ref={textareaRef}
+              className="input-textarea"
+              rows={1}
+              placeholder={t('inputArea.placeholder')}
+              aria-label={t('inputArea.messageInputBox')}
+              value={text}
+              onChange={(e) => { handleTextChange(e.target.value); handleInput(); }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              disabled={disabled}
+            />
+
+            <div className="input-inner-bottom">
+              <div className="input-inner-left">
+                {/* centered 模式下，/ 按钮放在 WorkspaceSelector 之前 */}
+                {centered && (
                   <button
-                    className="stop-btn"
-                    title={t('inputArea.stopExecution')}
-                    aria-label={t('inputArea.stopExecution')}
-                    onClick={onStop}
+                    className="input-btn slash-trigger-btn"
+                    title={t("slash.button.tooltip")}
+                    onClick={handleSlashTrigger}
+                    type="button"
+                    aria-label={t("slash.button.tooltip")}
                   >
-                    <Icon name="stop" />
-                  </button>
-                ) : executionStatus === "stopping" ? (
-                  <button
-                    className="stop-btn stop-btn-loading"
-                    title={t('inputArea.stopping')}
-                    disabled
-                  >
-                    <span className="loading-spinner"></span>
-                  </button>
-                ) : (
-                  <button
-                    className={`send-btn ${hasContent && !disabled && configReady ? "send-btn-active" : ""}`}
-                    title={configTip || t('inputArea.send')}
-                    aria-label={t('inputArea.sendMessage')}
-                    aria-disabled={disabled || !hasContent || !configReady}
-                    onClick={handleSend}
-                    disabled={disabled || !hasContent || !configReady}
-                  >
-                    <Icon name="send" />
+                    <Icon name="slash" />
                   </button>
                 )}
+                {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
+              </div>
+              <div className="input-inner-right">
+                {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前 */}
+                {!centered && (
+                  <button
+                    className="input-btn slash-trigger-btn"
+                    title={t("slash.button.tooltip")}
+                    onClick={handleSlashTrigger}
+                    type="button"
+                    aria-label={t("slash.button.tooltip")}
+                  >
+                    <Icon name="slash" />
+                  </button>
+                )}
+                <ModeSelector dropdownUp={!centered} />
+                <ProviderSelector dropdownUp={!centered} />
+                <div className="input-actions-right">
+                  <button className="input-btn" title={t('inputArea.attachFile')} aria-label={t('inputArea.attachFile')} onClick={handleFileSelect}>
+                    <Icon name="attach" />
+                  </button>
+                  {executionStatus === "running" && onStop ? (
+                    <button
+                      className="stop-btn"
+                      title={t('inputArea.stopExecution')}
+                      aria-label={t('inputArea.stopExecution')}
+                      onClick={onStop}
+                    >
+                      <Icon name="stop" />
+                    </button>
+                  ) : executionStatus === "stopping" ? (
+                    <button
+                      className="stop-btn stop-btn-loading"
+                      title={t('inputArea.stopping')}
+                      disabled
+                    >
+                      <span className="loading-spinner"></span>
+                    </button>
+                  ) : (
+                    <button
+                      className={`send-btn ${hasContent && !disabled && configReady ? "send-btn-active" : ""}`}
+                      title={configTip || t('inputArea.send')}
+                      aria-label={t('inputArea.sendMessage')}
+                      aria-disabled={disabled || !hasContent || !configReady}
+                      onClick={handleSend}
+                      disabled={disabled || !hasContent || !configReady}
+                    >
+                      <Icon name="send" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 拖拽覆盖层 */}
-        {isDragOver && (
-          <div className="drag-overlay">
-            <Icon name="attach" />
-            <span>{t('inputArea.dropToAdd')}</span>
-          </div>
-        )}
+          {/* 拖拽覆盖层 */}
+          {isDragOver && (
+            <div className="drag-overlay">
+              <Icon name="attach" />
+              <span>{t('inputArea.dropToAdd')}</span>
+            </div>
+          )}
+        </div>
 
         {/* 模板卡片（空会话状态） */}
         {centered && (
