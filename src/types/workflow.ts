@@ -27,6 +27,8 @@ export interface UserNodeData {
   branchIndex?: number;
   /** 组内分支总数 */
   branchTotal?: number;
+  /** 从斜杠命令加载的 Skill 名称，非空时渲染为深色标签而非文本 */
+  skillName?: string;
 }
 
 export interface ThinkingNodeData {

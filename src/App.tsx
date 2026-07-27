@@ -1029,9 +1029,26 @@ export default function App() {
       return;
     }
 
-    const text = `[加载 Skill: ${skillName}]\n\n${skillContent}`;
-    handleSend(text);
-  }, [workspaces, currentWorkspaceId, handleSend, t]);
+    resetRefs();
+    addNode("user", { content: "", attachments: [], skillName });
+    setExecutionStatus("running");
+
+    const workingDirectory = currentWorkspace?.path;
+    const workspaceId = currentWorkspaceId;
+    const providerId = useSettingsStore.getState().preferredProviderId;
+    const options = {
+      ...(workingDirectory ? { workingDirectory } : {}),
+      ...(workspaceId ? { workspaceId } : {}),
+      ...(providerId ? { providerId } : {}),
+    };
+
+    try {
+      await sendMessage(skillContent, options);
+    } catch (err) {
+      console.error("[App] 发送 Skill 失败:", err);
+      setExecutionStatus("failed");
+    }
+  }, [workspaces, currentWorkspaceId, resetRefs, addNode, setExecutionStatus, sendMessage, t]);
 
   const executeSlashCommand = useCallback(async (commandName: string, _args: string) => {
     const cmd = getCommandByName(commandName);

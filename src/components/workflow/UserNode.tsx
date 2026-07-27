@@ -26,6 +26,21 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   const executionStatus = useWorkflowStore((s) => s.executionStatus);
   const isAgentRunning = executionStatus === "running";
 
+  // Skill 加载节点：仅显示 /skillName，不展示完整内容
+  if (data.skillName) {
+    return (
+      <div className="wf-node wf-user-node">
+        <div className="wf-user-msg-wrapper">
+          <div className="wf-node-card">
+            <div className="wf-node-body">
+              <div className="wf-user-text">/{data.skillName}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(data.content);
