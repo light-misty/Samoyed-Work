@@ -1322,7 +1322,11 @@ fn persist_messages_to_db(
             .map(|m| serde_json::to_string(m).unwrap_or_default());
 
         // branch_group_id 仅设置在 user 消息上（分叉点标识），其他角色消息保持 None
-        let msg_branch_group_id = if msg.role == "user" { branch_group_id } else { None };
+        let msg_branch_group_id = if msg.role == "user" {
+            branch_group_id
+        } else {
+            None
+        };
 
         crate::db::message_repo::create_message(
             &conn,

@@ -77,6 +77,56 @@ impl SkillLoader {
         Ok(skills)
     }
 
+    /// 从工作区目录加载 Skill
+    ///
+    /// 扫描 {workspace_path}/.agent/skills/ 目录下的所有子目录,
+    /// 每个子目录应包含 SKILL.md 文件。
+    /// 与全局/项目 Skill 不同,工作区 Skill 按需加载,不参与覆盖逻辑。
+    pub fn load_workspace_skills(workspace_path: &str) -> Vec<Skill> {
+        let dir = std::path::PathBuf::from(workspace_path)
+            .join(".agent")
+            .join("skills");
+        if !dir.exists() || !dir.is_dir() {
+            return Vec::new();
+        }
+
+        log::debug!("加载工作区 Skill 目录: {}", dir.display());
+
+        let mut skills = Vec::new();
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(e) => {
+                log::warn!("读取工作区 Skill 目录失败: {} - {}", dir.display(), e);
+                return Vec::new();
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let skill_md_path = path.join("SKILL.md");
+            if !skill_md_path.exists() {
+                continue;
+            }
+            match Self::parse_skill_file_static(&skill_md_path, &path, SkillSource::Workspace) {
+                Ok(skill) => {
+                    skills.push(skill);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "解析工作区 Skill 文件失败: {} - {}",
+                        skill_md_path.display(),
+                        e
+                    );
+                }
+            }
+        }
+
+        skills
+    }
+
     /// 从单个目录加载 Skill
     ///
     /// 遍历目录下的子目录,每个子目录应包含 SKILL.md 文件
@@ -117,7 +167,7 @@ impl SkillLoader {
             }
 
             // 解析 SKILL.md 文件,失败时记录警告并跳过(不影响其他 Skill 加载)
-            match self.parse_skill_file(&skill_md_path, &path, source.clone()) {
+            match Self::parse_skill_file_static(&skill_md_path, &path, source.clone()) {
                 Ok(skill) => {
                     let name = skill.frontmatter.name.clone();
                     if let Some(idx) = seen_names.get(&name) {
@@ -140,21 +190,8 @@ impl SkillLoader {
         Ok(())
     }
 
-    /// 解析单个 SKILL.md 文件
-    ///
-    /// 读取文件内容,使用 yaml-front-matter crate 解析 YAML frontmatter 和 markdown 正文,
-    /// 并获取文件最后修改时间。
-    ///
-    /// # 参数
-    /// - `file_path`: SKILL.md 文件路径
-    /// - `dir_path`: Skill 所在目录路径(SKILL.md 的父目录)
-    /// - `source`: Skill 来源类型
-    ///
-    /// # 错误
-    /// - 文件读取失败:返回文件系统错误(通过 From<io::Error> 自动转换)
-    /// - frontmatter 解析失败:返回 CONFIG_INVALID_FORMAT 错误
-    fn parse_skill_file(
-        &self,
+    /// 解析单个 SKILL.md 文件（静态版本，供 load_workspace_skills 使用）
+    fn parse_skill_file_static(
         file_path: &Path,
         dir_path: &Path,
         source: SkillSource,

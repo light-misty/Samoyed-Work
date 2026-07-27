@@ -14,6 +14,8 @@ pub enum SkillSource {
     Project,
     /// 配置路径
     Configured,
+    /// 工作区目录({workspace}/.agent/skills/)
+    Workspace,
 }
 
 /// Skill frontmatter 元数据
