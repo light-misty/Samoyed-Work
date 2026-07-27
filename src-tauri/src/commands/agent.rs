@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tauri::{AppHandle, State};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::session_repo;
 use crate::db::sub_agent_message_repo;
@@ -14,6 +15,7 @@ use crate::events::AgentEmitter;
 use crate::models::llm::{ChatMessage, ContentPart, ToolDefinition};
 use crate::models::message::AttachmentMeta;
 use crate::models::message::Message;
+use crate::services::agent::compaction::ContextCompactor;
 use crate::services::agent::context::{AgentContext, AgentMode};
 use crate::services::agent::executor::{AgentExecutor, ContextUsagePersistFn};
 use crate::services::attachment::AttachmentService;
@@ -1010,6 +1012,247 @@ pub async fn list_sub_agent_messages(
     let conn = state.db.conn()?;
     sub_agent_message_repo::list_sub_agent_messages(&conn, &agent_id)
         .map_err(|e| CommandError::db(4001, format!("查询子 Agent 消息失败: {}", e)))
+}
+
+/// 手动压缩会话上下文返回结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualCompactionResult {
+    /// 是否实际执行了压缩
+    pub compacted: bool,
+    /// 压缩前 token 数
+    pub tokens_before: u64,
+    /// 压缩后 token 数
+    pub tokens_after: u64,
+    /// 压缩失败时的错误信息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// 附加提示信息（如"无需压缩"）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// 手动触发会话上下文压缩
+/// 检查当前会话上下文使用情况，若超过阈值则执行压缩并持久化结果到数据库
+#[tauri::command]
+pub async fn manual_compact_session(
+    session_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<ManualCompactionResult, CommandError> {
+    log::info!("manual_compact_session 请求: session_id={}", session_id);
+
+    // 1. 校验 Agent 未运行（运行中不允许压缩，避免与执行循环竞争消息列表）
+    {
+        let active = state.active_agents.lock().await;
+        if active.contains_key(&session_id) {
+            log::warn!(
+                "manual_compact_session 失败: Agent 正在运行, session_id={}",
+                session_id
+            );
+            return Err(CommandError::agent(
+                AGENT_ALREADY_RUNNING,
+                "Agent 正在运行，无法执行压缩".to_string(),
+            ));
+        }
+    }
+
+    // 2. 加载会话信息：活跃分支 ID + 该分支的消息列表
+    let (active_branch_id, messages, message_ids) = {
+        let conn = state.db.conn()?;
+        let active_branch_id =
+            crate::db::branch_repo::get_session_active_branch(&conn, &session_id)?;
+        let db_messages =
+            crate::db::message_repo::list_messages(&conn, &session_id, &active_branch_id);
+        // 转换为 ChatMessage 用于压缩器消费
+        let messages: Vec<ChatMessage> = db_messages
+            .iter()
+            .filter_map(|m| m.to_chat_message())
+            .collect();
+        // 收集所有消息 ID，用于后续删除旧消息
+        let message_ids: Vec<String> = db_messages.iter().map(|m| m.id.clone()).collect();
+        (active_branch_id, messages, message_ids)
+    };
+    log::info!(
+        "manual_compact_session: session_id={}, 活跃分支={}, 消息数={}",
+        session_id,
+        active_branch_id,
+        messages.len()
+    );
+
+    // 3. 从配置加载 CompactionConfig 并构造 ContextCompactor
+    let compaction_config = {
+        let cfg = state.config.lock().await;
+        cfg.load_app_settings()
+            .map(|s| s.general.compaction.clone())
+            .unwrap_or_default()
+    };
+    let compactor = ContextCompactor::new(compaction_config);
+
+    // 4. 获取当前默认 Provider 的上下文窗口大小
+    let context_window = {
+        let router = state.llm_router.read().await;
+        router.context_window_for(None) as u64
+    };
+
+    // 5. 估算当前消息列表的 token 数（参考 context.rs calculate_context_usage 实现）
+    use crate::services::agent::prompts::token_budget::TokenBudgetManager;
+    let tokens_before = TokenBudgetManager::estimate_tokens(
+        &messages
+            .iter()
+            .map(|m| m.content.as_str())
+            .collect::<String>(),
+    ) as u64;
+
+    // 6. 检查是否需要压缩
+    if !compactor.should_compact(tokens_before, context_window) {
+        log::info!(
+            "manual_compact_session: 无需压缩, session_id={}, tokens={}, window={}",
+            session_id,
+            tokens_before,
+            context_window
+        );
+        return Ok(ManualCompactionResult {
+            compacted: false,
+            tokens_before,
+            tokens_after: tokens_before,
+            error: None,
+            message: Some("无需压缩".to_string()),
+        });
+    }
+
+    // 7. 发射 AGENT_COMPACTION_START 事件，通知前端压缩开始
+    let _ = app_handle.emit(
+        types::AGENT_COMPACTION_START,
+        types::CompactionStartPayload {
+            session_id: session_id.clone(),
+            tokens_before,
+        },
+    );
+
+    // 8. 获取 LlmRouter 快照（Arc 克隆后释放读锁，避免跨 await 持锁）
+    let router_snapshot = {
+        let guard = state.llm_router.read().await;
+        Arc::clone(&guard)
+    };
+
+    // 9. 执行压缩（使用默认 Provider，preferred_provider_id=None）
+    let compact_result = router_snapshot
+        .compact_messages(&messages, &compactor, None)
+        .await;
+
+    match compact_result {
+        Ok(result) => {
+            // 压缩器返回 compacted=false（如消息数不超过保留数）
+            if !result.compacted {
+                log::info!(
+                    "manual_compact_session: 压缩器判定无需压缩, session_id={}",
+                    session_id
+                );
+                let _ = app_handle.emit(
+                    types::AGENT_COMPACTION_DONE,
+                    types::CompactionDonePayload {
+                        session_id: session_id.clone(),
+                        tokens_before,
+                        tokens_after: tokens_before,
+                        compacted: false,
+                        error: None,
+                    },
+                );
+                return Ok(ManualCompactionResult {
+                    compacted: false,
+                    tokens_before,
+                    tokens_after: tokens_before,
+                    error: None,
+                    message: Some("无需压缩".to_string()),
+                });
+            }
+
+            // 估算压缩后 token 数
+            let tokens_after = TokenBudgetManager::estimate_tokens(
+                &result
+                    .messages
+                    .iter()
+                    .map(|m| m.content.as_str())
+                    .collect::<String>(),
+            ) as u64;
+
+            // 10. 持久化压缩结果到 DB：先删除该分支旧消息，再插入压缩后消息
+            {
+                let conn = state.db.conn()?;
+                if !message_ids.is_empty() {
+                    crate::db::message_repo::delete_messages_by_ids(
+                        &conn,
+                        &session_id,
+                        &message_ids,
+                        &active_branch_id,
+                    )?;
+                }
+            }
+            persist_messages_to_db(
+                &state.db,
+                &session_id,
+                &result.messages,
+                &active_branch_id,
+                None,
+            )?;
+
+            log::info!(
+                "manual_compact_session 成功: session_id={}, tokens {} -> {}, 消息数 {} -> {}",
+                session_id,
+                tokens_before,
+                tokens_after,
+                messages.len(),
+                result.messages.len()
+            );
+
+            // 11. 发射 AGENT_COMPACTION_DONE 事件，通知前端压缩完成
+            let _ = app_handle.emit(
+                types::AGENT_COMPACTION_DONE,
+                types::CompactionDonePayload {
+                    session_id: session_id.clone(),
+                    tokens_before,
+                    tokens_after,
+                    compacted: true,
+                    error: None,
+                },
+            );
+
+            // 12. 返回成功结果
+            Ok(ManualCompactionResult {
+                compacted: true,
+                tokens_before,
+                tokens_after,
+                error: None,
+                message: None,
+            })
+        }
+        Err(e) => {
+            // 压缩失败（含无可用 Provider 等情况）：发射完成事件并返回带 error 的 Ok 结果
+            log::warn!(
+                "manual_compact_session 压缩失败: session_id={}, 错误: {}",
+                session_id,
+                e.message
+            );
+            let _ = app_handle.emit(
+                types::AGENT_COMPACTION_DONE,
+                types::CompactionDonePayload {
+                    session_id: session_id.clone(),
+                    tokens_before,
+                    tokens_after: tokens_before,
+                    compacted: false,
+                    error: Some(e.message.clone()),
+                },
+            );
+            Ok(ManualCompactionResult {
+                compacted: false,
+                tokens_before,
+                tokens_after: tokens_before,
+                error: Some(e.message.clone()),
+                message: None,
+            })
+        }
+    }
 }
 
 /// 将消息列表持久化到数据库

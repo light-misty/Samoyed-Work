@@ -466,6 +466,30 @@ export async function listSubAgentMessages(agentId: string): Promise<Message[]> 
   return result.data;
 }
 
+/** 手动压缩会话上下文返回结果，与 Rust ManualCompactionResult 对齐 */
+export interface ManualCompactionResult {
+  /** 是否实际执行了压缩 */
+  compacted: boolean;
+  /** 压缩前 token 数 */
+  tokensBefore: number;
+  /** 压缩后 token 数 */
+  tokensAfter: number;
+  /** 压缩失败时的错误信息 */
+  error?: string;
+  /** 附加提示信息（如"无需压缩"） */
+  message?: string;
+}
+
+/** 手动触发会话上下文压缩 */
+export async function manualCompactSession(sessionId: string): Promise<ManualCompactionResult> {
+  const result = await safeInvoke(() => invoke<ManualCompactionResult>("manual_compact_session", { sessionId }), {
+    context: "manualCompactSession",
+    showToast: true,
+  });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
 // ================================================================
 // 模板命令
 // ================================================================

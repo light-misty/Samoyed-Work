@@ -27,6 +27,10 @@ import type { NodeStatus, ToolNodeData } from "./types";
 import type { UpdateInfo } from "./services/tauri";
 import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
+// 斜杠命令相关导入
+import { SlashCommandHelp } from "./components/input/SlashCommandHelp";
+import { useSlashCommandStore } from "./stores/useSlashCommandStore";
+import { getCommandByName } from "./commands/slashCommands";
 
 /** 获取当前工作区的根目录绝对路径 */
 function getWorkspaceRoot(): string {
@@ -90,6 +94,8 @@ export default function App() {
   const { loadSettings, initThemeListener } = useSettingsStore();
   const settings = useSettingsStore((s) => s.settings);
   const { loadWorkspaces, switchWorkspace, currentWorkspaceId, workspaces, handleWorkspaceDirectoryDeleted } = useWorkspaceStore();
+  // 斜杠命令 help 覆盖层控制
+  const { openHelpOverlay } = useSlashCommandStore();
   const { loadTree, clearTree, initFileChangeListener, destroyFileChangeListener } = useFileTreeStore();
 
   const {
@@ -1007,6 +1013,138 @@ export default function App() {
     }
   }, [addNode, setExecutionStatus, sendMessage]);
 
+  // 斜杠命令分发器：根据命令名执行对应 handler
+  // 命令节点（user 节点）是 transient 的：仅添加到前端工作流，不持久化到 DB（不调用 startAgent）
+  const executeSlashCommand = useCallback(async (commandName: string, args: string) => {
+    const cmd = getCommandByName(commandName);
+    if (!cmd) return;
+
+    // 检查 Agent 运行状态：运行中且命令不允许在 Agent 运行时执行则拒绝
+    const isRunning = useWorkflowStore.getState().executionStatus === "running";
+    if (isRunning && !cmd.allowedInAgent) {
+      useToastStore.getState().addToast("warning", t("slash.toast.agentRunning"));
+      return;
+    }
+
+    switch (cmd.name) {
+      case "help": {
+        openHelpOverlay();
+        break;
+      }
+      case "compact": {
+        if (!currentSessionId) {
+          useToastStore.getState().addToast("warning", t("slash.toast.noSessionToRename"));
+          return;
+        }
+        // 插入 transient /compact 用户节点（仅前端，不持久化）
+        addNode("user", { content: "/compact", attachments: [] });
+        // 插入 CompactionNode (running 状态)，等待后端返回结果后更新
+        const compactionNodeId = addNode("compaction", { tokensBefore: 0 }, "running");
+        try {
+          const result = await tauriCmd.manualCompactSession(currentSessionId);
+          if (result.compacted) {
+            // 压缩成功：更新节点数据与状态
+            updateNode(compactionNodeId, {
+              data: { tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter },
+              status: "completed",
+            });
+            useToastStore.getState().addToast("success", t("slash.toast.compactDone", { before: result.tokensBefore, after: result.tokensAfter }));
+          } else if (result.error) {
+            // 压缩失败：标记节点失败状态（保留 tokensBefore 以满足类型要求）
+            updateNode(compactionNodeId, { status: "failed", data: { tokensBefore: result.tokensBefore, error: result.error } });
+            useToastStore.getState().addToast("error", t("slash.toast.compactFailed", { error: result.error }));
+          } else {
+            // 无需压缩：后端判断当前 token 数未达到压缩阈值
+            updateNode(compactionNodeId, {
+              data: { tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter },
+              status: "completed",
+            });
+            useToastStore.getState().addToast("info", t("slash.toast.compactNoNeed", { tokens: result.tokensBefore }));
+          }
+        } catch (err) {
+          updateNode(compactionNodeId, { status: "failed", data: { tokensBefore: 0, error: String(err) } });
+          useToastStore.getState().addToast("error", t("slash.toast.compactFailed", { error: String(err) }));
+        }
+        break;
+      }
+      case "retry": {
+        // 使用最后一次发送的文本重新执行
+        const lastUserText = lastSentTextRef.current;
+        if (!lastUserText) {
+          useToastStore.getState().addToast("warning", t("slash.toast.noMessageToRetry"));
+          return;
+        }
+        addNode("user", { content: "/retry", attachments: [] });
+        handleRetryError();
+        break;
+      }
+      case "stop": {
+        if (useWorkflowStore.getState().executionStatus !== "running") {
+          useToastStore.getState().addToast("warning", t("slash.toast.noAgentRunning"));
+          return;
+        }
+        addNode("user", { content: "/stop", attachments: [] });
+        handleStop();
+        break;
+      }
+      case "new": {
+        addNode("user", { content: "/new", attachments: [] });
+        handleNewSession();
+        break;
+      }
+      case "stats": {
+        addNode("user", { content: "/stats", attachments: [] });
+        // 插入 stats 节点，初始数据为 null，等待后端返回后更新
+        const statsNodeId = addNode("stats", { usageInfo: null });
+        try {
+          if (currentSessionId) {
+            const usage = await tauriCmd.getContextUsage(currentSessionId);
+            updateNode(statsNodeId, { data: { usageInfo: usage } });
+          } else {
+            updateNode(statsNodeId, { data: { usageInfo: null } });
+          }
+        } catch (err) {
+          console.error("[App] 获取上下文使用情况失败:", err);
+          updateNode(statsNodeId, { data: { usageInfo: null } });
+        }
+        break;
+      }
+      case "ws": {
+        if (!args || !args.trim()) {
+          useToastStore.getState().addToast("warning", t("slash.commands.ws.argHint"));
+          return;
+        }
+        const wsName = args.trim();
+        const ws = workspaces.find((w) => w.name === wsName);
+        if (!ws) {
+          useToastStore.getState().addToast("error", t("slash.toast.workspaceNotFound", { name: wsName }));
+          return;
+        }
+        addNode("user", { content: `/ws ${wsName}`, attachments: [] });
+        await switchWorkspace(ws.id);
+        break;
+      }
+      case "rename": {
+        if (!args || !args.trim()) {
+          useToastStore.getState().addToast("warning", t("slash.commands.rename.argHint"));
+          return;
+        }
+        if (!currentSessionId) {
+          useToastStore.getState().addToast("warning", t("slash.toast.noSessionToRename"));
+          return;
+        }
+        const newTitle = args.trim();
+        addNode("user", { content: `/rename ${newTitle}`, attachments: [] });
+        try {
+          await useSessionStore.getState().updateSessionTitle(currentSessionId, newTitle);
+        } catch (err) {
+          console.error("[App] 重命名会话失败:", err);
+        }
+        break;
+      }
+    }
+  }, [t, currentSessionId, addNode, updateNode, openHelpOverlay, handleRetryError, handleStop, handleNewSession, workspaces, switchWorkspace]);
+
   // 监听键盘快捷键
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1081,6 +1219,7 @@ export default function App() {
                     executionStatus={executionStatus}
                     onStop={handleStop}
                     centered={nodes.length === 0}
+                    onSlashCommand={executeSlashCommand}
                   />
                 }
               />
@@ -1134,6 +1273,8 @@ export default function App() {
       <Suspense fallback={<LazyFallback />}>
         <SettingsDialog />
       </Suspense>
+      {/* 斜杠命令帮助覆盖层（由 useSlashCommandStore 控制显隐） */}
+      <SlashCommandHelp />
       <Suspense fallback={<LazyFallback />}>
         {versionHistoryOpen && currentWorkspaceId && (
           <VersionHistoryPanel

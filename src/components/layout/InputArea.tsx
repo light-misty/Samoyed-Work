@@ -4,6 +4,8 @@ import { Icon } from "../common/Icon";
 import { ProviderSelector } from "../common/ProviderSelector";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 import { WorkspaceGitStatus } from "./WorkspaceGitStatus";
+import { SlashCommandMenu } from "../input/SlashCommandMenu";
+import { SLASH_COMMANDS, matchCommand, parseCommandArgs, type SlashCommand } from "../../commands/slashCommands";
 import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
@@ -11,6 +13,7 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { useAgentModeStore } from "../../stores/useAgentModeStore";
+import { useToastStore } from "../../stores/useToastStore";
 import { formatSize, matchesShortcut } from "../../utils/format";
 import { switchAgentMode } from "../../services/tauri";
 import type { PromptTemplate } from "../../types";
@@ -23,12 +26,18 @@ interface InputAreaProps {
   onStop?: () => void;
   /** 是否为居中布局（空会话状态）：居中时限制最大宽度 */
   centered?: boolean;
+  /** 斜杠命令执行回调：当用户选择或执行斜杠命令时调用 */
+  onSlashCommand?: (commandName: string, args: string) => void;
 }
 
-export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false }: InputAreaProps) {
+export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false, onSlashCommand }: InputAreaProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
+  // 斜杠命令菜单状态
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashMenuCommands, setSlashMenuCommands] = useState<SlashCommand[]>([]);
+  const [highlightIndex, setHighlightIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 保存模板插入时的 focus/height 定时器，组件卸载时清理
@@ -85,15 +94,112 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     clearAttachments();
   }, [text, disabled, onSend, attachments.length, clearAttachments, configReady]);
 
+  // 文本变化处理：同步 textarea 值到 state，并检测斜杠命令
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
+    // 检测斜杠命令：以 / 开头时弹出命令菜单
+    if (newText.startsWith("/")) {
+      const { fuzzyMatches } = matchCommand(newText);
+      if (fuzzyMatches.length > 0) {
+        setSlashMenuCommands(fuzzyMatches);
+        setHighlightIndex(0);
+        setSlashMenuOpen(true);
+      } else {
+        setSlashMenuOpen(false);
+      }
+    } else {
+      setSlashMenuOpen(false);
+    }
+  }, []);
+
+  // 命令选择回调：从菜单选择命令时执行
+  const handleSlashCommandSelect = useCallback((cmd: SlashCommand) => {
+    const agentRunning = executionStatus === "running";
+    // 检查 Agent 运行状态
+    if (agentRunning && !cmd.allowedInAgent) {
+      useToastStore.getState().addToast("warning", t("slash.toast.agentRunning"));
+      setSlashMenuOpen(false);
+      return;
+    }
+    // 从当前 text 解析参数
+    const parsed = parseCommandArgs(text);
+    const args = parsed?.args ?? "";
+    onSlashCommand?.(cmd.name, args);
+    setText("");
+    setSlashMenuOpen(false);
+  }, [executionStatus, t, text, onSlashCommand]);
+
+  // / 按钮点击：弹出完整命令列表
+  const handleSlashTrigger = useCallback(() => {
+    setSlashMenuCommands(SLASH_COMMANDS);
+    setHighlightIndex(0);
+    setSlashMenuOpen(true);
+    // 若当前输入不以 / 开头，则在前面插入 / 并聚焦输入框
+    if (!text.startsWith("/")) {
+      setText("/" + text);
+      textareaRef.current?.focus();
+    }
+  }, [text]);
+
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      // 斜杠命令菜单导航：菜单打开时拦截方向键/回车/Esc
+      if (slashMenuOpen && slashMenuCommands.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHighlightIndex((prev) => (prev + 1) % slashMenuCommands.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHighlightIndex((prev) => (prev - 1 + slashMenuCommands.length) % slashMenuCommands.length);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setSlashMenuOpen(false);
+          return;
+        }
+        if (e.key === "Enter" || matchesShortcut(e, sendMessageShortcut)) {
+          e.preventDefault();
+          const selected = slashMenuCommands[highlightIndex];
+          if (selected) {
+            handleSlashCommandSelect(selected);
+          }
+          return;
+        }
+      }
+
       // 发送消息快捷键（从设置中读取）
       if (matchesShortcut(e, sendMessageShortcut)) {
+        // 检查是否为斜杠命令
+        if (text.startsWith("/")) {
+          const { exactMatch, fuzzyMatches } = matchCommand(text);
+          if (exactMatch) {
+            // 精确匹配：直接执行命令
+            e.preventDefault();
+            const parsed = parseCommandArgs(text);
+            const command = parsed?.command ?? exactMatch.name;
+            const args = parsed?.args ?? "";
+            onSlashCommand?.(command, args);
+            setText("");
+            setSlashMenuOpen(false);
+            return;
+          }
+          if (fuzzyMatches.length === 0) {
+            // 无匹配，走正常发送
+            handleSend();
+            return;
+          }
+          // 多匹配，保持菜单打开
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         handleSend();
       }
     },
-    [handleSend, sendMessageShortcut]
+    [handleSend, sendMessageShortcut, slashMenuOpen, slashMenuCommands, highlightIndex, text, onSlashCommand, handleSlashCommandSelect]
   );
 
   // 输入框最大高度
@@ -256,6 +362,17 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   return (
     <div className={`input-area-wrapper ${centered ? "input-area-wrapper-centered" : ""}`} role="form" aria-label={t('inputArea.messageInput')}>
       <div className="input-container-wrapper" style={{ position: "relative" }}>
+        {/* 斜杠命令选择菜单（绝对定位在输入框上方） */}
+        {slashMenuOpen && slashMenuCommands.length > 0 && (
+          <SlashCommandMenu
+            commands={slashMenuCommands}
+            highlightIndex={highlightIndex}
+            onSelect={handleSlashCommandSelect}
+            onClose={() => setSlashMenuOpen(false)}
+            centered={centered}
+            agentRunning={executionStatus === "running"}
+          />
+        )}
         {/* 附件预览条 */}
         {attachments.length > 0 && (
           <div className="attachment-preview-bar">
@@ -306,7 +423,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             placeholder={t('inputArea.placeholder')}
             aria-label={t('inputArea.messageInputBox')}
             value={text}
-            onChange={(e) => { setText(e.target.value); handleInput(); }}
+            onChange={(e) => { handleTextChange(e.target.value); handleInput(); }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             disabled={disabled}
@@ -314,9 +431,33 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
           <div className="input-inner-bottom">
             <div className="input-inner-left">
+              {/* centered 模式下，/ 按钮放在 WorkspaceSelector 之前 */}
+              {centered && (
+                <button
+                  className="input-btn slash-trigger-btn"
+                  title={t("slash.button.tooltip")}
+                  onClick={handleSlashTrigger}
+                  type="button"
+                  aria-label={t("slash.button.tooltip")}
+                >
+                  <Icon name="keyboard" />
+                </button>
+              )}
               {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
             </div>
             <div className="input-inner-right">
+              {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前 */}
+              {!centered && (
+                <button
+                  className="input-btn slash-trigger-btn"
+                  title={t("slash.button.tooltip")}
+                  onClick={handleSlashTrigger}
+                  type="button"
+                  aria-label={t("slash.button.tooltip")}
+                >
+                  <Icon name="keyboard" />
+                </button>
+              )}
               <ModeSelector dropdownUp={!centered} />
               <ProviderSelector dropdownUp={!centered} />
               <div className="input-actions-right">

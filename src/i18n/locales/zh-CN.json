@@ -909,5 +909,85 @@
     "showMoreSessions": "显示更多会话 ({{count}})"
   },
   "inputArea.removeAttachment": "移除 {{name}}",
-  "update.checkFailedWithError": "检查更新失败: {{error}}"
+  "update.checkFailedWithError": "检查更新失败: {{error}}",
+  "slash": {
+    "commands": {
+      "help": {
+        "desc": "显示斜杠命令帮助",
+        "argHint": ""
+      },
+      "compact": {
+        "desc": "手动触发上下文压缩",
+        "argHint": ""
+      },
+      "retry": {
+        "desc": "重新执行上一条用户消息",
+        "argHint": ""
+      },
+      "stop": {
+        "desc": "停止当前正在执行的 Agent",
+        "argHint": ""
+      },
+      "new": {
+        "desc": "创建新会话",
+        "argHint": ""
+      },
+      "stats": {
+        "desc": "展示当前会话的 Token 用量统计",
+        "argHint": ""
+      },
+      "ws": {
+        "desc": "切换到指定工作区",
+        "argHint": "请提供工作区名称，用法：/ws <工作区名称>"
+      },
+      "rename": {
+        "desc": "重命名当前会话",
+        "argHint": "请提供新标题，用法：/rename <标题>"
+      }
+    },
+    "menu": {
+      "title": "斜杠命令",
+      "empty": "无匹配命令",
+      "hint": "上下键选择，回车执行，Esc 关闭",
+      "disabledInAgent": "Agent 运行中不可用"
+    },
+    "help": {
+      "title": "斜杠命令帮助",
+      "command": "命令",
+      "usage": "用法",
+      "description": "描述",
+      "availability": "Agent 运行时",
+      "allowed": "允许",
+      "disabled": "禁用",
+      "close": "关闭"
+    },
+    "toast": {
+      "agentRunning": "Agent 正在运行，无法执行此命令",
+      "noAgentRunning": "没有正在运行的 Agent",
+      "noMessageToRetry": "没有可重试的消息",
+      "workspaceNotFound": "未找到工作区 {{name}}",
+      "noSessionToRename": "当前无会话可重命名",
+      "compactNoNeed": "无需压缩（当前 {{tokens}} tokens）",
+      "compactFailed": "压缩失败：{{error}}",
+      "compactDone": "压缩完成（{{before}} → {{after}} tokens）"
+    },
+    "stats": {
+      "title": "Token 用量统计",
+      "noData": "暂无统计数据",
+      "model": "模型",
+      "contextWindow": "上下文窗口",
+      "totalTokens": "总 Token",
+      "inputTokens": "输入 Token",
+      "outputTokens": "输出 Token",
+      "systemPrompt": "系统提示",
+      "functionDefs": "工具定义",
+      "conversation": "对话",
+      "usageRatio": "占用比例",
+      "cacheHitRate": "缓存命中率",
+      "messageCount": "消息数"
+    },
+    "button": {
+      "tooltip": "斜杠命令"
+    }
+  }
 }
