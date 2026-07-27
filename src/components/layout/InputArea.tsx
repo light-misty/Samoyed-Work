@@ -241,13 +241,12 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           e.preventDefault();
           const item = getHighlightedItem(highlightIndex);
           if (item) {
-            if (item.kind === "command") {
-              handleSlashCommandSelect(item.cmd);
-            } else {
-              onSkillSelect?.(item.skill.name);
-              setText("");
-              setSlashMenuOpen(false);
-            }
+              if (item.kind === "command") {
+                handleSlashCommandSelect(item.cmd);
+              } else {
+                setText(`/${item.skill.name} `);
+                setSlashMenuOpen(false);
+              }
           }
           return;
         }
@@ -270,19 +269,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             return;
           }
           if (fuzzyMatches.length === 0) {
-            // 检查是否有匹配的 Skill
-            const afterSlash = text.slice(1);
-            const spaceIndex = afterSlash.indexOf(" ");
-            const queryText = spaceIndex === -1 ? afterSlash : afterSlash.slice(0, spaceIndex);
-            const matchingSkill = slashMenuSkills.find((s) => s.name === queryText);
-            if (matchingSkill) {
-              e.preventDefault();
-              onSkillSelect?.(matchingSkill.name);
-              setText("");
-              setSlashMenuOpen(false);
-              return;
-            }
-            // 无匹配，走正常发送
+            // 无命令匹配，走正常发送（技能匹配也通过 App.handleSend 中的技能检测处理）
+            setSlashMenuOpen(false);
             handleSend();
             return;
           }
@@ -494,9 +482,9 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
               highlightIndex={highlightIndex}
               onSelect={handleSlashCommandSelect}
               onSkillSelect={(skill) => {
-                onSkillSelect?.(skill.name);
-                setText("");
+                setText(`/${skill.name} `);
                 setSlashMenuOpen(false);
+                textareaRef.current?.focus();
               }}
               onClose={() => setSlashMenuOpen(false)}
               agentRunning={executionStatus === "running"}

@@ -624,6 +624,43 @@ export default function App() {
       return;
     }
 
+    // 检测是否为技能加载请求（/技能名），将技能选择直接插入输入框后通过发送按钮触发此流程
+    if (text.startsWith("/")) {
+      const afterSlash = text.slice(1);
+      const spaceIndex = afterSlash.indexOf(" ");
+      const skillName = spaceIndex === -1 ? afterSlash : afterSlash.slice(0, spaceIndex);
+      const userArgs = spaceIndex === -1 ? "" : afterSlash.slice(spaceIndex + 1).trim();
+
+      if (skillName) {
+        const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+        const workspacePath = currentWorkspace?.path;
+
+        try {
+          const skillContent = await tauriCmd.getSkillContent(skillName, workspacePath);
+          // 技能存在，走技能加载流程
+          resetRefs();
+          addNode("user", { content: userArgs, attachments: [], skillName });
+          setExecutionStatus("running");
+
+          const workingDirectory = currentWorkspace?.path;
+          const workspaceId = currentWorkspaceId;
+          const providerId = useSettingsStore.getState().preferredProviderId;
+          const options = {
+            ...(workingDirectory ? { workingDirectory } : {}),
+            ...(workspaceId ? { workspaceId } : {}),
+            ...(providerId ? { providerId } : {}),
+          };
+          lastSentOptionsRef.current = options;
+          lastSentTextRef.current = text;
+
+          await sendMessage(text, { ...options, skillContent });
+          return;
+        } catch {
+          // 技能不存在，当作普通文本消息发送
+        }
+      }
+    }
+
     resetRefs();
     lastSentTextRef.current = text;
 
