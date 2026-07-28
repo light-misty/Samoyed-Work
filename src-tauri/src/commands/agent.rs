@@ -215,9 +215,6 @@ pub async fn start_agent(
     let config = Arc::clone(&state.config);
     let doc_service = Arc::clone(&state.doc_service);
 
-    // 在进入 async move 闭包前克隆 skill_content（用于标题生成）
-    let skill_content_for_title = skill_content.clone();
-
     // 同步前端传入的 Agent 模式，确保待机状态切换后新会话使用正确模式
     state
         .agent_mode_manager
@@ -296,9 +293,10 @@ pub async fn start_agent(
 
     // 自动生成会话标题（后台任务，不阻塞主流程）
     // 仅当会话标题为默认值（"新会话"开头）时才生成
+    // 使用用户原始 prompt 生成标题，不使用 skill_content（避免技能内容干扰标题）
     {
         let title_sid = session_id.clone();
-        let title_prompt = skill_content_for_title.unwrap_or_else(|| prompt.clone());
+        let title_prompt = prompt.clone();
         let title_db = Arc::clone(&state.db);
         let title_emitter = AgentEmitter::new(app_handle.clone());
         let title_llm_router = Arc::clone(&state.llm_router);
