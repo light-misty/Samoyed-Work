@@ -250,12 +250,12 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           width: max-content;
           min-width: 320px;
           max-width: 480px;
+          max-height: 200px;
           background: var(--color-bg-elevated);
           border: 1px solid var(--color-border-light);
           border-radius: var(--radius-md);
           box-shadow: var(--shadow-lg);
           z-index: 200;
-          overflow: hidden;
           display: flex;
           flex-direction: column;
         }
@@ -301,6 +301,8 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           display: flex;
           flex-direction: column;
           gap: 1px;
+          flex: 1;
+          min-height: 0;
           scrollbar-width: none;
         }
         .slash-menu-list::-webkit-scrollbar {

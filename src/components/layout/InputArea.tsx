@@ -191,11 +191,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     setSlashMenuSkills([]);
     setHighlightIndex(0);
     setSlashMenuOpen(true);
-    // 若当前输入不以 / 开头，则在前面插入 / 并聚焦输入框
-    if (!text.startsWith("/")) {
-      setText("/" + text);
-      textareaRef.current?.focus();
-    }
     // 异步获取 Skills（不阻塞菜单打开）
     const ws = workspaces.find((w) => w.id === currentWorkspaceId);
     if (ws?.path) {
