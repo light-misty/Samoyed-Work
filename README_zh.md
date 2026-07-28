@@ -10,8 +10,8 @@
 
 [简体中文](./README_zh.md) | [English](./README.md)
 
-<img src="assets/screenshots/Chinese-1.1.0-main.png" alt="Samoyed Work Screenshot" width="800" />
-<img src="assets/screenshots/Chinese-1.1.0-workflow.png" alt="Samoyed Work Screenshot" width="800" />
+<img src="assets/screenshots/Chinese-1.1.5-main.png" alt="Samoyed Work Screenshot" width="800" />
+<img src="assets/screenshots/Chinese-1.1.5-workflow.png" alt="Samoyed Work Screenshot" width="800" />
 
 </div>
 
