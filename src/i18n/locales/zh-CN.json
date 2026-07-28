@@ -987,6 +987,12 @@
     },
     "button": {
       "tooltip": "斜杠命令"
+    },
+    "superpowers": {
+      "enable": "启用 Superpowers Skill 自动加载",
+      "disable": "禁用 Superpowers Skill 自动加载",
+      "hintOn": "Superpowers 已启用，会话将自动加载 Superpowers 框架",
+      "hintOff": "开启后新消息将自动加载 Superpowers 开发框架"
     }
   }
 }

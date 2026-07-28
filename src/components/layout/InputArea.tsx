@@ -10,6 +10,7 @@ import type { ExecutionStatus } from "../../types/workflow";
 import type { AttachmentMeta } from "../../types/session";
 import type { SkillInfo } from "../../types";
 import { useAttachmentStore, inferAttachmentType, SUPPORTED_ATTACHMENT_MIME_TYPES, MAX_IMAGE_SIZE, MAX_TEXT_SIZE, MAX_DOCUMENT_SIZE, MAX_ATTACHMENT_COUNT, hasImageAttachments } from "../../stores/useAttachmentStore";
+import { BUILTIN_SUPERPOWERS_NAME, BUILTIN_SUPERPOWERS_DESCRIPTION } from "../../commands/superpowersContent";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
@@ -36,6 +37,24 @@ interface InputAreaProps {
 // 新建会话页面隐藏的斜杠命令（这些命令在空会话状态下无意义）
 const NEW_SESSION_HIDDEN_COMMANDS = new Set(["compact", "retry", "stop", "new", "stats"]);
 
+// 内置 superpowers SkillInfo
+const BUILTIN_SUPERPOWERS_SKILL: SkillInfo = {
+  name: BUILTIN_SUPERPOWERS_NAME,
+  description: BUILTIN_SUPERPOWERS_DESCRIPTION,
+  when: null,
+  modes: [],
+  tags: [],
+  readOnly: true,
+  source: "builtin",
+};
+
+// 确保内置 superpowers skill 始终出现在列表中
+function mergeBuiltinSuperpowers(skills: SkillInfo[]): SkillInfo[] {
+  const exists = skills.some((s) => s.name === BUILTIN_SUPERPOWERS_NAME);
+  if (exists) return skills;
+  return [BUILTIN_SUPERPOWERS_SKILL, ...skills];
+}
+
 export function InputArea({ onSend, disabled = false, executionStatus = "idle", onStop, centered = false, onSlashCommand, onSkillSelect }: InputAreaProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
@@ -43,7 +62,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   // 斜杠命令菜单状态
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuCommands, setSlashMenuCommands] = useState<SlashCommand[]>([]);
-  const [slashMenuSkills, setSlashMenuSkills] = useState<SkillInfo[]>([]);
+  const [slashMenuSkills, setSlashMenuSkills] = useState<SkillInfo[]>(() => [BUILTIN_SUPERPOWERS_SKILL]);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +156,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         const ws = workspaces.find((w) => w.id === currentWorkspaceId);
         if (ws?.path) {
           listSkills(ws.path).then((skills) => {
-            setSlashMenuSkills(skills);
+            setSlashMenuSkills(mergeBuiltinSuperpowers(skills));
           }).catch(() => {});
         }
       }
@@ -181,7 +200,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     const ws = workspaces.find((w) => w.id === currentWorkspaceId);
     if (ws?.path) {
       listSkills(ws.path).then((skills) => {
-        setSlashMenuSkills(skills);
+        setSlashMenuSkills(mergeBuiltinSuperpowers(skills));
       }).catch(() => {
         // Skills 获取失败不影响菜单使用
       });

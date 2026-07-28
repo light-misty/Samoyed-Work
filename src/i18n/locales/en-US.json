@@ -987,6 +987,12 @@
     },
     "button": {
       "tooltip": "Slash Commands"
+    },
+    "superpowers": {
+      "enable": "Enable Superpowers Skill auto-load",
+      "disable": "Disable Superpowers Skill auto-load",
+      "hintOn": "Superpowers enabled - sessions will auto-load the Superpowers framework",
+      "hintOff": "Enable to auto-load the Superpowers development framework"
     }
   }
 }

@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { SlashCommand } from "../../commands/slashCommands";
 import type { SkillInfo } from "../../types";
+import { useSuperpowersStore } from "../../stores/useSuperpowersStore";
+import { BUILTIN_SUPERPOWERS_NAME } from "../../commands/superpowersContent";
 
 interface SlashCommandMenuProps {
   /** 过滤后的命令列表 */
@@ -63,6 +65,8 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const superpowersEnabled = useSuperpowersStore((s) => s.enabled);
+  const toggleSuperpowers = useSuperpowersStore((s) => s.toggle);
 
   const renderItems = buildRenderItems(commands, skills);
 
@@ -111,6 +115,7 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
             }
             if (item.kind === "skill" && item.skill) {
               const isHighlighted = idx === highlightIndex;
+              const isSuperpowers = item.skill.name === BUILTIN_SUPERPOWERS_NAME;
               return (
                 <div
                   key={`skill-${item.skill.name}`}
@@ -119,12 +124,39 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
                   role="option"
                   aria-selected={isHighlighted}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => onSkillSelect(item.skill!)}
+                  onClick={() => {
+                    if (isSuperpowers) return;
+                    onSkillSelect(item.skill!);
+                  }}
                 >
                   <div className="slash-menu-item-row">
                     <div className="slash-menu-item-name">/{item.skill.name}</div>
                     <div className="slash-menu-item-desc">{item.skill.description}</div>
+                    {isSuperpowers && (
+                      <button
+                        className={`superpowers-toggle ${superpowersEnabled ? "superpowers-toggle-on" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          toggleSuperpowers();
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                        }}
+                        title={t(superpowersEnabled ? "slash.superpowers.disable" : "slash.superpowers.enable")}
+                      >
+                        <div className="superpowers-toggle-track">
+                          <div className="superpowers-toggle-thumb" />
+                        </div>
+                      </button>
+                    )}
                   </div>
+                  {isSuperpowers && (
+                    <div className="slash-menu-superpowers-hint">
+                      {t(superpowersEnabled ? "slash.superpowers.hintOn" : "slash.superpowers.hintOff")}
+                    </div>
+                  )}
                 </div>
               );
             }
@@ -165,6 +197,53 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
       </div>
 
       <style>{`
+        .superpowers-toggle {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          margin-left: auto;
+          padding: 2px;
+          border-radius: 12px;
+          cursor: pointer;
+          background: transparent;
+          border: none;
+          transition: opacity 0.15s;
+        }
+        .superpowers-toggle:hover {
+          opacity: 0.9;
+        }
+        .superpowers-toggle-track {
+          width: 32px;
+          height: 18px;
+          border-radius: 10px;
+          background: var(--color-border-strong);
+          position: relative;
+          transition: background 0.2s;
+        }
+        .superpowers-toggle-on .superpowers-toggle-track {
+          background: var(--color-accent, #3b82f6);
+        }
+        .superpowers-toggle-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: white;
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          transition: transform 0.2s;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .superpowers-toggle-on .superpowers-toggle-thumb {
+          transform: translateX(14px);
+        }
+        .slash-menu-superpowers-hint {
+          font-size: 10px;
+          color: var(--color-accent, #3b82f6);
+          margin-top: 2px;
+          padding-left: 2px;
+        }
         .slash-menu-container {
           position: absolute;
           left: 0;

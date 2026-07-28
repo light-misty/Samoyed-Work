@@ -32,6 +32,8 @@ import { SlashCommandHelp } from "./components/input/SlashCommandHelp";
 import { StatsOverlay } from "./components/input/StatsOverlay";
 import { useSlashCommandStore } from "./stores/useSlashCommandStore";
 import { getCommandByName } from "./commands/slashCommands";
+import { useSuperpowersStore } from "./stores/useSuperpowersStore";
+import { BUILTIN_SUPERPOWERS_NAME, BUILTIN_SUPERPOWERS_CONTENT } from "./commands/superpowersContent";
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
 const PreviewOverlay = lazy(() =>
@@ -533,6 +535,28 @@ export default function App() {
       const userArgs = spaceIndex === -1 ? "" : afterSlash.slice(spaceIndex + 1).trim();
 
       if (skillName) {
+        // 内置 superpowers 特殊处理：无需后端文件
+        if (skillName === BUILTIN_SUPERPOWERS_NAME) {
+          resetRefs();
+          addNode("user", { content: userArgs, attachments: [], skillName });
+          setExecutionStatus("running");
+
+          const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+          const workingDirectory = currentWorkspace?.path;
+          const workspaceId = currentWorkspaceId;
+          const providerId = useSettingsStore.getState().preferredProviderId;
+          const options = {
+            ...(workingDirectory ? { workingDirectory } : {}),
+            ...(workspaceId ? { workspaceId } : {}),
+            ...(providerId ? { providerId } : {}),
+          };
+          lastSentOptionsRef.current = options;
+          lastSentTextRef.current = text;
+
+          await sendMessage(text, { ...options, skillContent: BUILTIN_SUPERPOWERS_CONTENT });
+          return;
+        }
+
         const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
         const workspacePath = currentWorkspace?.path;
 
@@ -583,11 +607,17 @@ export default function App() {
     const workspaceId = currentWorkspaceId;
     // 获取用户为当前会话选择的 Provider ID，传递给 Agent 优先使用
     const providerId = useSettingsStore.getState().preferredProviderId;
-    const options = {
+    const options: Record<string, unknown> = {
       ...(workingDirectory ? { workingDirectory } : {}),
       ...(workspaceId ? { workspaceId } : {}),
       ...(providerId ? { providerId } : {}),
     };
+
+    // superpowers 滑块开启时自动注入内置 skill 内容
+    const superpowersEnabled = useSuperpowersStore.getState().enabled;
+    if (superpowersEnabled) {
+      options.skillContent = BUILTIN_SUPERPOWERS_CONTENT;
+    }
 
     // 保存发送选项，用于错误重试
     lastSentOptionsRef.current = options;
@@ -652,6 +682,13 @@ export default function App() {
       ...(workspaceId ? { workspaceId } : {}),
       ...(providerId ? { providerId } : {}),
     };
+
+    // superpowers 滑块开启时自动注入内置 skill 内容
+    const superpowersEnabled = useSuperpowersStore.getState().enabled;
+    if (superpowersEnabled) {
+      options.skillContent = BUILTIN_SUPERPOWERS_CONTENT;
+    }
+
     lastSentOptionsRef.current = options;
 
     // 先清空 pendingBranchSend，避免 sendMessage 异步过程中重复触发
