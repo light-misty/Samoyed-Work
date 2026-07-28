@@ -63,3 +63,79 @@ fn json_merge(target: &mut serde_json::Value, source: &serde_json::Value) {
         }
     }
 }
+
+/// 检查 Git Bash 是否可用
+/// 优先检查用户配置的路径，若已配置则检测文件是否存在；
+/// 若未配置或文件不存在，则从 PATH 环境变量自动检测
+#[tauri::command]
+pub async fn check_git_bash_path(state: State<'_, AppState>) -> Result<bool, CommandError> {
+    let config = state.config.lock().await;
+    let settings = config.load_app_settings().map_err(|e| {
+        log::error!("加载应用设置失败: {}", e);
+        e
+    })?;
+
+    // 1. 用户已配置路径且文件存在
+    if !settings.git_bash_path.is_empty() {
+        let path = std::path::Path::new(&settings.git_bash_path);
+        if path.exists() {
+            return Ok(true);
+        }
+    }
+
+    // 2. 从 PATH 环境变量自动检测
+    let found = find_git_bash_from_path_inner();
+    Ok(found)
+}
+
+/// 从 PATH 环境变量查找 Git Bash（与 builtin.rs 中逻辑一致）
+fn find_git_bash_from_path_inner() -> bool {
+    let path_env = match std::env::var_os("PATH") {
+        Some(v) => v,
+        None => return false,
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::path::PathBuf;
+        let paths: Vec<PathBuf> = std::env::split_paths(&path_env).collect();
+
+        // 策略 a: 直接查找 bash.exe
+        for dir in &paths {
+            let bash_candidate = dir.join("bash.exe");
+            if bash_candidate.exists() {
+                return true;
+            }
+        }
+
+        // 策略 b: 从 git.exe 推断 bash.exe 位置
+        for dir in &paths {
+            let git_candidate = dir.join("git.exe");
+            if git_candidate.exists() {
+                if let Some(parent) = dir.parent() {
+                    if parent.join("bin").join("bash.exe").exists() {
+                        return true;
+                    }
+                    if parent.join("usr").join("bin").join("bash.exe").exists() {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let paths: Vec<&std::path::Path> = std::env::split_paths(&path_env)
+            .map(|p| p.as_path())
+            .collect();
+        for dir in paths {
+            let bash_candidate = dir.join("bash");
+            if bash_candidate.exists() {
+                return true;
+            }
+        }
+    }
+
+    false
+}

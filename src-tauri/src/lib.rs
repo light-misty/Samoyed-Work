@@ -753,6 +753,7 @@ pub fn run() {
             // 设置命令
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::settings::check_git_bash_path,
             // Agent 命令
             commands::agent::start_agent,
             commands::agent::stop_agent,

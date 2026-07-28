@@ -296,6 +296,24 @@ export default function App() {
     };
   }, [handleWorkspaceDirectoryDeleted]);
 
+  // 应用启动后检查 Git Bash 是否可用（延迟3秒，避免启动时阻塞）
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (import.meta.env.DEV) return;
+      try {
+        if (!settings.gitBashPath) {
+          const found = await tauriCmd.checkGitBashPath();
+          if (!found) {
+            useToastStore.getState().addToast("warning", t("settings.general.gitBashPathNotFound"));
+          }
+        }
+      } catch {
+        // 静默处理检测失败
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [settings.gitBashPath, t]);
+
   // 应用启动后自动静默检查更新（延迟5秒，避免启动时阻塞；开发环境下跳过自动检查）
   // 静默检查不弹出"正在检查更新"的 Toast，仅在发现新版本时通知用户
   useEffect(() => {

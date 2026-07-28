@@ -392,6 +392,13 @@ export async function updateSettings(settings: Record<string, unknown>): Promise
   if (!result.ok) throw result.error.raw;
 }
 
+/** 检查 Git Bash 是否可用 */
+export async function checkGitBashPath(): Promise<boolean> {
+  const result = await safeInvoke(() => invoke<boolean>("check_git_bash_path"), { context: "checkGitBashPath" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
 // ================================================================
 // Agent 命令
 // ================================================================
