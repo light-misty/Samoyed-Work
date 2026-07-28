@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData } from "../types";
+import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData, ToolNodeData, ThinkingNodeData, ContentNodeData } from "../types";
 import type { Message, BranchGroupInfo } from "../types/session";
 import type { ContextUsageInfo } from "../types/settings";
 
 import { extractToolPath } from "../utils/format";
 import { useWorkspaceStore } from "./useWorkspaceStore";
 import { useSettingsStore } from "./useSettingsStore";
-import { onAgentContextUpdate, type QuestionItem } from "../services/event";
+import { onAgentContextUpdate, type QuestionItem, type ToolCallPayload, type ToolResultPayload } from "../services/event";
 import * as tauriCmd from "../services/tauri";
 import i18n from "../i18n";
 
@@ -81,6 +81,29 @@ export type BackgroundAgentEvent =
   | { type: "sub_agent_tool_call"; agentId: string; toolName: string; arguments: Record<string, unknown>; iteration: number }
   | { type: "question"; questionId: string; questions: QuestionItem[] };
 
+/** addToolNodeFromEvent 方法的返回结果 */
+export interface AddToolNodeEventResult {
+  /** 创建或更新的工具节点 ID */
+  nodeId: string;
+  /** 被 tool_call 关闭的 streaming content 节点 ID（若有）。
+   *  调用方应将其赋值给 lastClosedStreamingNodeIdRef，供后续 is_streaming=false
+   *  的最终内容事件更新该节点（修复 LLM 在 tool_use 块后继续输出文本导致的截断问题） */
+  closedStreamingNodeId?: string;
+}
+
+/**
+ * addToolNodeFromEvent 接收的 ref 快照（由调用方传入）。
+ * 使用快照而非 ref 对象，因为 store 方法是同步的，快照在方法执行期间不会变化。
+ */
+export interface ToolEventRefs {
+  /** 当前 thinking 节点 ID（若有），创建新工具节点前会关闭它 */
+  thinkingNodeId?: string | null;
+  /** 当前 streaming content 节点 ID（若有），创建新工具节点前会关闭它并记录到返回结果 */
+  streamingNodeId?: string | null;
+  /** 当前迭代轮次，用作 payload.iteration 缺失时的回退值 */
+  currentIteration?: number | undefined;
+}
+
 interface WorkflowState {
   nodes: WorkflowNode[];
   executionStatus: ExecutionStatus;
@@ -111,6 +134,18 @@ interface WorkflowState {
 
   addNode: <T extends WorkflowNodeType>(type: T, data: NodeDataMap[T], status?: NodeStatus, iteration?: number) => string;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
+  /** 直接通过 ToolCall 事件创建/更新工具节点（绕过 React state 批处理）。
+   *  避免一次 LLM 响应包含多个 tool_calls 时 React 18 自动批处理导致 setState 合并、
+   *  前面的事件丢失、工具节点永久停留在 running 状态。
+   *  - callId 去重：已存在同 callId 节点时仅更新参数（流式阶段提前发射后重新发射场景）
+   *  - streaming_ 节点复用：真实 callId 到达时复用流式阶段创建的 streaming_X 节点
+   *  - 关闭 thinking/streaming：创建新节点前关闭已打开的 thinking/streaming content 节点
+   *  返回创建/更新的节点 ID 及被关闭的 streaming 节点 ID（若有） */
+  addToolNodeFromEvent: (payload: ToolCallPayload, refs?: ToolEventRefs) => AddToolNodeEventResult | null;
+  /** 直接通过 ToolResult 事件更新工具节点状态（绕过 React state 批处理）。
+   *  - 优先通过 callId 精确匹配 running 工具节点
+   *  - 回退到最后一个 running 工具节点（callId 缺失或不匹配时） */
+  updateToolResultFromEvent: (payload: ToolResultPayload) => void;
   removeNode: (id: string) => void;
   clearNodes: () => void;
   setExecutionStatus: (status: ExecutionStatus) => void;
@@ -458,6 +493,180 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) => (n.id === id ? { ...n, ...updates } : n)),
     }));
+  },
+
+  // 直接通过 ToolCall 事件创建/更新工具节点，绕过 React state 批处理
+  // 确保同一 tick 内多个 tool_call 事件都能被处理
+  addToolNodeFromEvent: (payload, refs) => {
+    const { nodes } = get();
+    const workspaceRoot = getWorkspaceRoot();
+    const filePath = extractToolPath(payload.toolName, payload.arguments, workspaceRoot);
+
+    // 1. 通过 callId 去重：如果已存在相同 callId 的工具节点，仅更新参数
+    //    这处理了流式阶段提前发射（参数不完整）后，流式结束重新发射（参数完整）的场景
+    //    重新发射时不应关闭 thinking/streaming 节点，因为它们可能属于下一迭代
+    const existingToolNode = payload.callId
+      ? nodes.find((n) => n.type === "tool" && (n.data as ToolNodeData).callId === payload.callId)
+      : undefined;
+
+    if (existingToolNode) {
+      const existingData = existingToolNode.data as ToolNodeData;
+      const updatedNodes = nodes.map((n) =>
+        n.id === existingToolNode.id
+          ? {
+              ...n,
+              data: {
+                ...existingData,
+                toolName: payload.toolName,
+                input: payload.arguments,
+                filePath,
+              } as ToolNodeData,
+            }
+          : n
+      );
+      set({ nodes: updatedNodes });
+      return { nodeId: existingToolNode.id };
+    }
+
+    // 2. streaming_ 节点复用：流式阶段提前创建的 streaming_X 节点与真实 callId 匹配
+    //    后端流式阶段可能用 "streaming_0" 作为临时 callId，流式结束后用真实 callId 重发
+    //    如果已存在 streaming_ 前缀的 running 节点，复用它而非创建重复节点
+    const toolIteration = payload.iteration ?? refs?.currentIteration;
+    const streamingToolNode = payload.callId && !payload.callId.startsWith("streaming_")
+      ? nodes.find(
+          (n) =>
+            n.type === "tool" &&
+            n.status === "running" &&
+            (n.data as ToolNodeData).callId?.startsWith("streaming_")
+        )
+      : undefined;
+
+    if (streamingToolNode) {
+      const existingData = streamingToolNode.data as ToolNodeData;
+      const updatedNodes = nodes.map((n) =>
+        n.id === streamingToolNode.id
+          ? {
+              ...n,
+              iteration: toolIteration,
+              data: {
+                ...existingData,
+                toolName: payload.toolName,
+                callId: payload.callId,
+                input: payload.arguments,
+                filePath,
+              } as ToolNodeData,
+            }
+          : n
+      );
+      set({ nodes: updatedNodes });
+      return { nodeId: streamingToolNode.id };
+    }
+
+    // 3. 创建新工具节点前，关闭 thinking 和 streaming content 节点
+    let closedStreamingNodeId: string | undefined;
+    let updatedNodes = [...nodes];
+
+    // 关闭 thinking 节点：设置 status=completed，保留已有 content，duration=0，isStreaming=false
+    if (refs?.thinkingNodeId) {
+      updatedNodes = updatedNodes.map((n) => {
+        if (n.id !== refs.thinkingNodeId) return n;
+        const existingData = n.data as ThinkingNodeData;
+        return {
+          ...n,
+          status: "completed" as NodeStatus,
+          data: {
+            ...existingData,
+            content: existingData.content ?? "",
+            duration: 0,
+            isStreaming: false,
+          } as ThinkingNodeData,
+        };
+      });
+    }
+
+    // 关闭 streaming content 节点：设置 status=completed，保留已有 content，isStreaming=false
+    // 同时记录被关闭的节点 ID，供调用方更新 lastClosedStreamingNodeIdRef
+    if (refs?.streamingNodeId) {
+      closedStreamingNodeId = refs.streamingNodeId;
+      updatedNodes = updatedNodes.map((n) => {
+        if (n.id !== refs.streamingNodeId) return n;
+        const existingData = n.data as ContentNodeData;
+        return {
+          ...n,
+          status: "completed" as NodeStatus,
+          data: {
+            ...existingData,
+            content: existingData.content ?? "",
+            isStreaming: false,
+          } as ContentNodeData,
+        };
+      });
+    }
+
+    // 4. 创建新工具节点（status=running，等待 tool_result 事件更新为 completed/failed）
+    const newNodeId = `node_${++nodeCounter}`;
+    updatedNodes.push({
+      id: newNodeId,
+      type: "tool",
+      status: "running",
+      timestamp: Date.now(),
+      data: {
+        toolName: payload.toolName,
+        input: payload.arguments,
+        filePath,
+        callId: payload.callId,
+      },
+      isExpanded: true,
+      iteration: toolIteration,
+    });
+
+    set({ nodes: updatedNodes });
+    return { nodeId: newNodeId, closedStreamingNodeId };
+  },
+
+  // 直接通过 ToolResult 事件更新工具节点状态，绕过 React state 批处理
+  updateToolResultFromEvent: (payload) => {
+    const { nodes } = get();
+
+    // 1. 优先通过 callId 精确匹配 running 工具节点
+    const toolNode = payload.callId
+      ? nodes.find(
+          (n) =>
+            n.type === "tool" &&
+            n.status === "running" &&
+            (n.data as ToolNodeData).callId === payload.callId
+        )
+      : undefined;
+
+    // 2. 回退到最后一个 running 工具节点（callId 缺失或不匹配时）
+    const targetNode = toolNode ?? (() => {
+      const runningTools = nodes.filter((n) => n.type === "tool" && n.status === "running");
+      return runningTools.length > 0 ? runningTools[runningTools.length - 1] : undefined;
+    })();
+
+    // 无匹配节点时 no-op（避免触发不必要的重渲染）
+    if (!targetNode) return;
+
+    const existingData = targetNode.data as ToolNodeData;
+    const updatedNodes = nodes.map((n) =>
+      n.id === targetNode.id
+        ? {
+            ...n,
+            status: (payload.success ? "completed" : "failed") as NodeStatus,
+            data: {
+              ...existingData,
+              success: payload.success,
+              error: payload.success ? undefined : (payload.error || i18n.t("toolNode.executionFailed")),
+              // 保存工具执行结果（如 bash 的 stdout/stderr/exit_code），用于 UI 展示
+              result: payload.success && payload.result
+                ? (payload.result as Record<string, unknown>)
+                : existingData.result,
+            } as ToolNodeData,
+          }
+        : n
+    );
+
+    set({ nodes: updatedNodes });
   },
 
   removeNode: (id) => {

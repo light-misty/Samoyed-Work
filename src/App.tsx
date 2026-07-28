@@ -22,8 +22,8 @@ import { useToastStore } from "./stores/useToastStore";
 import { useAgentModeStore } from "./stores/useAgentModeStore";
 import { useAgent } from "./hooks/useAgent";
 import { parseError } from "./services/errorHandler";
-import { extractToolPath, matchesShortcut } from "./utils/format";
-import type { NodeStatus, ToolNodeData } from "./types";
+import { matchesShortcut } from "./utils/format";
+import type { NodeStatus } from "./types";
 import type { UpdateInfo } from "./services/tauri";
 import { onSessionUpdated, onWorkspaceDirectoryDeleted } from "./services/event";
 import * as tauriCmd from "./services/tauri";
@@ -32,13 +32,6 @@ import { SlashCommandHelp } from "./components/input/SlashCommandHelp";
 import { StatsOverlay } from "./components/input/StatsOverlay";
 import { useSlashCommandStore } from "./stores/useSlashCommandStore";
 import { getCommandByName } from "./commands/slashCommands";
-
-/** 获取当前工作区的根目录绝对路径 */
-function getWorkspaceRoot(): string {
-  const { workspaces, currentWorkspaceId } = useWorkspaceStore.getState();
-  const ws = workspaces.find((w) => w.id === currentWorkspaceId);
-  return ws?.path || '';
-}
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
 const PreviewOverlay = lazy(() =>
@@ -103,8 +96,6 @@ export default function App() {
     error: agentError,
     deepThinking,
     content,
-    currentToolCall,
-    lastToolResult,
     pendingConfirmation,
     doneResult,
     isStopped,
@@ -115,19 +106,14 @@ export default function App() {
     reset: resetAgent,
     setSessionId: setAgentSessionId,
     sessionId: agentSessionId,
+    streamingNodeIdRef,
+    thinkingNodeIdRef,
+    currentIterationRef,
+    lastClosedStreamingNodeIdRef,
+    lastToolCallIterationRef,
   } = useAgent();
 
-  const streamingNodeIdRef = useRef<string | null>(null);
-  const thinkingNodeIdRef = useRef<string | null>(null);
   const confirmNodeIdRef = useRef<string | null>(null);
-  // 追踪当前迭代轮次，用于将 iteration 传递给 content/tool 节点
-  const currentIterationRef = useRef<number | undefined>(undefined);
-  // 追踪最后一次 tool_call 的迭代轮次，用于过滤残余 content 事件
-  // 当 tool_call 已关闭 streaming 节点后，同一迭代的残余 content 不应创建新节点
-  const lastToolCallIterationRef = useRef<number | null>(null);
-  // 记录被 tool_call 关闭的 streaming content 节点 ID
-  // 用于在收到 is_streaming=false 的最终内容事件时，更新已有节点（修复内容截断）
-  const lastClosedStreamingNodeIdRef = useRef<string | null>(null);
   // 追踪 Agent 上一次的 sessionId，用于检测新会话创建
   const prevAgentSessionIdRef = useRef<string | null>(null);
   // 标记新会话创建过程中（loadSessions 尚未完成），避免失效检测误清空
@@ -161,14 +147,9 @@ export default function App() {
     }
   }
 
-  // 重置所有工作流引用
+  // 重置 App.tsx 自己的工作流引用（其他 ref 由 useAgent.ts 的 reset/sendMessage 负责重置）
   function resetRefs() {
-    streamingNodeIdRef.current = null;
-    thinkingNodeIdRef.current = null;
     confirmNodeIdRef.current = null;
-    currentIterationRef.current = undefined;
-    lastToolCallIterationRef.current = null;
-    lastClosedStreamingNodeIdRef.current = null;
   }
 
   useEffect(() => {
@@ -372,10 +353,6 @@ export default function App() {
 
   useEffect(() => {
     if (deepThinking) {
-      // 更新当前迭代轮次追踪
-      if (deepThinking.iteration !== undefined) {
-        currentIterationRef.current = deepThinking.iteration;
-      }
       if (!deepThinking.isStreaming && !thinkingNodeIdRef.current) {
         return;
       }
@@ -405,101 +382,7 @@ export default function App() {
     }
   }, [deepThinking, addNode, updateNode]);
 
-  useEffect(() => {
-    if (currentToolCall) {
-      // 记录最后一次 tool_call 的迭代轮次
-      if (currentToolCall.iteration !== undefined) {
-        lastToolCallIterationRef.current = currentToolCall.iteration;
-      }
-      // 通过 callId 去重：如果已存在相同 callId 的工具节点，仅更新参数和简要描述
-      // 这处理了流式阶段提前发射（参数不完整）后，流式结束重新发射（参数完整）的场景
-      // 重新发射时不应关闭 thinking/streaming 节点，因为它们可能属于下一迭代
-      const existingToolNode = currentToolCall.callId
-        ? useWorkflowStore.getState().nodes.find(
-            (n) => n.type === "tool" && (n.data as ToolNodeData).callId === currentToolCall.callId
-          )
-        : undefined;
-
-      if (existingToolNode) {
-        updateNode(existingToolNode.id, {
-          data: {
-            ...existingToolNode.data,
-            toolName: currentToolCall.toolName,
-            input: currentToolCall.arguments,
-            filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
-          } as ToolNodeData,
-        });
-      } else {
-        const toolIteration = currentToolCall.iteration ?? currentIterationRef.current;
-
-        // 流式阶段提前创建的 streaming_ 节点与真实 callId 匹配：
-        // 后端流式阶段可能用 "streaming_0" 作为临时 callId，流式结束后用真实 callId 重发。
-        // 如果已存在 streaming_ 前缀的 running 节点，复用它而非创建重复节点
-        const streamingNode = currentToolCall.callId && !currentToolCall.callId.startsWith("streaming_")
-          ? useWorkflowStore.getState().nodes.find(
-              (n) => n.type === "tool" && n.status === "running"
-                && (n.data as ToolNodeData).callId?.startsWith("streaming_")
-            )
-          : undefined;
-
-        if (streamingNode) {
-          const existingData = streamingNode.data as ToolNodeData;
-          updateNode(streamingNode.id, {
-            iteration: toolIteration,
-            data: {
-              ...existingData,
-              toolName: currentToolCall.toolName,
-              callId: currentToolCall.callId,
-              input: currentToolCall.arguments,
-              filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
-            } as ToolNodeData,
-          });
-        } else {
-          closeThinkingNode("completed");
-          if (streamingNodeIdRef.current) {
-            lastClosedStreamingNodeIdRef.current = streamingNodeIdRef.current;
-            closeStreamingNode("completed");
-          }
-          addNode("tool", {
-            toolName: currentToolCall.toolName,
-            input: currentToolCall.arguments,
-            filePath: extractToolPath(currentToolCall.toolName, currentToolCall.arguments, getWorkspaceRoot()),
-            callId: currentToolCall.callId,
-          }, "running", toolIteration);
-        }
-      }
-    }
-  }, [currentToolCall, addNode, updateNode]);
-
-  useEffect(() => {
-    if (lastToolResult) {
-      // 优先通过 callId 精确匹配工具节点，回退到最后一个 running 的工具节点
-      const toolNode = lastToolResult.callId
-        ? useWorkflowStore.getState().nodes.find(
-            (n) => n.type === "tool" && n.status === "running" && (n.data as ToolNodeData).callId === lastToolResult.callId
-          )
-        : undefined;
-      const targetNode = toolNode ?? (() => {
-        const runningTools = useWorkflowStore.getState().nodes.filter((n) => n.type === "tool" && n.status === "running");
-        return runningTools.length > 0 ? runningTools[runningTools.length - 1] : undefined;
-      })();
-      if (targetNode) {
-        const existingData = targetNode.data as ToolNodeData;
-        updateNode(targetNode.id, {
-          status: lastToolResult.success ? "completed" : "failed",
-          data: {
-            ...existingData,
-            success: lastToolResult.success,
-            error: lastToolResult.success ? undefined : (lastToolResult.error || t('toolNode.executionFailed')),
-            // 保存工具执行结果（如 bash 的 stdout/stderr/exit_code），用于 UI 展示
-            result: lastToolResult.success && lastToolResult.result
-              ? (lastToolResult.result as Record<string, unknown>)
-              : existingData.result,
-          },
-        });
-      }
-    }
-  }, [lastToolResult, updateNode]);
+  // 工具节点的创建/更新由 useAgent.ts 事件处理器直接调用 store 方法完成（绕过 React 批处理）
 
   useEffect(() => {
     if (content !== undefined && content !== null) {

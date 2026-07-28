@@ -29,7 +29,7 @@ import {
   type NetworkRetryPayload,
 } from "../services/event";
 import i18n from "../i18n";
-import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent } from "../stores/useWorkflowStore";
+import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
 import { useAgentModeStore } from "../stores/useAgentModeStore";
 import type { NodeStatus, SubAgentNodeData } from "../types";
@@ -54,6 +54,16 @@ export interface UseAgentReturn {
   respondPermission: (operationId: string, response: 'once' | 'reject', feedback?: string) => Promise<void>;
   reset: () => void;
   setSessionId: (id: string) => void;
+  /** 当前 streaming content 节点 ID */
+  streamingNodeIdRef: { current: string | null };
+  /** 当前 thinking 节点 ID */
+  thinkingNodeIdRef: { current: string | null };
+  /** 当前迭代轮次 */
+  currentIterationRef: { current: number | undefined };
+  /** 被 tool_call 关闭的 streaming 节点 ID */
+  lastClosedStreamingNodeIdRef: { current: string | null };
+  /** 最后一次 tool_call 的迭代轮次，用于过滤残余 content 事件 */
+  lastToolCallIterationRef: { current: number | null };
 }
 
 const initialState = {
@@ -106,6 +116,14 @@ export function useAgent(): UseAgentReturn {
   const compactionNodeIdRef = useRef<string | null>(null);
   // 追踪子 Agent agentId → nodeId 映射，用于更新对应的 sub_agent 节点
   const subAgentNodeIdsRef = useRef<Map<string, string>>(new Map());
+  // 当前 streaming content 节点 ID（用于 addToolNodeFromEvent 关闭流式节点）
+  const streamingNodeIdRef = useRef<string | null>(null);
+  // 当前 thinking 节点 ID（用于 addToolNodeFromEvent 关闭思考节点）
+  const thinkingNodeIdRef = useRef<string | null>(null);
+  // 当前迭代轮次（用作 payload.iteration 缺失时的回退值）
+  const currentIterationRef = useRef<number | undefined>(undefined);
+  // 被 tool_call 关闭的 streaming content 节点 ID（用于后续 content 事件更新该节点）
+  const lastClosedStreamingNodeIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -133,6 +151,10 @@ export function useAgent(): UseAgentReturn {
               iteration: payload.iteration,
             });
             return;
+          }
+          // 同步更新当前迭代轮次，确保后续 onAgentToolCall 能读到最新值
+          if (payload.iteration !== undefined) {
+            currentIterationRef.current = payload.iteration;
           }
           if (payload.isStreaming) {
             // step 变化表示新一轮思考开始，重置累积内容并递增 epoch
@@ -208,6 +230,20 @@ export function useAgent(): UseAgentReturn {
           if (payload.iteration !== undefined) {
             lastToolCallIterationRef.current = payload.iteration;
           }
+          // 直接调用 store 方法创建/更新工具节点，绕过 React state 批处理
+          // 避免 React 18 自动批处理导致同一 tick 内多个 tool_call 事件丢失
+          const toolEventRefs: ToolEventRefs = {
+            thinkingNodeId: thinkingNodeIdRef.current,
+            streamingNodeId: streamingNodeIdRef.current,
+            currentIteration: currentIterationRef.current,
+          };
+          const result = useWorkflowStore.getState().addToolNodeFromEvent(payload, toolEventRefs);
+          // 如果有关闭的 streaming 节点，记录其 ID 供后续 content 事件更新
+          // （修复 LLM 在 tool_use 块后继续输出文本内容导致的截断问题）
+          if (result?.closedStreamingNodeId) {
+            lastClosedStreamingNodeIdRef.current = result.closedStreamingNodeId;
+          }
+          // 保留 setCurrentToolCall 供其他 UI 消费者使用（如右侧边栏）
           setCurrentToolCall(payload);
         }),
         onAgentToolResult((payload) => {
@@ -223,6 +259,9 @@ export function useAgent(): UseAgentReturn {
             });
             return;
           }
+          // 直接调用 store 方法更新工具节点状态，绕过 React state 批处理
+          useWorkflowStore.getState().updateToolResultFromEvent(payload);
+          // 保留 setLastToolResult 供其他 UI 消费者使用（如右侧边栏）
           setLastToolResult(payload);
         }),
         onAgentConfirm((payload) => {
@@ -506,6 +545,10 @@ export function useAgent(): UseAgentReturn {
       lastToolCallIterationRef.current = null;
       compactionNodeIdRef.current = null;
       subAgentNodeIdsRef.current.clear();
+      streamingNodeIdRef.current = null;
+      thinkingNodeIdRef.current = null;
+      currentIterationRef.current = undefined;
+      lastClosedStreamingNodeIdRef.current = null;
 
       // 从附件 store 获取当前待发送的附件
       const currentAttachments = useAttachmentStore.getState().attachments;
@@ -611,6 +654,10 @@ export function useAgent(): UseAgentReturn {
     lastToolCallIterationRef.current = null;
     compactionNodeIdRef.current = null;
     subAgentNodeIdsRef.current.clear();
+    streamingNodeIdRef.current = null;
+    thinkingNodeIdRef.current = null;
+    currentIterationRef.current = undefined;
+    lastClosedStreamingNodeIdRef.current = null;
   }, []);
 
   const setSessionIdExternal = useCallback((id: string) => {
@@ -637,5 +684,10 @@ export function useAgent(): UseAgentReturn {
     respondPermission,
     reset,
     setSessionId: setSessionIdExternal,
+    streamingNodeIdRef,
+    thinkingNodeIdRef,
+    currentIterationRef,
+    lastClosedStreamingNodeIdRef,
+    lastToolCallIterationRef,
   };
 }

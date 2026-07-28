@@ -1612,6 +1612,300 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_edit_tool_crlf_file_lf_old_string_normalized() {
+        // 验证 CRLF 文件 + LF old_string 时归一化匹配成功，写回 CRLF
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_crlf_norm_{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let file_path = "crlf_test.txt";
+        let abs_path = temp_dir.join(file_path);
+        // 文件使用 CRLF 行尾
+        let original = "line1\r\nline2\r\nline3\r\n";
+        std::fs::write(&abs_path, original).unwrap();
+
+        let mut registry = ToolRegistry::new();
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            test_db(),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                std::path::PathBuf::from("/tmp"),
+                std::time::Duration::from_secs(30),
+            )),
+            std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
+            std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+            false,
+        );
+        let tool = registry.get_arc("edit").unwrap();
+        // old_string 使用 LF 行尾（精确匹配会失败，触发归一化）
+        let result = tool
+            .execute(json!({
+                "path": file_path,
+                "old_string": "line2\n",
+                "new_string": "replaced\n",
+                "workspace_root": temp_dir.to_string_lossy(),
+            }))
+            .await;
+
+        assert!(result.success, "归一化匹配应成功: {:?}", result.error);
+        let output = result.output.unwrap();
+        assert_eq!(output["operation"], "edit");
+        assert_eq!(output["matches"], 1);
+
+        // 验证写回的文件仍为 CRLF 行尾
+        let content = std::fs::read_to_string(&abs_path).unwrap();
+        assert_eq!(content, "line1\r\nreplaced\r\nline3\r\n");
+
+        let _ = std::fs::remove_file(&abs_path);
+        let _ = std::fs::remove_dir(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_lf_file_lf_old_string_no_normalization() {
+        // 验证 LF 文件 + LF old_string 时精确匹配成功，不触发归一化
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_lf_exact_{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let file_path = "lf_test.txt";
+        let abs_path = temp_dir.join(file_path);
+        let original = "line1\nline2\nline3\n";
+        std::fs::write(&abs_path, original).unwrap();
+
+        let mut registry = ToolRegistry::new();
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            test_db(),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                std::path::PathBuf::from("/tmp"),
+                std::time::Duration::from_secs(30),
+            )),
+            std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
+            std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+            false,
+        );
+        let tool = registry.get_arc("edit").unwrap();
+        let result = tool
+            .execute(json!({
+                "path": file_path,
+                "old_string": "line2\n",
+                "new_string": "replaced\n",
+                "workspace_root": temp_dir.to_string_lossy(),
+            }))
+            .await;
+
+        assert!(result.success, "精确匹配应成功: {:?}", result.error);
+        let content = std::fs::read_to_string(&abs_path).unwrap();
+        assert_eq!(content, "line1\nreplaced\nline3\n");
+
+        let _ = std::fs::remove_file(&abs_path);
+        let _ = std::fs::remove_dir(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_crlf_file_lf_old_string_replace_all() {
+        // 验证 CRLF 文件 + LF old_string + replace_all=true 时归一化匹配多处，写回 CRLF
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_crlf_all_{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let file_path = "crlf_replace_all.txt";
+        let abs_path = temp_dir.join(file_path);
+        let original = "foo\r\nbar\r\nfoo\r\n";
+        std::fs::write(&abs_path, original).unwrap();
+
+        let mut registry = ToolRegistry::new();
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            test_db(),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                std::path::PathBuf::from("/tmp"),
+                std::time::Duration::from_secs(30),
+            )),
+            std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
+            std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+            false,
+        );
+        let tool = registry.get_arc("edit").unwrap();
+        let result = tool
+            .execute(json!({
+                "path": file_path,
+                "old_string": "foo\n",
+                "new_string": "qux\n",
+                "replace_all": true,
+                "workspace_root": temp_dir.to_string_lossy(),
+            }))
+            .await;
+
+        assert!(result.success, "归一化 replace_all 应成功: {:?}", result.error);
+        let output = result.output.unwrap();
+        assert_eq!(output["matches"], 2);
+        assert_eq!(output["replacedCount"], 2);
+
+        let content = std::fs::read_to_string(&abs_path).unwrap();
+        assert_eq!(content, "qux\r\nbar\r\nqux\r\n");
+
+        let _ = std::fs::remove_file(&abs_path);
+        let _ = std::fs::remove_dir(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_crlf_file_no_match_after_normalization() {
+        // 验证归一化后仍无匹配时返回原错误，不修改文件
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_norm_nomatch_{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let file_path = "crlf_nomatch.txt";
+        let abs_path = temp_dir.join(file_path);
+        let original = "hello world\r\n";
+        std::fs::write(&abs_path, original).unwrap();
+
+        let mut registry = ToolRegistry::new();
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            test_db(),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                std::path::PathBuf::from("/tmp"),
+                std::time::Duration::from_secs(30),
+            )),
+            std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
+            std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+            false,
+        );
+        let tool = registry.get_arc("edit").unwrap();
+        let result = tool
+            .execute(json!({
+                "path": file_path,
+                "old_string": "nonexistent string",
+                "new_string": "replacement",
+                "workspace_root": temp_dir.to_string_lossy(),
+            }))
+            .await;
+
+        assert!(!result.success);
+        assert!(result.error.unwrap().contains("No matching string found"));
+
+        // 验证文件未被修改（仍为原始 CRLF 内容）
+        let content = std::fs::read_to_string(&abs_path).unwrap();
+        assert_eq!(content, "hello world\r\n");
+
+        let _ = std::fs::remove_file(&abs_path);
+        let _ = std::fs::remove_dir(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_edit_tool_crlf_file_crlf_old_string_exact_match() {
+        // 验证 CRLF 文件 + CRLF old_string 时精确匹配成功（无需归一化）
+        let temp_dir = std::env::temp_dir().join(format!(
+            "samoyed_work_edit_crlf_exact_{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(&temp_dir).await.unwrap();
+
+        let file_path = "crlf_exact.txt";
+        let abs_path = temp_dir.join(file_path);
+        let original = "line1\r\nline2\r\nline3\r\n";
+        std::fs::write(&abs_path, original).unwrap();
+
+        let mut registry = ToolRegistry::new();
+        let _ = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            test_db(),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::lsp::manager::LspServerManager::new(
+                std::path::PathBuf::from("/tmp"),
+                std::time::Duration::from_secs(30),
+            )),
+            std::sync::Arc::new(crate::services::lsp::router::LanguageRouter::new()),
+            std::sync::Arc::new(crate::services::lsp::cache::LspResultCache::new(300, 500)),
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+            false,
+        );
+        let tool = registry.get_arc("edit").unwrap();
+        // old_string 使用 CRLF 行尾，与文件行尾一致，精确匹配成功
+        let result = tool
+            .execute(json!({
+                "path": file_path,
+                "old_string": "line2\r\n",
+                "new_string": "replaced\r\n",
+                "workspace_root": temp_dir.to_string_lossy(),
+            }))
+            .await;
+
+        assert!(result.success, "CRLF 精确匹配应成功: {:?}", result.error);
+        let output = result.output.unwrap();
+        assert_eq!(output["matches"], 1);
+
+        let content = std::fs::read_to_string(&abs_path).unwrap();
+        assert_eq!(content, "line1\r\nreplaced\r\nline3\r\n");
+
+        let _ = std::fs::remove_file(&abs_path);
+        let _ = std::fs::remove_dir(&temp_dir);
+    }
+
+    #[tokio::test]
     async fn test_glob_find_rust_files() {
         // 验证 glob 工具查找 .rs 文件
         let temp_dir =
@@ -5003,8 +5297,28 @@ impl Tool for EditTool {
                 }
             };
 
-            // 统计 old_string 出现次数
-            let match_count = old_content.matches(old_string).count();
+            // 统计 old_string 出现次数（精确匹配）
+            let mut match_count = old_content.matches(old_string).count();
+
+            // 精确匹配失败时，尝试 CRLF→LF 归一化匹配（Windows CRLF 文件 vs LLM LF old_string）
+            let mut normalized_content: Option<String> = None;
+            let mut normalized_old_string: Option<String> = None;
+            if match_count == 0 {
+                let norm_content = old_content.replace("\r\n", "\n");
+                let norm_old_string = old_string.replace("\r\n", "\n");
+                let norm_count = norm_content.matches(&norm_old_string).count();
+                if norm_count > 0 {
+                    log::info!(
+                        "edit 触发 CRLF→LF 归一化匹配: path={}, 归一化后匹配 {} 处",
+                        file_path,
+                        norm_count
+                    );
+                    match_count = norm_count;
+                    normalized_content = Some(norm_content);
+                    normalized_old_string = Some(norm_old_string);
+                }
+            }
+
             if match_count == 0 {
                 log::warn!("edit 失败: 未找到匹配的字符串, path={}", file_path);
                 return ToolResult {
@@ -5038,7 +5352,24 @@ impl Tool for EditTool {
             }
 
             // 执行替换：replace_all=true 时替换所有匹配，否则仅替换第一个
-            let new_content = if replace_all {
+            // 归一化匹配成功时，在归一化（LF）内容上执行替换，写回时恢复原始行尾风格
+            let original_is_crlf = old_content.contains("\r\n");
+            let new_content = if let (Some(norm_content), Some(norm_old_string)) =
+                (normalized_content, normalized_old_string)
+            {
+                let replaced = if replace_all {
+                    norm_content.replace(&norm_old_string, new_string)
+                } else {
+                    norm_content.replacen(&norm_old_string, new_string, 1)
+                };
+                // 恢复原始行尾风格：原始为 CRLF 则将所有 \n 转回 \r\n
+                // 先消除 new_string 可能携带的 CRLF，避免产生 \r\r\n
+                if original_is_crlf {
+                    replaced.replace("\r\n", "\n").replace('\n', "\r\n")
+                } else {
+                    replaced
+                }
+            } else if replace_all {
                 old_content.replace(old_string, new_string)
             } else {
                 old_content.replacen(old_string, new_string, 1)
