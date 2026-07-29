@@ -167,12 +167,15 @@ export default function App() {
     });
 
     // 监听窗口关闭事件：如果有待安装的更新，在关闭前安装（不自动重启）
+    // handler 为同步函数，避免 Tauri 2 等待 async handler resolve 再关闭窗口导致延迟
     let closeUnlisten: (() => void) | null = null;
-    getCurrentWindow().onCloseRequested(async (event) => {
+    getCurrentWindow().onCloseRequested((event) => {
       const { pendingUpdatePath, clearPendingUpdatePath } = useUpdateStore.getState();
-      if (pendingUpdatePath) {
-        // 阻止默认关闭行为，先安装更新
-        event.preventDefault();
+      if (!pendingUpdatePath) return;
+      // 阻止默认关闭行为，先安装更新
+      event.preventDefault();
+      // 异步安装更新，不阻塞窗口关闭的同步判断
+      (async () => {
         try {
           // 安装更新但不自动重启（restart=false，NSIS 不传 /R 参数）
           // install_downloaded_update 内部会调用 ShellExecuteW 启动安装器 + std::process::exit(0)
@@ -186,7 +189,7 @@ export default function App() {
           clearPendingUpdatePath();
           await getCurrentWindow().destroy();
         }
-      }
+      })();
     }).then((unlisten) => {
       closeUnlisten = unlisten;
     });
