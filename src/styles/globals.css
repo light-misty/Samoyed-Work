@@ -764,6 +764,16 @@
 }
 .workspace-files-header-spacer {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.workspace-files-root-path {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .workspace-files-search-row {
   display: flex;

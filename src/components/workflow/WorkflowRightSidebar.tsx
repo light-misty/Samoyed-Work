@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkflowStore } from '../../stores/useWorkflowStore';
 import { useSessionStore } from '../../stores/useSessionStore';
 import { useFileTreeStore } from '../../stores/useFileTreeStore';
+import { useWorkspaceStore } from '../../stores/useWorkspaceStore';
 import { listAllBranchUserMessages } from '../../services/tauri';
 import { Icon } from '../common/Icon';
 import { CustomScrollArea } from '../common/CustomScrollArea';
@@ -170,6 +171,12 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
   const fileSearchKeyword = useFileTreeStore((s) => s.searchKeyword);
   const setFileSearchKeyword = useFileTreeStore((s) => s.setSearchKeyword);
   const fileSearchInputRef = useRef<HTMLInputElement>(null);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  const currentWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === currentWorkspaceId) ?? null,
+    [workspaces, currentWorkspaceId]
+  );
 
   useEffect(() => {
     if (!isSearching) return;
@@ -518,7 +525,13 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
                   </button>
                 </div>
               ) : (
-                <div className="workspace-files-header-spacer" />
+                <div className="workspace-files-header-spacer">
+                  {currentWorkspace && (
+                    <span className="workspace-files-root-path" title={currentWorkspace.path}>
+                      {currentWorkspace.path}
+                    </span>
+                  )}
+                </div>
               )}
               <div className="workspace-files-actions">
                 <button
