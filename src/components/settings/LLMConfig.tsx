@@ -82,6 +82,7 @@ export function LLMConfigTab() {
         <div className="section-header">
           <span className="section-title">{t('settings.llm.configuredProviders')}</span>
           <span className="section-badge">{llmProviders.length}</span>
+          <span className="section-deepseek-hint">本应用深度适配 DeepSeek 模型服务商</span>
           <button className="add-btn" onClick={handleAdd}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
             {t('settings.llm.addProvider')}
@@ -159,6 +160,12 @@ export function LLMConfigTab() {
       <style>{`
         .section-header .add-btn {
           margin-left: auto;
+        }
+        .section-deepseek-hint {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+          margin-left: 8px;
+          white-space: nowrap;
         }
         .empty-state-lg {
           font-size: 13px;
