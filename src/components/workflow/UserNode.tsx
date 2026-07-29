@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { WorkflowNode, UserNodeData } from "../../types";
@@ -23,6 +23,20 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [contentExpanded, setContentExpanded] = useState(false);
+
+  const editRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isEditing && editRef.current) {
+      editRef.current.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editRef.current);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, [isEditing]);
 
   const MAX_PREVIEW_LENGTH = 300;
   const shouldTruncate = data.content.length > MAX_PREVIEW_LENGTH;
@@ -154,6 +168,13 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
     setEditContent("");
   };
 
+  // 粘贴为纯文本，避免富文本污染
+  const handleEditPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+  };
+
   // 确认创建分支：调用后端 create_branch 复制前缀消息+切换活跃分支，
   // 然后刷新 workflow 节点显示新分支，最后通过 pendingBranchSend 触发 App.tsx 发送新分支消息
   const handleConfirmCreateBranch = async () => {
@@ -227,7 +248,7 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   };
 
   // 编辑模式键盘事件：Ctrl/Cmd+Enter 触发创建分支，Esc 取消
-  const handleEditKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleEditKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void handleConfirmCreateBranch();
@@ -270,41 +291,44 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
     <div className="wf-node wf-user-node">
       <div className="wf-user-msg-wrapper">
         <div className="wf-node-card">
-          <div className="wf-node-body">
-            {isEditing ? (
-              <textarea
-                className="wf-user-edit-textarea"
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
+          {isEditing ? (
+            <div className="wf-node-body">
+              <div
+                className="wf-user-text wf-user-edit-div"
+                ref={editRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => setEditContent(e.currentTarget.textContent || "")}
                 onKeyDown={handleEditKeyDown}
-                autoFocus
-                rows={3}
-              />
-            ) : (
-              <>
-                <div className="wf-user-text">{displayContent}</div>
-                {shouldTruncate && (
-                  <button
-                    className="wf-user-expand-btn"
-                    onClick={() => setContentExpanded(!contentExpanded)}
-                  >
-                    {contentExpanded ? t('workflow.collapse') : t('workflow.expand')}
-                  </button>
-                )}
-              </>
-            )}
-            {hasAttachments && !isEditing && (
-              <div className="wf-user-attachments">
-                {data.attachments.map((att) => (
-                  <span key={att.id} className="wf-attachment-tag" title={att.name}>
-                    <Icon name={att.mimeType.startsWith("image/") ? "image" : "file"} size={10} />
-                    <span className="wf-attachment-name">{att.name}</span>
-                    <span className="wf-attachment-size">{formatSize(att.size)}</span>
-                  </span>
-                ))}
+                onPaste={handleEditPaste}
+              >
+                {data.content}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="wf-node-body">
+              <div className="wf-user-text">{displayContent}</div>
+              {shouldTruncate && (
+                <button
+                  className="wf-user-expand-btn"
+                  onClick={() => setContentExpanded(!contentExpanded)}
+                >
+                  {contentExpanded ? t('workflow.collapse') : t('workflow.expand')}
+                </button>
+              )}
+              {hasAttachments && (
+                <div className="wf-user-attachments">
+                  {data.attachments.map((att) => (
+                    <span key={att.id} className="wf-attachment-tag" title={att.name}>
+                      <Icon name={att.mimeType.startsWith("image/") ? "image" : "file"} size={10} />
+                      <span className="wf-attachment-name">{att.name}</span>
+                      <span className="wf-attachment-size">{formatSize(att.size)}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {showActions && isEditing && (
           <div className="wf-edit-actions-row">
