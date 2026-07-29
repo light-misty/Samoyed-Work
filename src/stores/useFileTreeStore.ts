@@ -117,14 +117,14 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
         const { activeWorkspaceId, debounceTimer } = get();
         // 只处理当前活动工作区的文件变更
         if (activeWorkspaceId && payload.workspaceId === activeWorkspaceId) {
-          // 防抖：500ms 内的多次变更合并为一次刷新
+          // 防抖：2000ms 内的多次变更合并为一次刷新
           if (debounceTimer) {
             clearTimeout(debounceTimer);
           }
           const timer = setTimeout(() => {
             get().loadTree(activeWorkspaceId);
             set({ debounceTimer: null });
-          }, 500);
+          }, 2000);
           set({ debounceTimer: timer });
         }
       });

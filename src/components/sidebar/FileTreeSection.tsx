@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from 'react-i18next';
 import { useFileTreeStore } from "../../stores/useFileTreeStore";
@@ -66,7 +66,7 @@ function InlineRenameInput({
 }
 
 /* ---- 文件树节点组件 ---- */
-function FileTreeItem({
+const FileTreeItem = memo(function FileTreeItem({
   node,
   depth = 0,
   renamingPath,
@@ -172,7 +172,7 @@ function FileTreeItem({
       )}
     </div>
   );
-}
+});
 
 /* ---- 新建输入弹窗 ---- */
 function NewItemInput({
@@ -606,7 +606,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
       </div>
 
       {/* 文件树内容 */}
-      {isLoading ? (
+      {isLoading && filteredTree.length === 0 ? (
         <div className="ft-skeleton" role="status" aria-label={t('fileTree.loading')}>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="ft-skeleton-item">
@@ -623,18 +623,20 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
           </span>
         </div>
       ) : (
-        <div className="ft-tree" role="tree" aria-label={t('fileTree.treeLabel')}>
-          {filteredTree.map((node) => (
-            <FileTreeItem
-              key={node.path}
-              node={node}
-              renamingPath={renamingPath}
-              onRenameConfirm={handleRenameConfirm}
-              onRenameCancel={handleRenameCancel}
-              onContextMenu={handleContextMenu}
-              onDoubleClickFile={onOpenPreview}
-            />
-          ))}
+        <div className="ft-tree-wrapper">
+          <div className="ft-tree" role="tree" aria-label={t('fileTree.treeLabel')}>
+            {filteredTree.map((node) => (
+              <FileTreeItem
+                key={node.path}
+                node={node}
+                renamingPath={renamingPath}
+                onRenameConfirm={handleRenameConfirm}
+                onRenameCancel={handleRenameCancel}
+                onContextMenu={handleContextMenu}
+                onDoubleClickFile={onOpenPreview}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -747,6 +749,13 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
           font-size: 13px;
           color: var(--color-text-quaternary);
         }
+        .ft-tree-wrapper {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          position: relative;
+        }
         .ft-tree {
           font-size: 13px;
         }
@@ -758,7 +767,6 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
           border-radius: var(--radius-sm);
           cursor: pointer;
           user-select: none;
-          transition: all 0.15s;
           color: var(--color-text-primary);
           position: relative;
         }
