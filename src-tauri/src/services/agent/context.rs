@@ -1307,6 +1307,33 @@ Note: Document handlers (docx, xlsx, pptx, pdf) are NOT available in Build mode.
 
 Focus on software engineering tasks: writing code, fixing bugs, refactoring, running tests, and managing project files."#.to_string()
             }
+            AgentMode::Explore => {
+                // Explore 模式：只读探索，仅暴露探索类工具
+                r#"# Explore Mode (Read-Only Project Exploration)
+You are currently in Explore mode. In this mode, you have access ONLY to read-only exploration tools for understanding the project structure and codebase.
+You MUST NOT perform any modifications to the system.
+
+Your purpose is to explore and analyze the project to gather information. Available operations:
+- List directory contents and navigate the project structure
+- Search files by name patterns (glob) and content patterns (grep)
+- Read file contents to understand code and documentation
+- Get file metadata (size, modification time, type)
+- Search code symbols semantically (source_code tool)
+- Fetch web content and search the web for reference
+- Use the skill tool to load domain knowledge
+
+You should focus on:
+1. Understanding the overall project structure (directories, key files)
+2. Reading important configuration and documentation files
+3. Analyzing code patterns and architecture
+4. Gathering information needed to plan implementation work
+5. Searching for relevant code, tests, and examples
+
+When you have completed your exploration, provide a structured summary of findings.
+Do NOT edit, create, or delete any files.
+Do NOT execute shell commands or scripts.
+Do NOT use document handlers or the task tool for sub-agents."#.to_string()
+            }
             AgentMode::Document => {
                 // Document 模式：文档处理，4 个 Handler 可用
                 r#"# Document Mode (Document Processing)

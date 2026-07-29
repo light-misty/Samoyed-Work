@@ -12,7 +12,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Wry};
 use tokio::sync::RwLock;
 
-use super::{is_document_handler, AgentMode};
+use super::{is_document_handler, AgentMode, EXPLORE_TOOL_NAMES};
 use crate::db::sub_agent_message_repo;
 use crate::db::Database;
 use crate::errors::{CommandError, TOOL_INVALID_PARAMS, TOOL_NOT_FOUND};
@@ -37,11 +37,13 @@ fn parse_agent_mode(mode: &str) -> AgentMode {
     match mode {
         "plan" => AgentMode::Plan,
         "document" => AgentMode::Document,
+        "explore" => AgentMode::Explore,
         _ => AgentMode::Build,
     }
 }
 
 /// 按子 Agent 配置过滤工具定义列表
+/// - Explore 模式下仅保留 EXPLORE_TOOL_NAMES 中的只读工具
 /// - 非 Document 模式下过滤掉 docx/xlsx/pptx/pdf
 /// - allowed_tools 非空时仅保留白名单中的工具
 ///
@@ -53,6 +55,18 @@ pub fn filter_tools_for_sub_agent(
 ) -> Vec<Value> {
     let mode = parse_agent_mode(agent_mode);
     let mut defs = tool_defs;
+
+    // Explore 模式下仅保留只读探索工具
+    if mode.is_explore() {
+        defs.retain(|d| {
+            d.get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                .map(|n| EXPLORE_TOOL_NAMES.contains(&n))
+                .unwrap_or(false)
+        });
+        return defs;
+    }
 
     // 非 Document 模式下过滤掉文档 Handler
     if !mode.includes_document_handlers() {
@@ -738,6 +752,16 @@ impl SubAgentExecutor {
         if mode.is_plan() && PermissionType::from_tool_name(tool_name).is_modification() {
             log::warn!(
                 "子 Agent 权限拒绝(Plan 模式): agent_id={}, tool={}",
+                config.agent_id,
+                tool_name
+            );
+            return Ok(false);
+        }
+        if mode.is_explore()
+            && !EXPLORE_TOOL_NAMES.contains(&tool_name)
+        {
+            log::warn!(
+                "子 Agent 权限拒绝(Explore 模式): agent_id={}, tool={}",
                 config.agent_id,
                 tool_name
             );

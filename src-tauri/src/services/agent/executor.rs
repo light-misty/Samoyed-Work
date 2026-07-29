@@ -8,7 +8,7 @@ use tauri::{Emitter, Runtime};
 
 use super::compaction::ContextCompactor;
 use super::context::AgentContext;
-use super::is_document_handler;
+use super::{is_document_handler, EXPLORE_TOOL_NAMES};
 use crate::config::app_settings::{CompactionConfig, ConfirmationLevel};
 use crate::errors::CommandError;
 use crate::events::emitter::AgentEmitter;
@@ -585,6 +585,21 @@ impl<R: Runtime> AgentExecutor<R> {
             });
         }
 
+        // Explore 模式拒绝非探索类工具
+        if mode.is_explore() && !EXPLORE_TOOL_NAMES.contains(&tool_name) {
+            log::warn!(
+                "权限拒绝(Explore 模式): session_id={}, tool={}",
+                ctx.session_id,
+                tool_name
+            );
+            return Ok(PermissionResult::Deny {
+                reason: format!(
+                    "Explore mode prohibits using tool: {}",
+                    tool_name
+                ),
+            });
+        }
+
         // 3. Doom loop 检测：连续多次相同调用
         if self
             .doom_loop_detector
@@ -909,12 +924,31 @@ impl<R: Runtime> AgentExecutor<R> {
     }
 
     /// 按当前 AgentMode 动态构建工具定义列表
+    /// Explore 模式：仅保留 EXPLORE_TOOL_NAMES 中的只读工具
     /// Build/Plan 模式：仅 Tool 定义，过滤掉文档 Handler
     /// Document 模式：Tool 定义 + 文档 Handler 定义
     /// 所有定义按 function.name 字母序稳定排序
     async fn build_tool_definitions(&self, session_id: &str) -> Vec<serde_json::Value> {
         let mode = self.agent_mode_manager.get_mode(session_id).await;
         let mut defs = self.tool_registry.tool_definitions();
+
+        // Explore 模式下仅保留只读探索工具
+        if mode.is_explore() {
+            defs.retain(|d| {
+                d.get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .map(|n| EXPLORE_TOOL_NAMES.contains(&n))
+                    .unwrap_or(false)
+            });
+            defs.sort_by(|a, b| {
+                let name_a = a["function"]["name"].as_str().unwrap_or("");
+                let name_b = b["function"]["name"].as_str().unwrap_or("");
+                name_a.cmp(name_b)
+            });
+            return defs;
+        }
+
         if mode.includes_document_handlers() {
             // Document 模式：加入文档 Handler 定义
             let reg = self.registry.lock().await;
@@ -952,6 +986,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 super::AgentMode::Plan => "plan",
                 super::AgentMode::Build => "build",
                 super::AgentMode::Document => "document",
+                super::AgentMode::Explore => "explore",
             };
             let skill_summary = skill_registry.build_summary_for_prompt(mode_str);
             if !skill_summary.is_empty() {
@@ -2177,6 +2212,7 @@ impl<R: Runtime> AgentExecutor<R> {
                             super::AgentMode::Plan => "plan",
                             super::AgentMode::Build => "build",
                             super::AgentMode::Document => "document",
+                            super::AgentMode::Explore => "explore",
                         };
                         safe_params["_agent_mode"] = json!(mode_str);
                     }

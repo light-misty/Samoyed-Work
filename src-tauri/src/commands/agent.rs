@@ -179,6 +179,7 @@ pub async fn start_agent(
         "plan" => AgentMode::Plan,
         "build" => AgentMode::Build,
         "document" => AgentMode::Document,
+        "explore" => AgentMode::Explore,
         other => {
             log::warn!("未知的 agentMode: {}，使用默认 Build", other);
             AgentMode::Build
@@ -920,6 +921,7 @@ pub async fn switch_agent_mode(
         "plan" => AgentMode::Plan,
         "build" => AgentMode::Build,
         "document" => AgentMode::Document,
+        "explore" => AgentMode::Explore,
         _ => {
             return Err(CommandError::agent(
                 AGENT_OPERATION_REJECTED,

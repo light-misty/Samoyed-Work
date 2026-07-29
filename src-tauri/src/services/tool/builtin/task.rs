@@ -169,6 +169,11 @@ impl Tool for TaskTool {
                     "type": "array",
                     "items": { "type": "string" },
                     "description": "List of tools available to the sub-agent (empty means inherit all tools)"
+                },
+                "agentMode": {
+                    "type": "string",
+                    "enum": ["build", "plan", "document", "explore"],
+                    "description": "Sub-agent execution mode (overrides parent mode). Use 'explore' for read-only project exploration sub-agents."
                 }
             },
             "required": ["description"]
@@ -279,12 +284,18 @@ impl TaskTool {
             };
         }
 
-        // 9. 读取 parent_system_prompt 和 agent_mode（优先从 params 读取，回退到字段值）
+        // 9. 读取 parent_system_prompt 和 agent_mode
         let parent_prompt = match params.get("_system_prompt").and_then(|v| v.as_str()) {
             Some(s) => s.to_string(),
             None => self.parent_system_prompt.read().await.clone(),
         };
-        let agent_mode = match params.get("_agent_mode").and_then(|v| v.as_str()) {
+        // agent_mode 优先级: LLM 显式传入的 agentMode > 系统注入 _agent_mode > 默认
+        let agent_mode = match params
+            .get("agentMode")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| params.get("_agent_mode").and_then(|v| v.as_str()))
+        {
             Some(s) => s.to_string(),
             None => self.agent_mode.read().await.clone(),
         };
@@ -423,12 +434,18 @@ impl TaskTool {
             };
         }
 
-        // 8. 读取 parent_system_prompt 和 agent_mode（优先从 params 读取，回退到字段值）
+        // 8. 读取 parent_system_prompt 和 agent_mode
         let parent_prompt = match params.get("_system_prompt").and_then(|v| v.as_str()) {
             Some(s) => s.to_string(),
             None => self.parent_system_prompt.read().await.clone(),
         };
-        let agent_mode = match params.get("_agent_mode").and_then(|v| v.as_str()) {
+        // agent_mode 优先级: LLM 显式传入的 agentMode > 系统注入 _agent_mode > 默认
+        let agent_mode = match params
+            .get("agentMode")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| params.get("_agent_mode").and_then(|v| v.as_str()))
+        {
             Some(s) => s.to_string(),
             None => self.agent_mode.read().await.clone(),
         };

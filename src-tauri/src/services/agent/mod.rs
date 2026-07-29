@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Agent 执行模式
+/// Explore:只读探索模式,仅暴露全局/搜索/文件读取等只读工具
 /// Plan:只读规划模式,禁止修改类操作
 /// Build:完整执行模式,允许所有编程操作(受权限规则约束)
 /// Document:Build 超集 + 4 个文档 Handler 动态加入工具列表
@@ -23,6 +24,8 @@ pub enum AgentMode {
     Plan,
     /// Document 模式:Build 超集,4 个文档 Handler(docx/xlsx/pptx/pdf)动态加入工具列表
     Document,
+    /// Explore 模式:只读探索,仅暴露全局/搜索/文件读取等探索类工具
+    Explore,
 }
 
 impl AgentMode {
@@ -38,6 +41,10 @@ impl AgentMode {
         matches!(self, AgentMode::Document)
     }
 
+    pub fn is_explore(&self) -> bool {
+        matches!(self, AgentMode::Explore)
+    }
+
     /// 判断当前模式是否应包含文档 Handler(仅 Document 模式返回 true)
     pub fn includes_document_handlers(&self) -> bool {
         matches!(self, AgentMode::Document)
@@ -45,7 +52,7 @@ impl AgentMode {
 }
 
 /// Agent 模式管理器
-/// 负责跟踪每个会话的当前模式(Plan/Build/Document)
+/// 负责跟踪每个会话的当前模式(Plan/Build/Document/Explore)
 /// 模式切换仅由前端按钮触发,不提供 LLM 工具切换模式
 pub struct AgentModeManager {
     /// 按 session_id 隔离的模式状态
@@ -88,6 +95,12 @@ impl AgentModeManager {
         self.set_mode(session_id, AgentMode::Document).await;
     }
 
+    /// 切换到 Explore 模式(前端按钮触发)
+    /// Explore 模式下,仅暴露只读探索类工具
+    pub async fn switch_to_explore(&self, session_id: &str) {
+        self.set_mode(session_id, AgentMode::Explore).await;
+    }
+
     /// 清理会话模式状态
     pub async fn cleanup(&self, session_id: &str) {
         let mut modes = self.modes.write().await;
@@ -106,6 +119,25 @@ pub use sub_executor::{SubAgentExecTrait, SubAgentExecutor};
 /// 文档 Handler 名称列表（仅在 Document 模式下暴露给 LLM）
 /// executor.rs 和 sub_executor.rs 共享此常量，避免重复定义导致维护不一致
 pub const DOCUMENT_HANDLER_NAMES: &[&str] = &["docx", "xlsx", "pptx", "pdf", "validator"];
+
+/// Explore 模式下暴露的工具名称列表（仅只读探索类工具）
+/// 工具名必须与 ToolRegistry 中实际注册的名称一致（见 builtin.rs 各 tool_name()）
+/// executor.rs 和 sub_executor.rs 共享此常量，避免重复定义导致维护不一致
+pub const EXPLORE_TOOL_NAMES: &[&str] = &[
+    "list",
+    "search",
+    "read",
+    "file_info",
+    "exists",
+    "glob",
+    "grep",
+    "source_code",
+    "scratchpad",
+    "skill",
+    "webfetch",
+    "websearch",
+    "todowrite",
+];
 
 /// 判断工具名是否为文档 Handler
 pub fn is_document_handler(name: &str) -> bool {
