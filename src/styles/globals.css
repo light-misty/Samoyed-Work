@@ -561,12 +561,18 @@
   background: #505152;
 }
 
-/* 右侧分支导航边栏（外层：控制 width 动画，收起时宽度收缩为 0） */
+/* 右侧分支导航边栏（外层：控制 width 动画，收起时宽度收缩为 0）
+   absolute 定位：覆盖 main-area 右侧整个高度（包括 input-area-wrapper 区域），
+   使右侧栏滚动条可延伸到底部，避免 input-area-wrapper 右侧 padding 区域形成空白 */
 .workflow-right-sidebar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   width: 240px;
-  flex-shrink: 0;
   background: var(--color-bg);
   overflow: hidden;
+  z-index: 5;
   /* width 过渡动画：显示时宽度从 0 扩展到 240px，隐藏时从 240px 收缩到 0 */
   transition: width 0.3s ease;
 }

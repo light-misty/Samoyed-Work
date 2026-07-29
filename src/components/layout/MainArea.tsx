@@ -20,7 +20,8 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
   // 右侧边栏收起时，显示浮动展开按钮
   const showToggleButton = !isEmpty && !rightSidebarVisible;
   // 右侧边栏收起时，给 workflow-area 添加预留区域 class，避免消息框与浮动按钮重叠
-  const workflowAreaClass = `workflow-area ${isEmpty ? "" : "flex-1"}${!isEmpty && !rightSidebarVisible ? " workflow-area-reserved" : ""}`;
+  // 右侧边栏展开时，添加 sidebar-expanded class，通过 padding-right 给 Timeline 预留空间
+  const workflowAreaClass = `workflow-area ${isEmpty ? "" : "flex-1"}${!isEmpty && !rightSidebarVisible ? " workflow-area-reserved" : ""}${!isEmpty && rightSidebarVisible ? " workflow-area-sidebar-expanded" : ""}`;
   // 右侧边栏展开时，给 main-area 添加 class，让 InputArea 也跟随收缩宽度（通过 CSS 选择器）
   const mainAreaClass = `main-area ${isEmpty ? "main-area-empty" : ""}${!isEmpty && rightSidebarVisible ? " main-area-sidebar-expanded" : ""}`;
 
@@ -29,7 +30,6 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
       {/* 工作流区域：滚动由 WorkflowTimeline 内部虚拟滚动容器管理 */}
       <div className={workflowAreaClass}>
         {workflow}
-        {showRightSidebar && <WorkflowRightSidebar collapsed={!rightSidebarVisible} />}
         {/* 右侧边栏收起时的浮动展开按钮（无边框，仅图标） */}
         {showToggleButton && (
           <button
@@ -48,6 +48,10 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
 
       {/* 输入框 */}
       {inputArea}
+
+      {/* 右侧边栏：absolute 定位，覆盖 main-area 右侧整个高度（包括 input-area-wrapper 区域），
+          避免 input-area-wrapper 右侧 padding 区域形成空白，滚动条可延伸到底部 */}
+      {showRightSidebar && <WorkflowRightSidebar collapsed={!rightSidebarVisible} />}
 
       <style>{`
         .main-area {
@@ -82,6 +86,12 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
         /* 右侧边栏收起时，为浮动按钮预留空间，避免消息框与按钮重叠 */
         .workflow-area-reserved > .workflow-scroll-container .workflow-scroll-padding {
           padding-right: 48px;
+        }
+        /* 右侧边栏展开时，通过 padding-right 给 Timeline 预留右侧栏空间，
+           使 Timeline 内容不被 absolute 定位的右侧栏覆盖 */
+        .workflow-area-sidebar-expanded {
+          padding-right: 240px;
+          transition: padding-right 0.3s ease;
         }
         .workflow-right-sidebar-toggle {
           position: absolute;
