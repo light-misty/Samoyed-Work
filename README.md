@@ -11,7 +11,8 @@
 [English](./README.md) | [简体中文](./README_zh.md)
 
 <img src="assets/screenshots/English-1.1.5-main.png" alt="Samoyed Work Screenshot" width="800" />
-<img src="assets/screenshots/English-1.1.5-workflow.png" alt="Samoyed Work Screenshot" width="800" />
+<img src="assets/screenshots/English-1.1.6-workflow-1.png" alt="Samoyed Work Screenshot" width="800" />
+<img src="assets/screenshots/English-1.1.6-workflow-2.png" alt="Samoyed Work Screenshot" width="800" />
 
 </div>
 
