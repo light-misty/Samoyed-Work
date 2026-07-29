@@ -8,6 +8,7 @@ import { listAllBranchUserMessages } from '../../services/tauri';
 import { Icon } from '../common/Icon';
 import { CustomScrollArea } from '../common/CustomScrollArea';
 import { FileTreeSection } from '../sidebar/FileTreeSection';
+import { TodoPanel } from './TodoPanel';
 import type { UserNodeData } from '../../types/workflow';
 import type { BranchUserMessage } from '../../types/session';
 
@@ -132,7 +133,7 @@ function ContextPanel() {
   );
 }
 
-type RightSidebarTab = "branches" | "context" | "files";
+type RightSidebarTab = "todos" | "branches" | "context" | "files";
 
 interface WorkflowRightSidebarProps {
   /** 是否处于收起状态（由父组件控制，用于触发滑入/滑出动画） */
@@ -148,7 +149,7 @@ interface WorkflowRightSidebarProps {
  */
 export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebarProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<RightSidebarTab>("branches");
+  const [activeTab, setActiveTab] = useState<RightSidebarTab>("todos");
   const nodes = useWorkflowStore((s) => s.nodes);
   const currentVisibleNodeId = useWorkflowStore((s) => s.currentVisibleNodeId);
   const setRightSidebarVisible = useWorkflowStore((s) => s.setRightSidebarVisible);
@@ -334,6 +335,13 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
             }}
           >
             <button
+              className={`right-sidebar-tab${activeTab === "todos" ? " active" : ""}`}
+              onClick={() => setActiveTab("todos")}
+            >
+              <Icon name="check-circle" size={12} />
+              <span>{t('workflow.todoList')}</span>
+            </button>
+            <button
               className={`right-sidebar-tab${activeTab === "branches" ? " active" : ""}`}
               onClick={() => setActiveTab("branches")}
             >
@@ -371,7 +379,13 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
         </div>
 
         {/* Tab 内容 */}
-        {activeTab === "branches" ? (
+        {activeTab === "todos" ? (
+          <CustomScrollArea className="branch-graph-content">
+            <div className="branch-graph-padding">
+              <TodoPanel />
+            </div>
+          </CustomScrollArea>
+        ) : activeTab === "branches" ? (
           <CustomScrollArea className="branch-graph-content">
             {currentUserNodes.length === 0 && !isSearching ? (
               <div className="branch-graph-empty">{t('workflow.emptyWorkflow')}</div>

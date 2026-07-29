@@ -39,6 +39,7 @@ import type {
   UpdatePermissionRuleParams,
   LspServerInfo,
   SkillInfo,
+  TodoList,
 } from "../types";
 
 // ================================================================
@@ -792,6 +793,20 @@ export async function listAllBranchUserMessages(sessionId: string): Promise<Bran
   const result = await safeInvoke(() =>
     invoke<BranchUserMessage[]>("list_all_branch_user_messages", { sessionId }),
     { context: "listAllBranchUserMessages" },
+  );
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+// ================================================================
+// Todo 命令
+// ================================================================
+
+/** 获取指定会话的 Todo 任务列表 */
+export async function getTodoList(sessionId: string): Promise<TodoList> {
+  const result = await safeInvoke(() =>
+    invoke<TodoList>("get_todo_list", { sessionId }),
+    { context: "getTodoList" },
   );
   if (!result.ok) throw result.error.raw;
   return result.data;

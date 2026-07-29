@@ -86,8 +86,16 @@
     "searchUserMessages": "搜索用户消息",
     "noSearchResults": "未找到匹配的消息",
     "workspaceFiles": "工作区文件",
+    "todoList": "待办任务",
     "expand": "展开查看全部",
     "collapse": "收起"
+  },
+  "todo": {
+    "empty": "暂无待办任务",
+    "loadError": "加载待办任务失败",
+    "priorityHigh": "高",
+    "priorityMedium": "中",
+    "priorityLow": "低"
   },
   "provider": {
     "selectModel": "选择模型",

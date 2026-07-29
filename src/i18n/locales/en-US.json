@@ -86,8 +86,16 @@
     "searchUserMessages": "Search user messages",
     "noSearchResults": "No matching messages found",
     "workspaceFiles": "Workspace Files",
+    "todoList": "Tasks",
     "expand": "View all",
     "collapse": "Collapse"
+  },
+  "todo": {
+    "empty": "No tasks yet",
+    "loadError": "Failed to load tasks",
+    "priorityHigh": "High",
+    "priorityMedium": "Medium",
+    "priorityLow": "Low"
   },
   "provider": {
     "selectModel": "Select Model",

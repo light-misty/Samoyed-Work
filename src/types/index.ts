@@ -6,3 +6,4 @@ export type { SettingsTab, ConfirmationLevel, RetentionPolicy, ThemeMode, Genera
 export type { PermissionScope, PermissionAction, PermissionType, PermissionRule, AddPermissionRuleParams, UpdatePermissionRuleParams } from "./permission";
 export type { LspServerStatus, LspServerInfo } from "./lsp";
 export type { SkillInfo } from "./skill";
+export type { TodoItem, TodoList, TodoStatus, TodoPriority } from "./todo";

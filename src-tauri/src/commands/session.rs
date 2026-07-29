@@ -486,6 +486,17 @@ pub async fn list_branch_groups(
     Ok(groups)
 }
 
+/// 获取指定会话的 Todo 任务列表
+#[tauri::command]
+pub async fn get_todo_list(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<crate::models::todo::TodoList, CommandError> {
+    let conn = state.db.conn()?;
+    let todo_list = crate::db::todo_repo::get_todo_list(&conn, &session_id)?;
+    Ok(todo_list)
+}
+
 /// 列出会话内所有分支的所有 user 消息（用于跨分支搜索）
 #[tauri::command]
 pub async fn list_all_branch_user_messages(
