@@ -1,7 +1,7 @@
 # Samoyed Work Handler & Tool 系统开发规范
 
 > 版本: 0.1.6
-> 适用项目: Samoyed Work 文档处理桌面应用
+> 适用项目: Samoyed Work AI 编程助手桌面应用
 > 最后更新: 2026-06-14
 
 ---

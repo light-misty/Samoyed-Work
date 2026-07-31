@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概览
 
-Samoyed Work 是一个基于 Tauri 2.x 的 AI 文档处理桌面应用。用户通过对话式 AI Agent 完成 Word/Excel/PPT/PDF/Markdown 文档的生成、读取、修改、格式转换等操作。
+Samoyed Work 是一个基于 Tauri 2.x 的 AI 编程助手桌面应用，定位为通用编程 Agent（类似 Claude Code、OpenCode）。用户通过对话式 AI Agent 在本地工作区中完成代码编写、修改、搜索、命令执行、测试等软件开发任务；同时保留 Document 模式，支持 Word/Excel/PPT/PDF/Markdown 等文档的生成、读取、修改与格式转换。
 
 ## 技术栈
 
@@ -15,7 +15,7 @@ Samoyed Work 是一个基于 Tauri 2.x 的 AI 文档处理桌面应用。用户�
 - **后端语言**: Rust 1.80+ (edition 2021)，Tokio 异步运行时；reqwest 使用 rustls-tls（非 native-tls）
 - **数据库**: SQLite (rusqlite, bundled)
 - **配置存储**: JSON 文件 (serde)
-- **文档处理**: Python 3.12+ Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six / fpdf2 / pypdf / pdfplumber / Pillow)
+- **文档处理（Document 模式）**: Python 3.12+ Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six / fpdf2 / pypdf / pdfplumber / Pillow)
 - **Markdown 渲染**: react-markdown + remark-gfm + rehype-highlight
 - **PDF 预览**: pdfjs-dist
 - **差异对比**: diff 库
@@ -209,7 +209,7 @@ docs/                    详细开发文档
 - `context_presets.rs` 内置 30+ 模型家族的默认上下文窗口预设表（OpenAI/Anthropic/Gemini/DeepSeek/Llama/Qwen/Kimi/GLM/ERNIE/Doubao/MiniMax/Yi/Baichuan/Spark/Mistral/Hunyuan 等）
 - 每 5 分钟后台自动执行健康检查，自动标记不可用 Provider；Provider 切换时发射 `llm:provider_switch` 事件
 
-### Handler 系统（文档处理，始终启用）
+### Handler 系统（文档处理，Document 模式启用）
 - 每个 Handler 实现 `Handler` trait: `handler_name()`, `description()`, `parameters()` (JSON Schema), `execute()`
 - 内置 5 个文档处理器（均通过 Python Sidecar 执行）:
   - `docx_handler`: Word 文档处理（读取/转换/分析）

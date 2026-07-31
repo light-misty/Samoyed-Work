@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Samoyed Work",
-    "desc": "AI Agent-powered intelligent work assistant desktop app"
+    "desc": "AI Agent-powered AI coding assistant desktop app"
   },
   "topBar": {
     "connected": "Connected",
@@ -606,7 +606,7 @@
       "selectWorkspace": "Select Workspace",
       "selectWorkspaceDesc": "Specify the directory for documents, Agent will operate files in this directory",
       "startConversation": "Start Conversation",
-      "startConversationDesc": "Describe your needs in the input box, Agent will automatically select the appropriate Handler to complete the task",
+      "startConversationDesc": "Describe your needs in the input box, Agent will automatically select the appropriate tools to complete the task",
       "builtinHandlerList": "Built-in Handler List",
       "faqTitle": "FAQ",
       "closeDialogDesc": "Close dialog / Cancel operation",

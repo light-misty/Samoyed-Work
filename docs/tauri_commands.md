@@ -1,6 +1,6 @@
 # Samoyed Work Tauri 命令接口文档
 
-> 项目：Samoyed Work文档处理桌面应用
+> 项目：Samoyed Work AI 编程助手桌面应用
 > 技术栈：Tauri 2 + Rust后端 + React前端
 > 版本：0.1.6
 > 最后更新：2026-06-14
@@ -33,7 +33,7 @@
 
 - **Rust后端**：通过 `#[tauri::command]` 暴露 **48 个命令**（跨 10 个模块），供前端通过 `invoke` 调用
 - **React前端**：通过 `@tauri-apps/api/core` 的 `invoke` 调用后端命令，通过 `@tauri-apps/api/event` 的 `listen` 监听后端事件
-- **Python Sidecar**：通过 stdin/stdout JSON 通信，负责文档处理
+- **Python Sidecar**：通过 stdin/stdout JSON 通信，负责文档处理（Document 模式）
 
 ---
 

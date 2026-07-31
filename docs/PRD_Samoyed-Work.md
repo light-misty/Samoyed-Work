@@ -1,4 +1,4 @@
-# Samoyed Work - AI文档处理Agent桌面应用 产品需求文档（PRD）
+# Samoyed Work - AI 编程 Agent 桌面应用 产品需求文档（PRD）
 
 > 版本：v2.0  
 > 日期：2026-06-14  
@@ -10,24 +10,25 @@
 
 ### 1.1 产品定位
 
-Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软件开发者及频繁处理文档的用户群体。用户通过自然语言对话驱动 Agent 完成文档的生成、读取、修改、格式转换等操作，支持 Word、Excel、PPT、PDF、Markdown 等多种文档格式。
+Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code、OpenCode、Codex），面向软件开发者。用户通过自然语言对话驱动 Agent 在本地工作区中完成代码的编写、修改、搜索、命令执行与测试等开发任务，支持多模型 LLM、权限控制、Skill 扩展与子 Agent 协作；内置 Document 模式，保留 Word、Excel、PPT、PDF、Markdown 等多种文档格式的生成、读取、修改与格式转换能力。
 
 ### 1.2 核心价值
 
-- **自然语言驱动**：用户无需学习复杂工具，通过对话即可完成文档操作
-- **多格式覆盖**：一站式处理 Word/Excel/PPT/PDF/Markdown 等主流文档格式
+- **自然语言驱动**：用户无需学习复杂工具，通过对话即可完成代码开发与任务执行
+- **通用编程能力**：文件编辑、代码搜索、命令执行、子 Agent 委托、LSP 代码智能等完整工具链
+- **文档能力保留**：Document 模式一站式处理 Word/Excel/PPT/PDF/Markdown 等主流文档格式
 - **本地优先**：除 LLM API 调用外，所有功能均在本地运行，保障数据安全
-- **高度可配**：用户自主配置 LLM 服务、Prompt 模板、快捷键等
+- **高度可配**：用户自主配置 LLM 服务、Prompt 模板、快捷键、权限规则等
 
 ### 1.3 目标用户
 
 | 用户类型 | 典型场景 |
 |---------|---------|
-| 软件开发者 | 生成技术文档、API文档、README、将Markdown转为Word/PPT |
-| 项目经理 | 生成周报/月报、整理Excel数据、制作汇报PPT |
-| 技术写作者 | Markdown写作与排版、文档格式转换 |
-| 数据分析师 | Excel数据处理与报表生成、数据可视化文档输出 |
-| 学生/研究人员 | 论文排版、文献整理、笔记转正式文档 |
+| 软件开发者 | 编写/修改/重构代码、修复 Bug、运行测试、代码搜索 |
+| 技术负责人 | 代码审查、架构设计、技术方案落地、项目脚手架搭建 |
+| 数据分析师 | 编写 Python 脚本处理数据、可视化分析、生成分析报告 |
+| 文档工程师 | 编写 API 文档/README，Markdown 转 Word/PPT |
+| 办公用户 | 通过 Document 模式生成周报、会议纪要、汇报 PPT 等文档 |
 
 ---
 
@@ -44,7 +45,7 @@ Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 | 状态管理 | Zustand 5 | 轻量状态管理 |
 | 本地数据库 | SQLite (rusqlite, bundled) | 会话历史、版本快照、模板 |
 | 配置存储 | JSON文件 | LLM配置、应用设置、工作区配置 |
-| 文档处理 | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab | 通过 Tauri Sidecar 调用 Python 脚本 |
+| 文档处理（Document 模式） | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab | 通过 Tauri Sidecar 调用 Python 脚本，仅 Document 模式启用 |
 | Markdown渲染 | react-markdown + remark-gfm + rehype-highlight | 实时渲染预览 |
 | PDF预览 | pdfjs-dist | 应用内 PDF 渲染 |
 | 代码执行 | write_script + run_command Tool（Git Bash）| 智能体编写脚本并通过 bash 执行 |
@@ -75,7 +76,7 @@ Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 |  |  - 版本快照管理                              |  |
 |  +--------------------------------------------+  |
 |  +--------------------------------------------+  |
-|  |           Python Sidecar (文档处理)          |  |
+|  |           Python Sidecar (文档处理, Document 模式)  |  |
 |  |  - 5个文档处理器 (word/excel/ppt/pdf/md)    |  |
 |  |  - write_script + run_command Tool         |  |
 |  |  - 格式转换                                 |  |
@@ -163,7 +164,7 @@ Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 - 虚拟滚动优化长列表
 - 迭代组分组展示
 
-#### 内置 Handler（4个）
+#### 内置 Handler（4个，Document 模式下启用）
 | Handler | 功能 |
 |---------|------|
 | docx_handler | Word 文档 read/convert/analyze |
@@ -192,7 +193,7 @@ Samoyed Work 是一款专注于文档处理的 AI Agent 桌面应用，面向软
 - 5 分钟超时自动取消
 - 通过 oneshot channel 同步等待
 
-### 3.4 文档处理
+### 3.4 文档处理（Document 模式）
 
 | 格式 | read | convert | analyze | 生成/修改 |
 |------|------|---------|---------|-----------|

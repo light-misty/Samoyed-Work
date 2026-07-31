@@ -169,7 +169,7 @@ impl AttachmentService {
         }])
     }
 
-    /// 解析文档附件：调用 Sidecar read_document 提取文本内容
+    /// 解析文档附件：调用 Sidecar read 操作提取文本内容
     async fn resolve_document(
         attachment: &AttachmentMeta,
         workspace_root: &str,

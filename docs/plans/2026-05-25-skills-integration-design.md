@@ -6,7 +6,7 @@
 
 ### 1.1 当前系统 Sidecar Handlers 实现
 
-当前 Samoyed Work 的文档处理通过 Python Sidecar 实现，包含四个 Handler：
+当前 Samoyed Work 的文档处理（Document 模式下启用）通过 Python Sidecar 实现，包含四个 Handler：
 
 | Handler | 基础库 | 功能范围 | 专业程度 |
 |---------|--------|----------|----------|

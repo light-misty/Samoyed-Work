@@ -18,8 +18,8 @@
 | 后端语言 | Rust | 1.80+ (edition 2021) | Tauri后端逻辑 |
 | 本地数据库 | SQLite (rusqlite, bundled) | 0.31 | 会话历史、版本快照 |
 | 配置存储 | JSON (serde_json) | - | LLM配置、应用设置、工作区配置 |
-| Python Sidecar | Python | 3.12+ | 文档处理脚本运行时 |
-| 文档处理 | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six | - | Word/Excel/PPT/PDF生成与修改 |
+| Python Sidecar | Python | 3.12+ | 文档处理脚本运行时（Document 模式） |
+| 文档处理（Document 模式） | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six | - | Word/Excel/PPT/PDF生成与修改 |
 | Markdown渲染 | react-markdown + remark-gfm + rehype-highlight | - | Markdown实时渲染预览 |
 | PDF预览 | pdfjs-dist | - | 应用内PDF渲染 |
 | 图表绘制 | recharts | - | Token用量统计图表 |
@@ -199,7 +199,7 @@ samoyed-work/
 │   │   └── logger.ts                # 前端日志
 │   └── styles/
 │       └── globals.css              # 全局样式 (Tailwind CSS)
-├── sidecar/                         # Python 文档处理引擎
+├── sidecar/                         # Python 文档处理引擎（Document 模式）
 │   ├── main.py                      # stdin/stdout JSON行协议入口
 │   ├── requirements.txt             # Python依赖 (13个库)
 │   ├── handlers/

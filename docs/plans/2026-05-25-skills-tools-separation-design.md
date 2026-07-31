@@ -414,7 +414,7 @@ export interface HandlerInfo {
 当前系统提示词（[context.rs](../src-tauri/src/services/agent/context.rs)）需要更新，明确告知 LLM Tools 和 Handlers 的区别：
 
 ```
-你是 Samoyed Work，一个专业的 AI 文档处理助手。
+你是 Samoyed Work，一个专业的 AI 编程助手。
 
 你可以使用以下两类能力：
 
@@ -428,7 +428,7 @@ export interface HandlerInfo {
 - create_directory: 创建目录
 - write_text_file: 写入文本文件
 
-处理器（Handlers）- 专业文档处理，按需调用：
+处理器（Handlers）- 专业文档处理（Document 模式），按需调用：
 - read_document: 读取结构化文档
 - generate_document: 生成新文档
 - modify_document: 修改已有文档
@@ -659,7 +659,7 @@ export interface HandlerInfo {
 
 ### 5.2 为什么内置 Handlers 不可禁用？
 
-内置 Handlers（如 generate_document、modify_document）是 Agent 的核心能力，禁用它们会导致 Agent 无法完成基本的文档处理任务。用户如果不需要某些功能，可以通过自定义 Handlers 来扩展而非限制内置能力。
+内置 Handlers（如 generate_document、modify_document）是 Document 模式下文档处理能力的基础，禁用它们会导致 Agent 无法完成基本的文档处理任务。用户如果不需要某些功能，可以通过自定义 Handlers 来扩展而非限制内置能力。
 
 只有用户自定义的 Handlers 可以被启用/禁用，因为这些是用户主动添加的能力，用户有权决定是否使用。
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Samoyed Work 产品原型 - AI文档处理Agent</title>
+<title>Samoyed Work 产品原型 - AI编程Agent</title>
 <style>
 /* ===== 设计令牌 ===== */
 :root {
@@ -851,7 +851,7 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                 </button>
               </div>
               <div class="session-list-body" id="sessionListBody">
-                <!-- Workspace 1: 文档处理 -->
+                <!-- Workspace 1: 项目文档 -->
                 <div class="workspace-group">
                   <div class="workspace-header" onclick="toggleWorkspace(this)">
                     <div class="workspace-header-left">
@@ -859,7 +859,7 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                       </span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="workspace-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                      <span class="workspace-name">文档处理</span>
+                      <span class="workspace-name">项目文档</span>
                     </div>
                     <div class="workspace-actions">
                       <button class="workspace-action-btn" title="新建会话" onclick="event.stopPropagation();switchView('empty')">
@@ -875,24 +875,24 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                   </div>
                   <div class="workspace-sessions" style="max-height:2000px;opacity:1">
                     <div class="session-item active" onclick="selectSession(this)">
-                      <div class="session-item-title" id="sessionTitle1" title="分析Q4财报文档">分析Q4财报文档</div>
-                      <input class="session-edit-input" id="sessionEdit1" style="display:none" value="分析Q4财报文档" onblur="finishRename(this, 'sessionTitle1')" onkeydown="if(event.key==='Enter')this.blur()">
+                      <div class="session-item-title" id="sessionTitle1" title="修复登录页面 Bug">修复登录页面 Bug</div>
+                      <input class="session-edit-input" id="sessionEdit1" style="display:none" value="修复登录页面 Bug" onblur="finishRename(this, 'sessionTitle1')" onkeydown="if(event.key==='Enter')this.blur()">
                       <div class="session-item-actions" onclick="event.stopPropagation()">
                         <button class="session-action-btn" title="重命名" onclick="startRename('sessionTitle1','sessionEdit1')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                         <button class="session-action-btn session-action-btn-danger" title="删除" onclick="openDeleteDialog(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                       </div>
                     </div>
                     <div class="session-item" onclick="selectSession(this)">
-                      <div class="session-item-title" id="sessionTitle2" title="合同条款审查">合同条款审查</div>
-                      <input class="session-edit-input" id="sessionEdit2" style="display:none" value="合同条款审查" onblur="finishRename(this, 'sessionTitle2')" onkeydown="if(event.key==='Enter')this.blur()">
+                      <div class="session-item-title" id="sessionTitle2" title="实现用户认证模块">实现用户认证模块</div>
+                      <input class="session-edit-input" id="sessionEdit2" style="display:none" value="实现用户认证模块" onblur="finishRename(this, 'sessionTitle2')" onkeydown="if(event.key==='Enter')this.blur()">
                       <div class="session-item-actions" onclick="event.stopPropagation()">
                         <button class="session-action-btn" title="重命名" onclick="startRename('sessionTitle2','sessionEdit2')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                         <button class="session-action-btn session-action-btn-danger" title="删除" onclick="openDeleteDialog(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                       </div>
                     </div>
                     <div class="session-item" onclick="selectSession(this)">
-                      <div class="session-item-title" id="sessionTitle3" title="市场调研报告生成">市场调研报告生成</div>
-                      <input class="session-edit-input" id="sessionEdit3" style="display:none" value="市场调研报告生成" onblur="finishRename(this, 'sessionTitle3')" onkeydown="if(event.key==='Enter')this.blur()">
+                      <div class="session-item-title" id="sessionTitle3" title="代码重构与性能优化">代码重构与性能优化</div>
+                      <input class="session-edit-input" id="sessionEdit3" style="display:none" value="代码重构与性能优化" onblur="finishRename(this, 'sessionTitle3')" onkeydown="if(event.key==='Enter')this.blur()">
                       <div class="session-item-actions" onclick="event.stopPropagation()">
                         <button class="session-action-btn" title="重命名" onclick="startRename('sessionTitle3','sessionEdit3')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                         <button class="session-action-btn session-action-btn-danger" title="删除" onclick="openDeleteDialog(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
@@ -948,7 +948,7 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 <span>返回会话</span>
               </button>
-              <span class="file-tree-workspace-name">文档处理</span>
+              <span class="file-tree-workspace-name">项目文档</span>
             </div>
             <div class="file-tree-wrapper">
               <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin:8px 12px;background:var(--color-bg);border:1px solid var(--color-border-light);border-radius:var(--radius-md)">
@@ -961,30 +961,30 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
               <div style="padding:0 12px 12px;font-size:13px">
                 <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">docs</span>
+                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">src</span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-quaternary);flex-shrink:0"><path d="M6 9l6 6 6-6"/></svg>
                 </div>
                 <div style="padding-left:16px;margin-left:8px;border-left:1.5px solid var(--color-border-light)">
                   <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary)">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-ext-docx);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Q4财报分析报告.docx</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">auth/login.ts</span>
                   </div>
                   <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary)">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-ext-pdf);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><circle cx="12" cy="15" r="2"/><path d="M12 7v4"/></svg>
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">2025年度总结报告.pdf</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">api/user.ts</span>
                   </div>
                   <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary)">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-ext-xlsx);flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">销售人员绩效表.xlsx</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">utils/validate.ts</span>
                   </div>
                   <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary)">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-ext-pptx);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">项目汇报模板.pptx</span>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">pages/Login.tsx</span>
                   </div>
                 </div>
                 <div class="ft-item" style="display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-text-primary);margin-top:2px">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">todo.md</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">README.md</span>
                 </div>
               </div>
             </div>
@@ -1042,7 +1042,7 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                   <div class="attachment-preview-bar" id="emptyAttachBar" style="display:none">
                     <div class="attachment-chip">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <span class="attachment-name">report.docx</span>
+                      <span class="attachment-name">login.ts</span>
                       <span class="attachment-size">245 KB</span>
                       <button class="attachment-remove" title="移除">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1090,17 +1090,17 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
 
                   <div class="template-cards-section">
                     <div class="template-cards-grid">
-                      <button class="template-card" onclick="insertTemplate('请帮我分析文档内容，提取关键信息并生成摘要报告')">
+                      <button class="template-card" onclick="insertTemplate('请帮我检查并修复代码中的 Bug')">
                         <svg class="template-card-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
-                        <span class="template-card-name">文档分析</span>
+                        <span class="template-card-name">代码修复</span>
                       </button>
-                      <button class="template-card" onclick="insertTemplate('请根据以下要求生成一份专业文档内容...')">
+                      <button class="template-card" onclick="insertTemplate('请帮我实现以下功能...')">
                         <svg class="template-card-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
-                        <span class="template-card-name">内容生成</span>
+                        <span class="template-card-name">功能实现</span>
                       </button>
-                      <button class="template-card" onclick="insertTemplate('请将文件转换为目标格式，保持原有排版和内容完整性')">
-                        <svg class="template-card-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-                        <span class="template-card-name">格式转换</span>
+                      <button class="template-card" onclick="insertTemplate('请在项目中搜索相关代码，帮我理解其实现')">
+                        <svg class="template-card-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <span class="template-card-name">代码搜索</span>
                       </button>
                       <button class="template-card-more" onclick="alert('打开模板设置')">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);margin-bottom:4px"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
@@ -1121,14 +1121,7 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                     <div class="wf-user-msg-wrapper">
                       <div class="wf-node-card">
                         <div class="wf-node-body">
-                          <div class="wf-user-text">请帮我分析这份Q4财报文档，提取关键财务指标并生成摘要报告</div>
-                          <div class="wf-user-attachments">
-                            <span class="wf-attachment-tag">
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                              <span class="wf-attachment-name">Q4财报分析报告.docx</span>
-                              <span class="wf-attachment-size">245 KB</span>
-                            </span>
-                          </div>
+                          <div class="wf-user-text">修复登录页面的 Bug：用户输入正确的密码仍然无法登录</div>
                         </div>
                       </div>
                     </div>
@@ -1143,19 +1136,19 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                       </div>
                       <div class="wf-thinking-content">
-                        <p class="wf-thinking-paragraph">用户需要分析Q4财报文档，提取关键财务指标并生成摘要报告。我需要先读取文档，理解其结构，然后提取财务数据进行分析。</p>
-                        <p class="wf-thinking-paragraph">文档包含三个主要部分：收入分析、利润指标和市场表现。我将依次处理这些部分。</p>
+                        <p class="wf-thinking-paragraph">用户报告登录页面 Bug：输入正确的密码仍然无法登录。我需要先读取登录相关代码，定位密码验证逻辑，找出失败原因。</p>
+                        <p class="wf-thinking-paragraph">密码验证涉及 src/auth/login.ts 的登录处理函数和 src/utils/validate.ts 的密码校验工具。我将依次检查这些文件。</p>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Tool Node 1: read_document (running with streaming animation) -->
+                  <!-- Tool Node 1: read (running with streaming animation) -->
                   <div class="wf-node wf-tool-running">
                     <div class="wf-tool-content">
                       <div class="wf-tool-brief">
-                        <span class="font-mono">read_document</span>
+                        <span class="font-mono">read</span>
                         <span> · </span>
-                        <span>读取 Q4财报分析报告.docx</span>
+                        <span>读取 src/auth/login.ts</span>
                         <span class="wf-tool-status-running">执行中...</span>
                       </div>
                       <div class="wf-code-preview wf-code-preview-streaming wf-code-preview-expanded">
@@ -1166,20 +1159,20 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                             <button class="wf-code-preview-copy-btn">复制</button>
                           </div>
                         </div>
-                        <pre class="wf-code-preview-content"><span class="wf-stream-line">document_path = "docs/Q4财报分析报告.docx"</span>
-<span class="wf-stream-line">content = read_document(document_path)</span>
-<span class="wf-stream-line">print(f"文档读取成功，共 {len(content)} 页")</span></pre>
+                        <pre class="wf-code-preview-content"><span class="wf-stream-line">file_path = "src/auth/login.ts"</span>
+<span class="wf-stream-line">content = read(file_path)</span>
+<span class="wf-stream-line">print(f"文件读取成功，共 {len(content)} 行")</span></pre>
                       </div>
                     </div>
                   </div>
 
-                  <!-- Tool Node 2: extract_data (completed) -->
+                  <!-- Tool Node 2: grep (completed) -->
                   <div class="wf-node">
                     <div class="wf-tool-content">
                       <div class="wf-tool-brief">
-                        <span class="font-mono">extract_data</span>
+                        <span class="font-mono">grep</span>
                         <span> · </span>
-                        <span>提取关键财务指标</span>
+                        <span>搜索密码验证相关代码</span>
                         <span class="wf-tool-status-done">完成</span>
                       </div>
                       <div class="wf-code-preview wf-code-preview-expanded">
@@ -1190,15 +1183,12 @@ input, textarea { font-family: inherit; font-size: inherit; color: inherit; bord
                             <button class="wf-code-preview-copy-btn">复制</button>
                           </div>
                         </div>
-                        <pre class="wf-code-preview-content">data = extract_financial_data(content)
-summary = {
-  "total_revenue": 1240000000,
-  "gross_profit": 720000000,
-  "net_income": 260000000,
-  "revenue_growth": 0.185,
-  "gross_margin": 0.581,
-}
-print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
+                        <pre class="wf-code-preview-content">matches = grep(pattern="verifyPassword|bcrypt", path="src/auth/login.ts")
+# 命中 3 处:
+#   L42: if (!verifyPassword(password, user.password_hash))
+#   L45: const salt = user.salt ?? DEFAULT_SALT
+#   L48: return bcrypt.compare(password + salt, user.password_hash)
+print(f"搜索完成: {len(matches)} 处匹配")</pre>
                       </div>
                     </div>
                   </div>
@@ -1207,27 +1197,24 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                   <div class="wf-node">
                     <div class="wf-content-text-wrapper">
                       <div class="markdown-preview">
-                        <h2>Q4 财务分析报告</h2>
-                        <p>已完成文档读取，以下为核心财务指标摘要：</p>
-                        <h3>收入分析</h3>
+                        <h2>登录 Bug 问题分析</h2>
+                        <p>已完成代码检查，找到密码验证失败的原因：</p>
+                        <h3>根因</h3>
                         <ul>
-                          <li>Q4 总收入：<strong>$12.4亿</strong>（同比增长 18.5%）</li>
-                          <li>产品收入：$9.8亿（占比 79%）</li>
-                          <li>服务收入：$2.6亿（占比 21%）</li>
+                          <li>第 48 行：密码校验使用了<strong>错误的盐值拼接顺序</strong>（salt 应在哈希前拼接）</li>
+                          <li>第 42 行：verifyPassword 未处理旧用户缺少 salt 字段的情况</li>
                         </ul>
-                        <h3>利润指标</h3>
+                        <h3>影响范围</h3>
                         <ul>
-                          <li>毛利润：$7.2亿（毛利率 58.1%）</li>
-                          <li>营业利润：$3.1亿（利润率 25%）</li>
-                          <li>净利润：<strong>$2.6亿</strong>（净利率 21%）</li>
+                          <li>使用旧密码格式的用户（约 1.2 万账户）无法登录</li>
+                          <li>新注册用户不受影响</li>
                         </ul>
-                        <h3>同比对比</h3>
+                        <h3>修复方案</h3>
                         <table>
-                          <thead><tr><th>指标</th><th>Q4 2025</th><th>Q3 2025</th><th>环比变化</th></tr></thead>
+                          <thead><tr><th>位置</th><th>修改内容</th></tr></thead>
                           <tbody>
-                            <tr><td>总收入</td><td>$12.4亿</td><td>$10.5亿</td><td>+18.1%</td></tr>
-                            <tr><td>毛利润</td><td>$7.2亿</td><td>$6.1亿</td><td>+18.0%</td></tr>
-                            <tr><td>净利润</td><td>$2.6亿</td><td>$2.1亿</td><td>+23.8%</td></tr>
+                            <tr><td>login.ts:48</td><td>改为 bcrypt.compare(password, hash)（库内部处理盐值）</td></tr>
+                            <tr><td>login.ts:42</td><td>对旧账户补全 salt 字段后重新校验</td></tr>
                           </tbody>
                         </table>
                       </div>
@@ -1262,7 +1249,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                                   <span style="width:24px;height:24px;border-radius:50%;background:var(--color-accent);color:white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">v3</span>
                                   <div style="flex:1;min-width:0">
                                     <div style="font-size:12px;font-weight:500;color:var(--color-text-primary)">2 分钟前</div>
-                                    <div style="font-size:10px;color:var(--color-text-tertiary)">添加摘要报告章节</div>
+                                    <div style="font-size:10px;color:var(--color-text-tertiary)">修复密码验证逻辑</div>
                                   </div>
                                   <span style="font-size:10px;color:var(--color-success);font-weight:500">当前</span>
                                 </div>
@@ -1270,7 +1257,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                                   <span style="width:24px;height:24px;border-radius:50%;background:var(--color-bg-sub);color:var(--color-text-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">v2</span>
                                   <div style="flex:1;min-width:0">
                                     <div style="font-size:12px;font-weight:500;color:var(--color-text-primary)">5 分钟前</div>
-                                    <div style="font-size:10px;color:var(--color-text-tertiary)">提取财务数据表格</div>
+                                    <div style="font-size:10px;color:var(--color-text-tertiary)">添加盐值兼容处理</div>
                                   </div>
                                   <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 6px;opacity:0.7" onclick="event.stopPropagation();showToast('success','已恢复至 v2')">恢复</button>
                                 </div>
@@ -1278,7 +1265,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                                   <span style="width:24px;height:24px;border-radius:50%;background:var(--color-bg-sub);color:var(--color-text-tertiary);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">v1</span>
                                   <div style="flex:1;min-width:0">
                                     <div style="font-size:12px;font-weight:500;color:var(--color-text-primary)">10 分钟前</div>
-                                    <div style="font-size:10px;color:var(--color-text-tertiary)">初始文档读取</div>
+                                    <div style="font-size:10px;color:var(--color-text-tertiary)">初始代码读取</div>
                                   </div>
                                   <button class="btn btn-sm btn-ghost" style="font-size:10px;padding:2px 6px;opacity:0.7" onclick="event.stopPropagation();showToast('success','已恢复至 v1')">恢复</button>
                                 </div>
@@ -1286,20 +1273,27 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                               <div class="version-diff-view" style="flex:1;display:flex;overflow:hidden;min-height:120px">
                                 <div class="version-diff-pane" style="flex:1;overflow-y:auto;padding:12px;border-right:1px solid var(--color-border-light)">
                                   <div class="version-diff-label" style="font-size:10px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;margin-bottom:6px">v3 (当前)</div>
-                                  <div class="version-diff-content" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap">Q4 总收入：$12.4亿（同比增长 18.5%）
-产品收入：$9.8亿（占比 79%）
-<span style="background:var(--color-success-light);color:var(--color-success)">+ 服务收入：$2.6亿（占比 21%）</span>
-<span style="background:var(--color-success-light);color:var(--color-success)">+ 毛利润：$7.2亿（毛利率 58.1%）</span>
-营业利润：$3.1亿（利润率 25%）
-净利润：$2.6亿（净利率 21%）</div>
+                                  <div class="version-diff-content" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap">export async function login(email, password) {
+  const user = await getUserByEmail(email);
+  const valid = await verifyPassword(
+    password,
+    user.password_hash
+  );
+<span style="background:var(--color-success-light);color:var(--color-success)">+ if (!user.salt) { await migrateSalt(user); }</span>
+  return valid;
+}</div>
                                 </div>
                                 <div class="version-diff-pane" style="flex:1;overflow-y:auto;padding:12px">
                                   <div class="version-diff-label" style="font-size:10px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;margin-bottom:6px">v2 (基准)</div>
-                                  <div class="version-diff-content" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap">Q4 总收入：$12.4亿（同比增长 18.5%）
-产品收入：$9.8亿（占比 79%）
-<span style="background:var(--color-error-light);color:var(--color-error)">- 服务收入：$2.6亿（占比 21%）</span>
-营业利润：$3.1亿（利润率 25%）
-净利润：$2.6亿（净利率 21%）</div>
+                                  <div class="version-diff-content" style="font-family:var(--font-mono);font-size:11px;line-height:1.6;white-space:pre-wrap">export async function login(email, password) {
+  const user = await getUserByEmail(email);
+  const valid = await verifyPassword(
+    password,
+    user.password_hash
+  );
+<span style="background:var(--color-error-light);color:var(--color-error)">- const salt = user.salt ?? DEFAULT_SALT;</span>
+  return valid;
+}</div>
                                 </div>
                               </div>
                             </div>
@@ -1314,9 +1308,9 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                     <div class="wf-confirm-flat">
                       <div class="wf-confirm-title">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                        生成摘要报告
+                        应用修复补丁
                       </div>
-                      <div class="wf-confirm-desc">将使用分析数据生成一份完整的Q4财务摘要报告（.docx格式）。确认执行？</div>
+                      <div class="wf-confirm-desc">将使用修复后的代码修改 src/auth/login.ts 中的密码验证逻辑。确认执行？</div>
                       <div class="wf-confirm-actions">
                         <div class="wf-confirm-buttons">
                           <button class="wf-confirm-btn btn btn-danger">确认执行</button>
@@ -1332,13 +1326,13 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                   <!-- Error Node -->
                   <div class="wf-node">
                     <div class="wf-error-flat">
-                      <div class="wf-error-message">文档格式解析失败，该文档可能包含加密内容或不支持的格式</div>
+                      <div class="wf-error-message">代码格式错误：login.ts 第 42 行存在语法错误</div>
                       <details class="wf-error-details">
                         <summary>查看错误详情</summary>
                         <div class="wf-error-detail-content">
-                          <div>错误代码: E1004</div>
-                          <div>模块: document_parser</div>
-                          <div>详细信息: 文档包含加密保护，无法解析内容</div>
+                          <div>错误代码: E2003</div>
+                          <div>模块: typescript_parser</div>
+                          <div>详细信息: 缺少右括号，无法解析表达式</div>
                         </div>
                       </details>
                       <button class="wf-error-retry-btn">
@@ -1365,7 +1359,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                   <div class="attachment-preview-bar" id="convAttachBar" style="display:none">
                     <div class="attachment-chip">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <span class="attachment-name">report.docx</span>
+                      <span class="attachment-name">login.ts</span>
                       <span class="attachment-size">245 KB</span>
                       <button class="attachment-remove" title="移除">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1421,7 +1415,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
   <div class="preview-overlay" id="previewOverlay" style="display:none">
     <div class="preview-dialog">
       <div class="preview-header">
-        <span class="preview-title" id="previewTitle">文档预览</span>
+        <span class="preview-title" id="previewTitle">文件预览</span>
         <button class="preview-close-btn" onclick="closePreview()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -1433,31 +1427,33 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
       </div>
       <div class="preview-content" id="previewContent">
         <div class="markdown-preview">
-          <h1>Q4 2025 财务分析报告</h1>
-          <p>本报告基于 Q4财报分析报告.docx 提取的核心财务数据生成。</p>
-          <h2>关键财务指标</h2>
+          <h1>src/auth/login.ts（修复后）</h1>
+          <p>密码验证逻辑已修复，登录接口恢复正常。</p>
+          <h2>核心修改</h2>
           <table>
-            <thead><tr><th>指标</th><th>Q4 2025</th><th>Q3 2025</th><th>环比变化</th></tr></thead>
+            <thead><tr><th>位置</th><th>修改前</th><th>修改后</th></tr></thead>
             <tbody>
-              <tr><td>总收入</td><td>$12.4亿</td><td>$10.5亿</td><td>+18.1%</td></tr>
-              <tr><td>毛利润</td><td>$7.2亿</td><td>$6.1亿</td><td>+18.0%</td></tr>
-              <tr><td>净利润</td><td>$2.6亿</td><td>$2.1亿</td><td>+23.8%</td></tr>
+              <tr><td>L48</td><td>bcrypt.compare(password + salt, hash)</td><td>bcrypt.compare(password, hash)</td></tr>
+              <tr><td>L42</td><td>直接校验，无 salt 兼容</td><td>旧账户自动迁移 salt</td></tr>
             </tbody>
           </table>
         </div>
       </div>
       <div class="preview-content" id="previewSource" style="display:none">
-        <pre class="preview-content-text" style="font-family:var(--font-mono);font-size:12px;line-height:1.8;background:var(--color-bg-sub);padding:16px;border-radius:var(--radius-sm)"># Q4 2025 财务分析报告
+        <pre class="preview-content-text" style="font-family:var(--font-mono);font-size:12px;line-height:1.8;background:var(--color-bg-sub);padding:16px;border-radius:var(--radius-sm)">export async function login(email, password) {
+  const user = await getUserByEmail(email);
+  if (!user) return { ok: false, reason: "USER_NOT_FOUND" };
 
-本报告基于 Q4财报分析报告.docx 提取的核心财务数据生成。
+  // 旧账户兼容：补全 salt 后重新校验
+  if (!user.salt) {
+    await migrateSalt(user);
+  }
 
-## 关键财务指标
-
-| 指标 | Q4 2025 | Q3 2025 | 环比变化 |
-|------|---------|---------|----------|
-| 总收入 | $12.4亿 | $10.5亿 | +18.1% |
-| 毛利润 | $7.2亿 | $6.1亿 | +18.0% |
-| 净利润 | $2.6亿 | $2.1亿 | +23.8% |</pre>
+  const valid = await verifyPassword(password, user.password_hash);
+  return valid
+    ? { ok: true, token: createToken(user.id) }
+    : { ok: false, reason: "INVALID_PASSWORD" };
+}</pre>
       </div>
       <div class="preview-content" id="previewChanges" style="display:none">
         <div style="font-size:13px;color:var(--color-text-secondary);line-height:1.6">
@@ -1465,15 +1461,15 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
           <div style="display:flex;flex-direction:column;gap:4px">
             <div style="display:flex;gap:8px;padding:4px 8px;background:var(--color-success-light);border-radius:var(--radius-sm);font-size:12px">
               <span style="color:var(--color-success);font-weight:600;font-family:var(--font-mono)">+</span>
-              <span>新增年度同比对比表格</span>
+              <span>新增旧账户 salt 迁移逻辑</span>
             </div>
             <div style="display:flex;gap:8px;padding:4px 8px;background:var(--color-warning-bg);border-radius:var(--radius-sm);font-size:12px">
               <span style="color:var(--color-warning);font-weight:600;font-family:var(--font-mono)">~</span>
-              <span>更新净利润数据（$2.5亿 → $2.6亿）</span>
+              <span>修正密码校验方式（bcrypt 直接比较）</span>
             </div>
             <div style="display:flex;gap:8px;padding:4px 8px;background:var(--color-error-light);border-radius:var(--radius-sm);font-size:12px">
               <span style="color:var(--color-error);font-weight:600;font-family:var(--font-mono)">-</span>
-              <span>移除过时的市场表现章节</span>
+              <span>移除错误的盐值拼接逻辑</span>
             </div>
           </div>
         </div>
@@ -1489,7 +1485,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
         <span>确认删除</span>
       </div>
       <div class="delete-dialog-desc">
-        确定要删除会话 "<strong id="deleteSessionName">分析Q4财报文档</strong>" 吗？此操作不可撤销，相关文件不会被删除。
+        确定要删除会话 "<strong id="deleteSessionName">修复登录页面 Bug</strong>" 吗？此操作不可撤销，相关文件不会被删除。
       </div>
       <div class="delete-dialog-actions">
         <button class="delete-dialog-btn delete-dialog-btn-cancel" onclick="closeDeleteDialog()">取消</button>
@@ -1638,7 +1634,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
             <div class="workspace-list-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--color-text-tertiary);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               <span class="workspace-list-path">D:/projects/samoyed-work/workspaces/docs</span>
-              <span class="workspace-list-desc">文档处理</span>
+              <span class="workspace-list-desc">项目文档</span>
               <button class="workspace-list-remove" onclick="showToast('warning','工作区已移除')">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -1661,8 +1657,8 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
         <!-- Handlers / Tools -->
         <div class="settings-panel" id="settingsTabHandlers">
           <div class="settings-section-title">Handlers / Tools</div>
-          <div class="settings-section-desc">文档处理器和工具列表。处理器用于读写特定格式文件，工具提供通用文件系统操作。</div>
-          <div class="settings-section-title" style="font-size:13px;margin-bottom:10px;color:var(--color-text-secondary)">文档处理器</div>
+          <div class="settings-section-desc">处理器（Handler）和工具（Tool）列表。处理器用于读写特定格式的文档（Document 模式下启用），工具提供通用文件系统与代码操作。</div>
+          <div class="settings-section-title" style="font-size:13px;margin-bottom:10px;color:var(--color-text-secondary)">文档处理器（Document 模式）</div>
           <div class="handlers-grid">
             <div class="handler-card">
               <div class="handler-card-icon" style="background:var(--color-ext-docx);color:white">D</div>
@@ -1987,7 +1983,7 @@ print(f"提取完成: {len(data['metrics'])} 项指标")</pre>
                 <span>什么是 Samoyed Work？</span>
                 <svg class="faq-question-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
               </div>
-              <div class="faq-answer">Samoyed Work 是一款基于 AI 的文档处理代理工具，能够自动读取、分析、生成和转换各类文档格式（.docx、.xlsx、.pptx、.pdf、Markdown 等）。它通过与 LLM 集成，理解用户意图并智能化地执行文档处理任务。</div>
+              <div class="faq-answer">Samoyed Work 是一款基于 AI 的编程 Agent 桌面应用，能够在本地工作区中自动完成代码的编写、修改、搜索与命令执行等开发任务。它通过与 LLM 集成，理解用户意图并智能化地执行编程任务；内置 Document 模式，也可生成、分析和转换各类文档格式（.docx、.xlsx、.pptx、.pdf、Markdown 等）。</div>
             </div>
             <div class="faq-item">
               <div class="faq-question" onclick="toggleFaq(this)">
@@ -2267,7 +2263,7 @@ function showToast(type, message) {
 
 // ===== Preview Overlay =====
 function openPreview(title) {
-  document.getElementById('previewTitle').textContent = title || '文档预览';
+  document.getElementById('previewTitle').textContent = title || '文件预览';
   document.getElementById('previewOverlay').style.display = 'flex';
 }
 
@@ -2334,7 +2330,7 @@ var typewriterInterval = null;
 function startTypewriter() {
   const el = document.getElementById('typewriterText');
   if (!el) return;
-  const text = '今天想处理什么文档？';
+  const text = '今天想实现什么功能？';
   el.textContent = '';
   if (typewriterInterval) clearInterval(typewriterInterval);
 

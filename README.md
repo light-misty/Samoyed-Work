@@ -46,7 +46,7 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 - Auto-detection when directories are deleted
 - Git repository status display
 
-### Document Processing
+### Document Processing (Document Mode)
 - Word (.docx): read, create, edit, format conversion, structure analysis
 - Excel (.xlsx): read, create, edit, data extraction
 - PPT (.pptx): read, create, edit, slide extraction

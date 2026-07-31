@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Samoyed Work",
-    "desc": "基于 AI Agent 的智能工作助手桌面应用"
+    "desc": "基于 AI Agent 的 AI 编程助手桌面应用"
   },
   "topBar": {
     "connected": "已连接",
@@ -606,7 +606,7 @@
       "selectWorkspace": "选择工作区",
       "selectWorkspaceDesc": "指定文档存放的目录，Agent 将在此目录下操作文件",
       "startConversation": "开始对话",
-      "startConversationDesc": "在输入框中描述您的需求，Agent 会自动选择合适的处理器完成任务",
+      "startConversationDesc": "在输入框中描述您的需求，Agent 会自动选择合适的工具完成任务",
       "builtinHandlerList": "内置 Handler 列表",
       "faqTitle": "常见问题",
       "closeDialogDesc": "关闭弹窗/取消操作",
