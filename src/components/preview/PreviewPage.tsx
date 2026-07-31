@@ -36,24 +36,24 @@ export function PreviewPage({
   const { t } = useTranslation();
 
   return (
-    <div className="preview-page">
+    <div className="flex flex-col h-full min-h-0">
       {/* 顶部栏：返回按钮 + 标题 */}
-      <div className="preview-header">
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border flex-shrink-0 h-11">
         <button
-          className="preview-back-btn"
+          className="flex items-center gap-1 px-2 py-1 bg-transparent border-none text-text-secondary cursor-pointer text-[13px] rounded transition-colors hover:bg-bg-sub hover:text-text-primary"
           onClick={onBack}
           title={t("preview.back")}
         >
           <Icon name="back" size={16} />
           <span>{t("preview.back")}</span>
         </button>
-        <h3 className="preview-title">{title}</h3>
+        <h3 className="text-[14px] font-medium text-text-primary m-0 truncate">{title}</h3>
       </div>
 
       {/* 主体内容区 */}
-      <div className="preview-body">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {loading ? (
-          <div className="preview-status">
+          <div className="flex items-center justify-center gap-2 flex-1 text-text-tertiary text-[13px]">
             <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -72,66 +72,6 @@ export function PreviewPage({
           </div>
         )}
       </div>
-
-      <style>{`
-        .preview-page {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          min-height: 0;
-        }
-        .preview-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 8px 16px;
-          border-bottom: 1px solid var(--color-border, #e5e6eb);
-          flex-shrink: 0;
-          height: 44px;
-        }
-        .preview-back-btn {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          padding: 4px 8px;
-          background: transparent;
-          border: none;
-          color: var(--color-text-secondary, #646a73);
-          cursor: pointer;
-          font-size: 13px;
-          border-radius: 4px;
-          transition: background 0.15s, color 0.15s;
-        }
-        .preview-back-btn:hover {
-          background: var(--color-bg-hover, #f0f1f5);
-          color: var(--color-text-primary, #1f2329);
-        }
-        .preview-title {
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--color-text-primary, #1f2329);
-          margin: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .preview-body {
-          flex: 1;
-          min-height: 0;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-        }
-        .preview-status {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          flex: 1;
-          color: var(--color-text-tertiary, #8f959e);
-          font-size: 13px;
-        }
-      `}</style>
     </div>
   );
 }

@@ -10,8 +10,8 @@ import { CustomScrollArea } from "../common/CustomScrollArea";
 interface WorkflowTimelineProps {
   /** 错误节点重试回调 */
   onRetryError?: () => void;
-  /** 是否显示打字机效果 */
-  typewriterVisible?: boolean;
+  /** 打字机重播键：值变化时强制重挂空会话标题的打字机动画（如新建会话） */
+  typewriterKey?: number;
 }
 
 function TypewriterText({ text }: { text: string }) {
@@ -69,7 +69,7 @@ function throttle<T extends (...args: any[]) => void>(fn: T, delay: number): T {
  * 避免虚拟滚动带来的 DOM 不完整和滚动卡顿问题。
  * 支持流式输出即时滚动和新增节点平滑滚动。
  */
-export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: WorkflowTimelineProps) {
+export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimelineProps) {
   const { t } = useTranslation();
   const { nodes, registerNodeRef, unregisterNodeRef } = useWorkflowStore();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -228,7 +228,7 @@ export function WorkflowTimeline({ onRetryError, typewriterVisible = false }: Wo
 
   if (nodes.length === 0) {
     return (
-      <EmptySessionTitle typewriterVisible={typewriterVisible} />
+      <EmptySessionTitle typewriterKey={typewriterKey} />
     );
   }
 
@@ -279,9 +279,10 @@ const EMPTY_MODE_CONFIG: Record<AgentMode, { icon: IconName; textKey: string }> 
  * 空会话标题组件
  * 根据当前 Agent 模式显示对应图标和文字。
  * 图标直接显示（无动画），文字保持打字机效果（TypewriterText）。
- * 模式切换时 TypewriterText 通过 text prop 变化自动重启打字动画。
+ * 模式切换时 TypewriterText 通过 text prop 变化自动重启打字动画；
+ * typewriterKey 变化时通过 key 强制重挂，重新播放打字动画（新建会话场景）。
  */
-function EmptySessionTitle({ typewriterVisible }: { typewriterVisible: boolean }) {
+function EmptySessionTitle({ typewriterKey }: { typewriterKey?: number }) {
   const { t } = useTranslation();
   const mode = useAgentModeStore((s) => s.mode);
   const { icon, textKey } = EMPTY_MODE_CONFIG[mode];
@@ -293,11 +294,7 @@ function EmptySessionTitle({ typewriterVisible }: { typewriterVisible: boolean }
         className={`wf-empty-title wf-empty-main-title wf-empty-main-title-with-icon wf-empty-mode-title wf-empty-mode-${mode}`}
       >
         <Icon name={icon} size={42} className="wf-empty-book-icon wf-empty-mode-icon" />
-        {typewriterVisible ? (
-          <TypewriterText text={titleText} />
-        ) : (
-          titleText
-        )}
+        <TypewriterText key={typewriterKey} text={titleText} />
       </h3>
     </div>
   );

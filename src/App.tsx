@@ -35,7 +35,7 @@ import { getCommandByName } from "./commands/slashCommands";
 import { useSuperpowersStore } from "./stores/useSuperpowersStore";
 import { BUILTIN_SUPERPOWERS_NAME, BUILTIN_SUPERPOWERS_CONTENT } from "./commands/superpowersContent";
 
-// 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
+// 懒加载组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
 // 文档预览页：打开预览时替换主内容区显示，带返回按钮
 const PreviewPage = lazy(() =>
   import("./components/preview/PreviewPage").then((m) => ({ default: m.PreviewPage }))
@@ -63,7 +63,8 @@ export default function App() {
   const updateNotificationOpen = useUpdateStore((s) => s.updateNotificationOpen);
   const setUpdateNotificationOpen = useUpdateStore((s) => s.setUpdateNotificationOpen);
   const [pendingUpdateInfo, setPendingUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [typewriterVisible, setTypewriterVisible] = useState(true);
+  // 打字机重播键：新建会话时自增，强制重挂空会话标题的打字机动画
+  const [typewriterKey, setTypewriterKey] = useState(0);
 
   // 文档预览状态
   const [previewTitle, setPreviewTitle] = useState("");
@@ -713,8 +714,21 @@ export default function App() {
     }
   }, [setExecutionStatus, stopAgent]);
 
+  // 关闭文档预览
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewContent("");
+    setPreviewTitle("");
+    setPreviewFileType(undefined);
+    setPreviewPdfBase64(null);
+  }, []);
+
   // 新建会话：先保存当前会话状态到缓存，再清空 UI
   const handleNewSession = useCallback(() => {
+    // 退出文档预览页，避免新建会话后残留旧文件预览
+    handleClosePreview();
+    // 自增打字机重播键：空会话保持挂载时强制重挂，重新播放打字机动画
+    setTypewriterKey((k) => k + 1);
     // 如果当前有会话，保存其状态到缓存
     if (currentSessionId) {
       saveSessionToCache(currentSessionId, {
@@ -723,9 +737,6 @@ export default function App() {
         confirmNodeId: confirmNodeIdRef.current,
         currentIteration: currentIterationRef.current,
       });
-      setTypewriterVisible(true);
-    } else {
-      setTypewriterVisible(true);
     }
     clearNodes();
     resetAgent();
@@ -733,10 +744,12 @@ export default function App() {
     clearContextUsage();
     resetRefs();
     setRightSidebarVisible(false);
-  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, setRightSidebarVisible]);
+  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, setRightSidebarVisible, handleClosePreview]);
 
   // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
   const handleSwitchSession = useCallback(async (sessionId: string, workspaceId?: string) => {
+    // 退出文档预览页，避免切换会话后残留旧文件预览
+    handleClosePreview();
     // 仅当 workspaceId 是真实工作区且与当前不同时才切换
     if (workspaceId && workspaceId !== currentWorkspaceId && workspaces.some((w) => w.id === workspaceId)) {
       await switchWorkspace(workspaceId);
@@ -813,7 +826,7 @@ export default function App() {
     if (hasMessages) {
       loadContextUsage(sessionId);
     }
-  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
+  }, [clearNodes, resetAgent, clearContextUsage, clearSubAgentWorkflow, handleClosePreview, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, saveSessionToCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId, switchWorkspace, currentWorkspaceId, workspaces]);
 
   // 为指定工作区新建会话：仅切换工作区并重置到"待机"状态，不立即创建后端会话
   // 实际会话在用户首次提问时由 useAgent.sendMessage 自动创建（携带当前工作区 ID），
@@ -830,13 +843,17 @@ export default function App() {
 
   // 查看指定工作区的文件树
   const handleShowFilesForWorkspace = useCallback(async (workspaceId: string) => {
+    // 退出文档预览页，避免切换工作区后残留旧工作区的文件预览
+    handleClosePreview();
     if (workspaceId !== currentWorkspaceId) {
       await switchWorkspace(workspaceId);
     }
-  }, [switchWorkspace, currentWorkspaceId]);
+  }, [switchWorkspace, currentWorkspaceId, handleClosePreview]);
 
   // 删除当前会话后的处理：清空缓存，切换到其他会话或清空工作流
   const handleDeleteCurrentSession = useCallback(async (nextSessionId: string | null) => {
+    // 退出文档预览页，避免删除会话后残留旧文件预览
+    handleClosePreview();
     // 清除被删除会话的缓存
     if (currentSessionId) {
       clearSessionCache(currentSessionId);
@@ -897,7 +914,7 @@ export default function App() {
       clearNodes();
       clearContextUsage();
     }
-  }, [clearNodes, resetAgent, clearSubAgentWorkflow, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
+  }, [clearNodes, resetAgent, clearSubAgentWorkflow, handleClosePreview, switchSession, setAgentSessionId, loadFromMessages, loadContextUsage, clearContextUsage, clearSessionCache, restoreSessionFromCache, getCachedStreamingRefs, setExecutionStatus, currentSessionId]);
 
   // 打开文档预览：从后端获取文档内容并显示预览浮层
   const handleOpenPreview = useCallback(async (filePath: string, fileName: string) => {
@@ -934,15 +951,6 @@ export default function App() {
       setPreviewLoading(false);
     }
   }, [currentWorkspaceId]);
-
-  // 关闭文档预览
-  const handleClosePreview = useCallback(() => {
-    setPreviewOpen(false);
-    setPreviewContent("");
-    setPreviewTitle("");
-    setPreviewFileType(undefined);
-    setPreviewPdfBase64(null);
-  }, []);
 
   // 错误重试回调：使用最后一次发送的文本重新发送消息
   const handleRetryError = useCallback(async () => {
@@ -1155,7 +1163,7 @@ export default function App() {
               {nodes.length === 0 && <WorkspaceGitStatus pageLevel />}
               <MainArea
                 isEmpty={nodes.length === 0}
-                workflow={<WorkflowTimeline onRetryError={handleRetryError} typewriterVisible={typewriterVisible} />}
+                workflow={<WorkflowTimeline onRetryError={handleRetryError} typewriterKey={typewriterKey} />}
                 inputArea={
                   <InputArea
                     onSend={handleSend}
