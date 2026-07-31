@@ -138,6 +138,10 @@ type RightSidebarTab = "todos" | "branches" | "context" | "files";
 interface WorkflowRightSidebarProps {
   /** 是否处于收起状态（由父组件控制，用于触发滑入/滑出动画） */
   collapsed?: boolean;
+  /** 打开文档预览回调（透传给工作区文件树右键菜单/双击） */
+  onOpenPreview?: (filePath: string, fileName: string) => void;
+  /** 打开版本历史回调（透传给工作区文件树右键菜单） */
+  onOpenVersionHistory?: (filePath: string, fileName: string) => void;
 }
 
 /**
@@ -147,7 +151,7 @@ interface WorkflowRightSidebarProps {
  * - 上下文窗口：展示 Token 使用情况、进度条、缓存命中率
  * - 滑入/滑出动画：外层控制 width，内层控制 transform，避免内容被压缩
  */
-export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebarProps) {
+export function WorkflowRightSidebar({ collapsed = false, onOpenPreview, onOpenVersionHistory }: WorkflowRightSidebarProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<RightSidebarTab>("todos");
   const nodes = useWorkflowStore((s) => s.nodes);
@@ -576,7 +580,7 @@ export function WorkflowRightSidebar({ collapsed = false }: WorkflowRightSidebar
               </div>
             </div>
             <CustomScrollArea className="branch-graph-content">
-              <FileTreeSection hideSearchBar />
+              <FileTreeSection hideSearchBar onOpenPreview={onOpenPreview} onOpenVersionHistory={onOpenVersionHistory} />
             </CustomScrollArea>
           </div>
         )}

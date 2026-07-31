@@ -8,9 +8,13 @@ interface MainAreaProps {
   inputArea: ReactNode;
   /** 是否为空会话状态：空会话时工作流与输入框整体垂直居中 */
   isEmpty?: boolean;
+  /** 打开文档预览回调（透传给右侧栏工作区文件树） */
+  onOpenPreview?: (filePath: string, fileName: string) => void;
+  /** 打开版本历史回调（透传给右侧栏工作区文件树） */
+  onOpenVersionHistory?: (filePath: string, fileName: string) => void;
 }
 
-export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps) {
+export function MainArea({ workflow, inputArea, isEmpty = false, onOpenPreview, onOpenVersionHistory }: MainAreaProps) {
   const { t } = useTranslation();
   // 右侧边栏可见性：仅在非空会话且开关开启时显示
   const rightSidebarVisible = useWorkflowStore((s) => s.rightSidebarVisible);
@@ -51,7 +55,7 @@ export function MainArea({ workflow, inputArea, isEmpty = false }: MainAreaProps
 
       {/* 右侧边栏：absolute 定位，覆盖 main-area 右侧整个高度（包括 input-area-wrapper 区域），
           避免 input-area-wrapper 右侧 padding 区域形成空白，滚动条可延伸到底部 */}
-      {showRightSidebar && <WorkflowRightSidebar collapsed={!rightSidebarVisible} />}
+      {showRightSidebar && <WorkflowRightSidebar collapsed={!rightSidebarVisible} onOpenPreview={onOpenPreview} onOpenVersionHistory={onOpenVersionHistory} />}
 
       <style>{`
         .main-area {

@@ -1201,6 +1201,8 @@ export default function App() {
                     onSkillSelect={handleSkillSelect}
                   />
                 }
+                onOpenPreview={handleOpenPreview}
+                onOpenVersionHistory={handleOpenVersionHistory}
               />
             </div>
             {currentSubAgentId && (
