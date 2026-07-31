@@ -99,7 +99,7 @@ const FileTreeItem = memo(function FileTreeItem({
           onContextMenu={(e) => onContextMenu(e, node)}
         >
           <span className={`ft-dir-icon ${isExpanded ? "ft-dir-open" : ""}`}>
-            <Icon name="folder" size={15} />
+            <Icon name="folder" size={13} />
           </span>
           {isRenaming ? (
             <InlineRenameInput
@@ -111,7 +111,7 @@ const FileTreeItem = memo(function FileTreeItem({
             <span className="ft-name">{node.name}</span>
           )}
 <span className="ft-chevron" style={{ transform: isExpanded ? "rotate(0deg)" : "rotate(-90deg)" }}>
-  <Icon name="chevron-down" size={12} />
+  <Icon name="chevron-down" size={11} />
 </span>
         </div>
         {isExpanded && node.children && (
@@ -143,11 +143,11 @@ const FileTreeItem = memo(function FileTreeItem({
     "ft-ext-default";
 
   const extIcon =
-    node.extension === "docx" ? <Icon name="doc" size={15} /> :
-    node.extension === "xlsx" ? <Icon name="xlsx" size={15} /> :
-    node.extension === "pptx" ? <Icon name="ppt" size={15} /> :
-    node.extension === "pdf" ? <Icon name="pdf" size={15} /> :
-    <Icon name="file" size={15} />;
+    node.extension === "docx" ? <Icon name="doc" size={13} /> :
+    node.extension === "xlsx" ? <Icon name="xlsx" size={13} /> :
+    node.extension === "pptx" ? <Icon name="ppt" size={13} /> :
+    node.extension === "pdf" ? <Icon name="pdf" size={13} /> :
+    <Icon name="file" size={13} />;
 
   return (
     <div
@@ -605,7 +605,7 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
         <div className="ft-skeleton" role="status" aria-label={t('fileTree.loading')}>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="ft-skeleton-item">
-              <div className="skeleton skeleton-circle" style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <div className="skeleton skeleton-circle" style={{ width: 14, height: 14, flexShrink: 0 }} />
               <div className={`skeleton skeleton-text ${i === 3 ? "skeleton-text-short" : ""}`} />
             </div>
           ))}
@@ -752,18 +752,25 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           position: relative;
         }
         .ft-tree {
-          font-size: 13px;
+          font-size: 12px;
         }
         .ft-item {
           display: flex;
           align-items: center;
           gap: 7px;
-          padding: 4px 8px;
-          border-radius: var(--radius-sm);
+          padding: 2px 8px;
+          /* 按钮之间添加 1px 间距 */
+          margin-top: 1px;
+          border-radius: var(--radius-xs);
           cursor: pointer;
           user-select: none;
           color: var(--color-text-primary);
           position: relative;
+        }
+        /* 顶层第一个按钮不添加上间距 */
+        .ft-tree > :first-child.ft-item,
+        .ft-tree > :first-child > .ft-item {
+          margin-top: 0;
         }
         .ft-item:hover {
           background: var(--color-accent-bg);
@@ -780,8 +787,8 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           flex-shrink: 0;
         }
         .ft-file:hover {
@@ -793,8 +800,8 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           font-weight: 500;
         }
         .ft-file-icon {
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           flex-shrink: 0;
           display: flex;
           align-items: center;
@@ -811,12 +818,12 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          font-size: 13px;
-          line-height: 1.5;
+          font-size: 12px;
+          line-height: 1.4;
         }
         .ft-chevron {
-          width: 16px;
-          height: 16px;
+          width: 14px;
+          height: 14px;
           flex-shrink: 0;
           display: flex;
           align-items: center;
@@ -831,8 +838,8 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
         }
         .ft-rename-input {
           flex: 1;
-          font-size: 13px;
-          line-height: 1.5;
+          font-size: 12px;
+          line-height: 1.4;
           padding: 1px 4px;
           border: 1px solid var(--color-accent);
           border-radius: var(--radius-xs);
@@ -852,7 +859,7 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           display: flex;
           align-items: center;
           gap: 7px;
-          padding: 4px 8px;
+          padding: 2px 8px;
         }
         .ft-section {
           display: flex;
