@@ -727,8 +727,12 @@ export default function App() {
   const handleNewSession = useCallback(() => {
     // 退出文档预览页，避免新建会话后残留旧文件预览
     handleClosePreview();
-    // 自增打字机重播键：空会话保持挂载时强制重挂，重新播放打字机动画
-    setTypewriterKey((k) => k + 1);
+    // 已在新建会话页面（无会话且无节点）时不再重播打字机动画，仅从有内容的页面新建时才自增重播键
+    const alreadyInNewSession = !currentSessionId && nodes.length === 0;
+    if (!alreadyInNewSession) {
+      // 自增打字机重播键：空会话保持挂载时强制重挂，重新播放打字机动画
+      setTypewriterKey((k) => k + 1);
+    }
     // 如果当前有会话，保存其状态到缓存
     if (currentSessionId) {
       saveSessionToCache(currentSessionId, {
@@ -744,7 +748,7 @@ export default function App() {
     clearContextUsage();
     resetRefs();
     setRightSidebarVisible(false);
-  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, setRightSidebarVisible, handleClosePreview]);
+  }, [clearNodes, resetAgent, clearCurrentSession, clearContextUsage, saveSessionToCache, currentSessionId, nodes.length, setRightSidebarVisible, handleClosePreview]);
 
   // 切换到历史会话：先保存当前会话状态到缓存，再从缓存或后端恢复目标会话
   const handleSwitchSession = useCallback(async (sessionId: string, workspaceId?: string) => {
