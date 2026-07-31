@@ -16,13 +16,3 @@ export interface DocumentMetadata {
   modified?: string;
   wordCount?: number;
 }
-
-export interface VersionInfo {
-  versionId: string;
-  path: string;
-  timestamp: string;
-  operation: string;
-  description: string;
-  size: number;
-  sessionId?: string;
-}

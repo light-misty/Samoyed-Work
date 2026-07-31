@@ -205,7 +205,7 @@ pub struct AgentContext {
     persisted_count: usize,
     /// 当前工作区路径，用于 Handler 的路径安全校验
     pub workspace_path: String,
-    /// 当前工作区 ID，用于版本快照等需要关联工作区的操作
+    /// 当前工作区 ID，用于需要关联工作区的操作
     pub workspace_id: String,
     /// 当前识别的任务类型
     task_type: TaskType,

@@ -42,9 +42,6 @@ const PreviewOverlay = lazy(() =>
 const SettingsDialog = lazy(() =>
   import("./components/settings/SettingsDialog").then((m) => ({ default: m.SettingsDialog }))
 );
-const VersionHistoryPanel = lazy(() =>
-  import("./components/preview/VersionHistoryPanel").then((m) => ({ default: m.VersionHistoryPanel }))
-);
 const UpdateNotification = lazy(() =>
   import("./components/common/UpdateNotification").then((m) => ({ default: m.UpdateNotification }))
 );
@@ -74,13 +71,6 @@ export default function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
   const [previewPdfBase64, setPreviewPdfBase64] = useState<string | null>(null);
-  // 差异对比数据
-  const [previewDiffData, setPreviewDiffData] = useState<{ oldContent: string; newContent: string } | null>(null);
-
-  // 版本历史面板状态
-  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-  const [versionHistoryFilePath, setVersionHistoryFilePath] = useState("");
-  const [versionHistoryFileName, setVersionHistoryFileName] = useState("");
 
   // 子 Agent 工作流详情页：当前查看的子 Agent ID，非空时切换到详情页替代主工作流
   const currentSubAgentId = useWorkflowStore((s) => s.currentSubAgentId);
@@ -951,33 +941,7 @@ export default function App() {
     setPreviewTitle("");
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
-    setPreviewDiffData(null);
   }, []);
-
-  // 打开版本历史面板
-  const handleOpenVersionHistory = useCallback((filePath: string, fileName: string) => {
-    setVersionHistoryFilePath(filePath);
-    setVersionHistoryFileName(fileName);
-    setVersionHistoryOpen(true);
-  }, []);
-
-  // 版本对比回调：将两个版本的内容传入 PreviewOverlay 的 DiffView
-  const handleCompareVersions = useCallback((oldContent: string, newContent: string, fileType: string) => {
-    setPreviewTitle(t('preview.versionDiff'));
-    setPreviewContent(newContent);
-    setPreviewFileType(fileType);
-    setPreviewDiffData({ oldContent, newContent });
-    setPreviewPdfBase64(null);
-    setPreviewOpen(true);
-    setVersionHistoryOpen(false);
-  }, []);
-
-  // 版本回滚完成回调
-  const handleRollbackComplete = useCallback(() => {
-    if (currentWorkspaceId) {
-      loadTree(currentWorkspaceId);
-    }
-  }, [currentWorkspaceId, loadTree]);
 
   // 错误重试回调：使用最后一次发送的文本重新发送消息
   const handleRetryError = useCallback(async () => {
@@ -1202,7 +1166,6 @@ export default function App() {
                   />
                 }
                 onOpenPreview={handleOpenPreview}
-                onOpenVersionHistory={handleOpenVersionHistory}
               />
             </div>
             {currentSubAgentId && (
@@ -1218,7 +1181,6 @@ export default function App() {
         sidebar={
           <LeftSidebar
             onOpenPreview={handleOpenPreview}
-            onOpenVersionHistory={handleOpenVersionHistory}
             onSwitchSession={handleSwitchSession}
             onCreateSession={handleCreateSessionForWorkspace}
             onNewSession={handleNewSession}
@@ -1237,7 +1199,6 @@ export default function App() {
           content={previewContent}
           fileType={previewFileType}
           pdfBase64Data={previewPdfBase64}
-          diffData={previewDiffData}
         />
       </Suspense>
       {previewLoading && (
@@ -1258,19 +1219,6 @@ export default function App() {
       <SlashCommandHelp />
       {/* Token 用量统计覆盖层（由 useSlashCommandStore 控制显隐） */}
       <StatsOverlay />
-      <Suspense fallback={<LazyFallback />}>
-        {versionHistoryOpen && currentWorkspaceId && (
-          <VersionHistoryPanel
-            open={versionHistoryOpen}
-            onClose={() => setVersionHistoryOpen(false)}
-            workspaceId={currentWorkspaceId}
-            filePath={versionHistoryFilePath}
-            fileName={versionHistoryFileName}
-            onCompareVersions={handleCompareVersions}
-            onRollbackComplete={handleRollbackComplete}
-          />
-        )}
-      </Suspense>
 
       {/* 全局 Toast 提示容器 */}
       <ToastContainer />

@@ -425,58 +425,35 @@ async fn search_files(workspace_id: String, query: String, options: Option<Searc
 async fn preview_document(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<PreviewContent, CommandError>
 ```
 
-### 7.2 get_document_versions
-
-```rust
-#[tauri::command]
-async fn get_document_versions(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<Vec<VersionInfo>, CommandError>
-```
-
-### 7.3 rollback_version
-
-```rust
-#[tauri::command]
-async fn rollback_version(workspace_id: String, path: String, version_id: String, state: State<'_, AppState>) -> Result<(), CommandError>
-```
-
-### 7.4 get_version_content
-
-获取历史版本的内容预览。
-
-```rust
-#[tauri::command]
-async fn get_version_content(workspace_id: String, path: String, version_id: String, state: State<'_, AppState>) -> Result<PreviewContent, CommandError>
-```
-
-### 7.5 create_file
+### 7.2 create_file
 
 ```rust
 #[tauri::command]
 async fn create_file(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<(), CommandError>
 ```
 
-### 7.6 create_directory
+### 7.3 create_directory
 
 ```rust
 #[tauri::command]
 async fn create_directory(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<(), CommandError>
 ```
 
-### 7.7 rename_file
+### 7.4 rename_file
 
 ```rust
 #[tauri::command]
 async fn rename_file(workspace_id: String, old_path: String, new_path: String, state: State<'_, AppState>) -> Result<(), CommandError>
 ```
 
-### 7.8 delete_file
+### 7.5 delete_file
 
 ```rust
 #[tauri::command]
 async fn delete_file(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<(), CommandError>
 ```
 
-### 7.9 show_in_file_manager
+### 7.6 show_in_file_manager
 
 在系统文件管理器中打开文件所在目录。
 
@@ -485,7 +462,7 @@ async fn delete_file(workspace_id: String, path: String, state: State<'_, AppSta
 async fn show_in_file_manager(workspace_id: String, path: String, state: State<'_, AppState>) -> Result<(), CommandError>
 ```
 
-### 7.10 get_pdf_data
+### 7.7 get_pdf_data
 
 获取PDF文件的base64编码数据（用于前端渲染）。
 
@@ -537,7 +514,6 @@ async fn get_settings(state: State<'_, AppState>) -> Result<AppSettings, Command
 struct AppSettings {
     general: GeneralSettings,           // author_name, author_email, author_company, confirmation_level
     appearance: AppearanceSettings,     // theme_mode, language, language_follow_system
-    version_snapshot: VersionSnapshot,   // retention_policy, max_count, max_days
     workspace: WorkspaceDefaults,       // default_workspace_id
     shortcuts: Shortcuts,               // new_session, close_session, send_message, toggle_sidebar, quick_prompt
     update: UpdateSettings,             // auto_check

@@ -1,14 +1,8 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../common/Icon";
-import * as Diff from "diff";
 import { PdfCanvasViewer } from "./PdfCanvasViewer";
 import { MarkdownPreview } from "./MarkdownPreview";
-
-interface DiffData {
-  oldContent: string;
-  newContent: string;
-}
 
 interface PreviewOverlayProps {
   open: boolean;
@@ -16,7 +10,6 @@ interface PreviewOverlayProps {
   title?: string;
   content?: string;
   fileType?: string;
-  diffData?: DiffData | null;
   // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
   pdfBase64Data?: string | null;
 }
@@ -27,15 +20,10 @@ export function PreviewOverlay({
   title = "",
   content = "",
   fileType,
-  diffData = null,
   pdfBase64Data = null,
 }: PreviewOverlayProps) {
-  const { t } = useTranslation();
-  const [showDiff, setShowDiff] = useState(false);
-
   useEffect(() => {
     if (!open) return;
-    setShowDiff(false);
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -56,14 +44,6 @@ export function PreviewOverlay({
         <div className="flex items-center px-5 py-3 border-b border-border gap-3 flex-shrink-0">
           <span className="font-semibold text-[14px] flex-1 truncate">{title}</span>
           <div className="flex gap-[6px] items-center">
-            {diffData && (
-              <button
-                className="px-[10px] py-1 rounded-[var(--radius-sm)] text-[11px] font-medium bg-bg-sub text-text-secondary hover:bg-bg-hover transition-all"
-                onClick={() => setShowDiff(!showDiff)}
-              >
-                {showDiff ? t("preview.documentPreview") : t("preview.diffCompare")}
-              </button>
-            )}
             <button
               className="w-[30px] h-[30px] flex items-center justify-center rounded-[var(--radius-sm)] transition-colors text-text-secondary hover:bg-bg-sub"
               onClick={onClose}
@@ -74,9 +54,7 @@ export function PreviewOverlay({
         </div>
 
         {/* 内容区 */}
-        {showDiff && diffData ? (
-          <DiffView oldContent={diffData.oldContent} newContent={diffData.newContent} />
-        ) : fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
+        {fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
           // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
           // 必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
           <div className="flex-1 overflow-hidden flex flex-col">
@@ -565,245 +543,6 @@ function PdfDocumentView({ data }: { data: Record<string, unknown> }) {
           {t("preview.emptyDocument")}
         </div>
       )}
-    </div>
-  );
-}
-
-interface DiffLine {
-  type: "added" | "removed" | "unchanged";
-  oldLineNum?: number;
-  newLineNum?: number;
-  content: string;
-}
-
-/** 使用 diff 算法计算行级差异，构建 DiffLine 数组 */
-function computeDiffLines(oldContent: string, newContent: string): DiffLine[] {
-  const changes = Diff.diffLines(oldContent, newContent);
-  const result: DiffLine[] = [];
-  let oldLineNum = 0;
-  let newLineNum = 0;
-
-  for (const change of changes) {
-    if (!change.value) continue;
-    // 移除末尾换行符后按行拆分
-    const lines = change.value.replace(/\n$/, "").split("\n");
-
-    if (!change.added && !change.removed) {
-      // 未变化的行，左右两侧行号同步递增
-      for (const line of lines) {
-        oldLineNum++;
-        newLineNum++;
-        result.push({ type: "unchanged", oldLineNum, newLineNum, content: line });
-      }
-    } else if (change.removed) {
-      // 删除的行，仅左侧有行号
-      for (const line of lines) {
-        oldLineNum++;
-        result.push({ type: "removed", oldLineNum, content: line });
-      }
-    } else if (change.added) {
-      // 新增的行，仅右侧有行号
-      for (const line of lines) {
-        newLineNum++;
-        result.push({ type: "added", newLineNum, content: line });
-      }
-    }
-  }
-
-  return result;
-}
-
-function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string }) {
-  const { t } = useTranslation();
-  const diffLines = useMemo(() => computeDiffLines(oldContent, newContent), [oldContent, newContent]);
-  const leftRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
-  // 同步滚动锁，防止循环触发
-  const syncing = useRef(false);
-  // 视图模式：并排对比(side-by-side) 或 内联对比(inline)
-  const [viewMode, setViewMode] = useState<"side-by-side" | "inline">("side-by-side");
-
-  // 同步滚动处理，使用 requestAnimationFrame 防止循环触发
-  const handleScroll = (source: "left" | "right") => {
-    if (syncing.current) return;
-    syncing.current = true;
-    const sourceEl = source === "left" ? leftRef.current : rightRef.current;
-    const targetEl = source === "left" ? rightRef.current : leftRef.current;
-    if (sourceEl && targetEl) {
-      targetEl.scrollTop = sourceEl.scrollTop;
-    }
-    requestAnimationFrame(() => { syncing.current = false; });
-  };
-
-  // 差异统计
-  const stats = useMemo(() => {
-    let added = 0;
-    let removed = 0;
-    for (const line of diffLines) {
-      if (line.type === "added") added++;
-      if (line.type === "removed") removed++;
-    }
-    return { added, removed };
-  }, [diffLines]);
-
-  return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      {/* 差异统计栏 + 视图模式切换 */}
-      <div className="flex items-center gap-4 px-5 py-2 border-b border-border bg-bg-sub text-[12px] flex-shrink-0">
-        <span className="text-text-secondary">{t("preview.diffStats")}</span>
-        <span className="text-success font-medium">+{stats.added} {t("preview.added")}</span>
-        <span className="text-error font-medium">-{stats.removed} {t("preview.removed")}</span>
-        {/* 视图模式切换按钮 */}
-        <div className="ml-auto flex items-center gap-1">
-          <button
-            className={`diff-mode-btn ${viewMode === "side-by-side" ? "diff-mode-btn-active" : ""}`}
-            onClick={() => setViewMode("side-by-side")}
-            title={t("preview.sideBySideCompare")}
-          >
-            {t("preview.sideBySide")}
-          </button>
-          <button
-            className={`diff-mode-btn ${viewMode === "inline" ? "diff-mode-btn-active" : ""}`}
-            onClick={() => setViewMode("inline")}
-            title={t("preview.inlineCompare")}
-          >
-            {t("preview.inline")}
-          </button>
-        </div>
-      </div>
-
-      {/* 根据视图模式渲染不同内容 */}
-      {viewMode === "inline" ? (
-        /* 内联对比视图：所有行在一个面板中显示 */
-        <div className="flex-1 overflow-y-auto px-5 py-5 font-mono text-[12px] leading-[1.8]">
-          {diffLines.map((line, i) => {
-            const isAdded = line.type === "added";
-            const isRemoved = line.type === "removed";
-            return (
-              <div
-                key={i}
-                className={
-                  isAdded ? "bg-success-light text-success" :
-                  isRemoved ? "bg-error-light text-error" : ""
-                }
-              >
-                {/* 删除行显示旧行号，新增行显示新行号，未修改行显示行号 */}
-                <span className="diff-ln">{line.oldLineNum ?? line.newLineNum ?? ""}</span>
-                <span className={`diff-marker ${isAdded ? "diff-marker-added" : ""} ${isRemoved ? "diff-marker-removed" : ""}`}>
-                  {isAdded ? "+" : isRemoved ? "-" : " "}
-                </span>
-                {line.content}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-      /* 并排对比面板 */
-      <div className="flex flex-1 overflow-hidden">
-        {/* 左侧：修改前（显示 removed + unchanged 行） */}
-        <div
-          ref={leftRef}
-          className="flex-1 overflow-y-auto px-5 py-5 font-mono text-[12px] leading-[1.8] bg-[var(--color-bg-sub)] border-r border-border"
-          onScroll={() => handleScroll("left")}
-        >
-          <div className="px-3 py-2 bg-bg-sub font-sans font-semibold text-[12px] mb-3 sticky top-0 z-10">{t("preview.before")}</div>
-          {diffLines.map((line, i) => {
-            // 新增行在左侧显示为空占位，保持与右侧对齐
-            if (line.type === "added") {
-              return (
-                <div key={i} className="diff-line-placeholder">
-                  <span className="diff-ln"></span>
-                  <span className="diff-marker"> </span>
-                </div>
-              );
-            }
-            const isRemoved = line.type === "removed";
-            return (
-              <div key={i} className={isRemoved ? "bg-error-light text-error" : ""}>
-                <span className="diff-ln">{line.oldLineNum ?? ""}</span>
-                <span className={`diff-marker ${isRemoved ? "diff-marker-removed" : ""}`}>{isRemoved ? "-" : " "}</span>
-                {line.content}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* 右侧：修改后（显示 added + unchanged 行） */}
-        <div
-          ref={rightRef}
-          className="flex-1 overflow-y-auto px-5 py-5 font-mono text-[12px] leading-[1.8] bg-bg"
-          onScroll={() => handleScroll("right")}
-        >
-          <div className="px-3 py-2 bg-bg-sub font-sans font-semibold text-[12px] mb-3 sticky top-0 z-10">{t("preview.after")}</div>
-          {diffLines.map((line, i) => {
-            // 删除行在右侧显示为空占位，保持与左侧对齐
-            if (line.type === "removed") {
-              return (
-                <div key={i} className="diff-line-placeholder">
-                  <span className="diff-ln"></span>
-                  <span className="diff-marker"> </span>
-                </div>
-              );
-            }
-            const isAdded = line.type === "added";
-            return (
-              <div key={i} className={isAdded ? "bg-success-light text-success" : ""}>
-                <span className="diff-ln">{line.newLineNum ?? ""}</span>
-                <span className={`diff-marker ${isAdded ? "diff-marker-added" : ""}`}>{isAdded ? "+" : " "}</span>
-                {line.content}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      )}
-
-      <style>{`
-        .diff-ln {
-          display: inline-block;
-          width: 36px;
-          color: var(--color-text-tertiary);
-          text-align: right;
-          margin-right: 12px;
-          user-select: none;
-        }
-        .diff-marker {
-          display: inline-block;
-          width: 12px;
-          user-select: none;
-          font-weight: 600;
-        }
-        .diff-marker-removed {
-          color: var(--color-error);
-        }
-        .diff-marker-added {
-          color: var(--color-success);
-        }
-        .diff-line-placeholder {
-          background: var(--color-bg-sub);
-          min-height: 1.8em;
-        }
-        /* 视图模式切换按钮样式 */
-        .diff-mode-btn {
-          padding: 2px 8px;
-          border-radius: var(--radius-sm);
-          border: 1px solid var(--color-border);
-          background: transparent;
-          color: var(--color-text-tertiary);
-          cursor: pointer;
-          font-size: 11px;
-          transition: all 0.15s;
-        }
-        .diff-mode-btn:hover {
-          background: var(--color-bg-hover);
-          color: var(--color-text-secondary);
-        }
-        .diff-mode-btn-active {
-          background: var(--color-accent-lighter);
-          color: var(--color-accent);
-          border-color: var(--color-accent);
-        }
-      `}</style>
     </div>
   );
 }

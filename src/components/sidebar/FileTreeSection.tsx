@@ -388,7 +388,7 @@ function NewItemInput({
 }
 
 /* ---- 主组件 ---- */
-export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearchBar }: { onOpenPreview?: (filePath: string, fileName: string) => void; onOpenVersionHistory?: (filePath: string, fileName: string) => void; hideSearchBar?: boolean }) {
+export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPreview?: (filePath: string, fileName: string) => void; hideSearchBar?: boolean }) {
   const { t } = useTranslation();
   const { searchKeyword, setSearchKeyword, getFilteredTree, loadTree, isLoading, activeWorkspaceId } = useFileTreeStore();
   const { workspaces } = useWorkspaceStore();
@@ -550,11 +550,6 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
           }
         },
       },
-      {
-        label: t('fileTree.versionHistory'),
-        icon: "clock",
-        onClick: () => onOpenVersionHistory?.(node.path, node.name),
-      },
       { label: "", separator: true, onClick: () => {} },
       {
         label: t('fileTree.rename'),
@@ -579,7 +574,7 @@ export function FileTreeSection({ onOpenPreview, onOpenVersionHistory, hideSearc
         onClick: () => tauriCmd.showInFileManager(activeWorkspaceId, node.path),
       },
     ];
-  }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview, onOpenVersionHistory]);
+  }, [contextMenu, activeWorkspaceId, handleCopyPath, onOpenPreview]);
 
   return (
     <div className="ft-section">

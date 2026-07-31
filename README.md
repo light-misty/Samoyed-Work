@@ -54,12 +54,6 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 - Markdown / Plain Text: read and convert
 - Python code: sandboxed execution with plotting and data analysis support
 
-### Version History
-- Automatic version snapshots on file changes
-- Configurable retention policy (by count or days)
-- Version history browsing with diff comparison
-- One-click rollback
-
 ### Session Management
 - Switch between multiple sessions
 - AI continues running in background after switching

@@ -163,10 +163,6 @@ type PersistFn = Arc<dyn Fn(&str, &[ChatMessage]) -> Result<(), CommandError> + 
 pub type ContextUsagePersistFn =
     Arc<dyn Fn(&str, &crate::models::llm::ContextUsageInfo) + Send + Sync>;
 
-/// 版本快照回调类型
-/// 接收 (workspace_id, session_id, file_path, operation)，在文件修改/删除前创建快照
-type SnapshotFn = Arc<dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync>;
-
 pub struct AgentExecutor<R: Runtime> {
     router: Arc<LlmRouter>,
     tool_registry: Arc<ToolRegistry>,
@@ -192,8 +188,6 @@ pub struct AgentExecutor<R: Runtime> {
     persist_fn: Option<PersistFn>,
     /// 上下文窗口使用信息持久化回调，每次发射事件时调用，确保切换会话后数据一致
     context_usage_persist_fn: Option<ContextUsagePersistFn>,
-    /// 版本快照回调，在文件修改/删除前调用，自动创建快照
-    snapshot_fn: Option<SnapshotFn>,
     /// 操作确认级别，决定哪些操作需要用户手动确认
     confirmation_level: ConfirmationLevel,
     /// 上下文压缩器（可选，从配置初始化；为 None 时不执行压缩）
@@ -233,7 +227,6 @@ impl<R: Runtime> AgentExecutor<R> {
             should_stop: Arc::new(|_| false),
             persist_fn: None,
             context_usage_persist_fn: None,
-            snapshot_fn: None,
             confirmation_level: ConfirmationLevel::default(),
             compactor: None,
         }
@@ -260,12 +253,6 @@ impl<R: Runtime> AgentExecutor<R> {
     /// 设置上下文窗口使用信息持久化回调
     pub fn with_context_usage_persist_fn(mut self, f: ContextUsagePersistFn) -> Self {
         self.context_usage_persist_fn = Some(f);
-        self
-    }
-
-    /// 设置版本快照回调，在文件修改/删除前自动创建快照
-    pub fn with_snapshot_fn(mut self, f: SnapshotFn) -> Self {
-        self.snapshot_fn = Some(f);
         self
     }
 
@@ -404,42 +391,6 @@ impl<R: Runtime> AgentExecutor<R> {
                 false
             }
             ConfirmationLevel::Always => true,
-        }
-    }
-
-    /// 从 Handler 参数中提取需要创建快照的文件路径列表
-    /// remove: 单文件路径
-    /// write（覆盖模式）: 单文件路径
-    /// 文档 Handler（docx/xlsx/pptx/pdf）: 精简后不再有 modify 操作，无需快照
-    fn extract_snapshot_paths(
-        &self,
-        handler_name: &str,
-        params: &serde_json::Value,
-    ) -> Vec<String> {
-        match handler_name {
-            "remove" => {
-                vec![params["path"].as_str().unwrap_or("").to_string()]
-            }
-            "write" => {
-                let append = params
-                    .get("append")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                if !append {
-                    vec![params["path"].as_str().unwrap_or("").to_string()]
-                } else {
-                    Vec::new()
-                }
-            }
-            "docx" | "xlsx" | "pptx" | "pdf" => {
-                // 文档 Handler 精简后不再有 modify 操作，无需创建快照
-                Vec::new()
-            }
-            "edit" => {
-                // edit 工具修改文件，需要创建快照
-                vec![params["path"].as_str().unwrap_or("").to_string()]
-            }
-            _ => Vec::new(),
         }
     }
 
@@ -2238,43 +2189,6 @@ impl<R: Runtime> AgentExecutor<R> {
                     // 为 skill 工具注入 _workspace_path，使 SkillTool 能加载工作区 Skill
                     if tool_call.name == "skill" && !ctx.workspace_path.is_empty() {
                         safe_params["_workspace_path"] = json!(ctx.workspace_path);
-                    }
-
-                    // 在文件修改/删除操作前自动创建版本快照
-                    if let Some(ref snapshot_fn) = self.snapshot_fn {
-                        let files_to_snapshot =
-                            self.extract_snapshot_paths(&tool_call.name, &safe_params);
-                        for file_path in &files_to_snapshot {
-                            if !file_path.is_empty() {
-                                let operation = match tool_call.name.as_str() {
-                                    "remove" => "delete",
-                                    "edit" => "edit",
-                                    "docx" | "xlsx" | "pptx" | "pdf" => "read",
-                                    _ => "unknown",
-                                };
-                                match snapshot_fn(
-                                    &ctx.workspace_id,
-                                    &ctx.session_id,
-                                    file_path,
-                                    operation,
-                                ) {
-                                    Ok(_) => {
-                                        log::info!(
-                                            "版本快照已创建: file={}, operation={}",
-                                            file_path,
-                                            operation
-                                        );
-                                    }
-                                    Err(e) => {
-                                        log::warn!(
-                                            "版本快照创建失败: file={}, 错误: {}",
-                                            file_path,
-                                            e.message
-                                        );
-                                    }
-                                }
-                            }
-                        }
                     }
 
                     // 提前捕获 question 工具的 questions 参数（safe_params 在 execute 时会被 move）

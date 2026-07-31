@@ -48,19 +48,6 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );",
     )?;
 
-    // version_snapshots 版本快照表
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS version_snapshots (
-            id                TEXT        NOT NULL PRIMARY KEY,
-            workspace_id      TEXT        NOT NULL,
-            session_id        TEXT        NOT NULL,
-            file_path         TEXT        NOT NULL,
-            snapshot_path     TEXT        NOT NULL,
-            operation         TEXT        NOT NULL DEFAULT '',
-            created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-        );",
-    )?;
-
     // prompt_templates Prompt模板表
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -261,15 +248,6 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
             ON session_messages (session_id, created_at ASC);
         CREATE INDEX IF NOT EXISTS idx_session_messages_role
             ON session_messages (role);
-
-        CREATE INDEX IF NOT EXISTS idx_version_snapshots_workspace_id
-            ON version_snapshots (workspace_id);
-        CREATE INDEX IF NOT EXISTS idx_version_snapshots_session_id
-            ON version_snapshots (session_id);
-        CREATE INDEX IF NOT EXISTS idx_version_snapshots_file_path
-            ON version_snapshots (file_path);
-        CREATE INDEX IF NOT EXISTS idx_version_snapshots_created_at
-            ON version_snapshots (created_at DESC);
 
         CREATE INDEX IF NOT EXISTS idx_prompt_templates_category
             ON prompt_templates (category);

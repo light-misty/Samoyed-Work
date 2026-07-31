@@ -12,10 +12,9 @@
 2. [SQLite 表设计](#2-sqlite-表设计)
    - [sessions 会话表](#21-sessions-会话表)
    - [session_messages 消息表](#22-session_messages-消息表)
-   - [version_snapshots 版本快照表](#23-version_snapshots-版本快照表)
-   - [session_summaries 会话摘要表](#24-session_summaries-会话摘要表)
-   - [templates 模板表](#25-templates-模板表)
-   - [user_preferences 用户偏好表](#26-user_preferences-用户偏好表)
+   - [session_summaries 会话摘要表](#23-session_summaries-会话摘要表)
+   - [templates 模板表](#24-templates-模板表)
+   - [user_preferences 用户偏好表](#25-user_preferences-用户偏好表)
 3. [索引设计](#3-索引设计)
 4. [JSON 配置文件 Schema](#4-json-配置文件-schema)
    - [llm_config.json](#41-llm_configjson)
@@ -28,7 +27,7 @@
 
 ## 1. 概述
 
-Samoyed Work 使用 **SQLite** 作为本地嵌入式数据库，存储会话记录、消息历史、版本快照元数据、模板及用户偏好。应用配置信息采用 **JSON 文件** 存储。
+Samoyed Work 使用 **SQLite** 作为本地嵌入式数据库，存储会话记录、消息历史、模板及用户偏好。应用配置信息采用 **JSON 文件** 存储。
 
 ### 设计原则
 
@@ -123,23 +122,7 @@ CREATE TABLE IF NOT EXISTS session_messages (
 | `is_accumulated` | INTEGER | DEFAULT 0 | 是否为累积拼接消息 |
 | `created_at` | TEXT | NOT NULL | 创建时间 |
 
-### 2.3 version_snapshots 版本快照表
-
-#### DDL
-
-```sql
-CREATE TABLE IF NOT EXISTS version_snapshots (
-    id                TEXT NOT NULL PRIMARY KEY,
-    workspace_id      TEXT NOT NULL,
-    session_id        TEXT NOT NULL,
-    file_path         TEXT NOT NULL,
-    snapshot_path     TEXT NOT NULL,
-    operation         TEXT NOT NULL DEFAULT '',
-    created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
-```
-
-### 2.4 session_summaries 会话摘要表
+### 2.3 session_summaries 会话摘要表
 
 存储会话的摘要信息（用于上下文窗口管理）。
 
@@ -155,7 +138,7 @@ CREATE TABLE IF NOT EXISTS session_summaries (
 );
 ```
 
-### 2.5 templates 模板表
+### 2.4 templates 模板表
 
 存储 Prompt 模板。
 
@@ -175,7 +158,7 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 ```
 
-### 2.6 user_preferences 用户偏好表
+### 2.5 user_preferences 用户偏好表
 
 ```sql
 CREATE TABLE IF NOT EXISTS user_preferences (
@@ -200,12 +183,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions (created_at DESC)
 CREATE INDEX IF NOT EXISTS idx_session_messages_session_id ON session_messages (session_id);
 CREATE INDEX IF NOT EXISTS idx_session_messages_session_id_created ON session_messages (session_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_session_messages_role ON session_messages (role);
-
--- version_snapshots 表
-CREATE INDEX IF NOT EXISTS idx_version_snapshots_workspace_id ON version_snapshots (workspace_id);
-CREATE INDEX IF NOT EXISTS idx_version_snapshots_session_id ON version_snapshots (session_id);
-CREATE INDEX IF NOT EXISTS idx_version_snapshots_file_path ON version_snapshots (file_path);
-CREATE INDEX IF NOT EXISTS idx_version_snapshots_created_at ON version_snapshots (created_at DESC);
 
 -- session_summaries 表
 CREATE INDEX IF NOT EXISTS idx_session_summaries_session_id ON session_summaries (session_id);
@@ -276,11 +253,6 @@ Provider 类型：`openai | anthropic | ollama | gemini | custom`
     "theme_mode": "system",
     "language": "zh-CN",
     "language_follow_system": true
-  },
-  "version_snapshot": {
-    "retention_policy": "Both",
-    "max_count": 50,
-    "max_days": 30
   },
   "workspace": {
     "default_workspace_id": ""

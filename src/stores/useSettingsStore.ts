@@ -57,11 +57,6 @@ const defaultSettings: AppSettings = {
     language: "zh-CN",
     languageFollowSystem: true,
   },
-  versionSnapshot: {
-    retentionPolicy: "byCount",
-    maxCount: 50,
-    maxDays: 30,
-  },
   workspace: {
     defaultWorkspaceId: "",
   },

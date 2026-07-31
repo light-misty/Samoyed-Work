@@ -1795,27 +1795,6 @@ async fn run_agent(
         )
     });
 
-    // 创建版本快照回调，在文件修改/删除前自动创建快照
-    let db_for_snapshot = Arc::clone(db);
-    let config_for_snapshot = Arc::clone(config);
-    let workspace_path_for_snapshot = workspace_path.to_string();
-    #[allow(clippy::type_complexity)]
-    let snapshot_fn: Arc<
-        dyn Fn(&str, &str, &str, &str) -> Result<(), CommandError> + Send + Sync,
-    > = Arc::new(
-        move |wid: &str, sid: &str, file_path: &str, operation: &str| {
-            create_version_snapshot(
-                &db_for_snapshot,
-                &config_for_snapshot,
-                &workspace_path_for_snapshot,
-                wid,
-                sid,
-                file_path,
-                operation,
-            )
-        },
-    );
-
     // 创建上下文窗口使用信息持久化回调，每次发射事件时持久化到数据库
     let db_for_context_usage = Arc::clone(db);
     let context_usage_persist_fn: ContextUsagePersistFn = Arc::new(
@@ -1850,7 +1829,6 @@ async fn run_agent(
     .with_max_iterations(max_iterations)
     .with_persist_fn(persist_fn)
     .with_context_usage_persist_fn(context_usage_persist_fn)
-    .with_snapshot_fn(snapshot_fn)
     .with_confirmation_level(confirmation_level)
     .with_compactor(compaction_config);
 
@@ -1939,126 +1917,6 @@ async fn run_agent(
             Err(e)
         }
     }
-}
-
-/// 创建版本快照
-/// 在文件被修改/删除前，将当前文件复制到快照目录，并创建数据库记录
-/// 同时根据保留策略清理过期快照
-fn create_version_snapshot(
-    db: &Arc<crate::db::Database>,
-    config: &Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
-    workspace_root: &str,
-    workspace_id: &str,
-    session_id: &str,
-    file_path: &str,
-    operation: &str,
-) -> Result<(), CommandError> {
-    // 解析文件绝对路径
-    let abs_path = if std::path::Path::new(file_path).is_absolute() {
-        file_path.to_string()
-    } else {
-        std::path::Path::new(workspace_root)
-            .join(file_path)
-            .to_string_lossy()
-            .to_string()
-    };
-
-    let path = std::path::Path::new(&abs_path);
-
-    // 文件不存在则无需创建快照（可能是新建文件）
-    if !path.exists() || !path.is_file() {
-        log::debug!("跳过快照创建: 文件不存在或不是文件, path={}", file_path);
-        return Ok(());
-    }
-
-    // 获取应用数据目录，用于存储快照文件
-    let snapshot_dir = {
-        // block_in_place 避免在 async 上下文中 blocking_lock 导致 panic
-        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
-        cfg.data_dir().join("snapshots")
-    };
-
-    // 确保快照目录存在
-    std::fs::create_dir_all(&snapshot_dir)?;
-
-    // 生成快照文件名：使用 UUID + 原始扩展名
-    let snapshot_id = uuid::Uuid::new_v4().to_string();
-    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("bin");
-    let snapshot_file_name = format!("{}.{}", snapshot_id, extension);
-    let snapshot_path = snapshot_dir.join(&snapshot_file_name);
-
-    // 复制当前文件到快照目录
-    std::fs::copy(&abs_path, &snapshot_path)?;
-
-    log::info!(
-        "版本快照文件已创建: file={}, snapshot={}, operation={}",
-        file_path,
-        snapshot_file_name,
-        operation
-    );
-
-    // 在数据库中创建快照记录
-    let conn = db.conn()?;
-    crate::db::snapshot_repo::create_snapshot(
-        &conn,
-        &snapshot_id,
-        workspace_id,
-        session_id,
-        file_path,
-        &snapshot_path.to_string_lossy(),
-        operation,
-    )?;
-
-    // 根据保留策略清理过期快照
-    let (policy, max_count, max_days) = {
-        let cfg = tokio::task::block_in_place(|| config.blocking_lock());
-        match cfg.load_app_settings() {
-            Ok(settings) => {
-                let policy_str = match settings.version_snapshot.retention_policy {
-                    crate::config::app_settings::RetentionPolicy::ByCount => "byCount",
-                    crate::config::app_settings::RetentionPolicy::ByDays => "byDays",
-                    crate::config::app_settings::RetentionPolicy::Both => "both",
-                };
-                (
-                    policy_str.to_string(),
-                    settings.version_snapshot.max_count,
-                    settings.version_snapshot.max_days,
-                )
-            }
-            Err(_) => ("byCount".to_string(), 50, 30),
-        }
-    };
-
-    // 清理过期快照并删除对应的文件
-    let deleted_ids = crate::db::snapshot_repo::cleanup_snapshots(
-        &conn,
-        workspace_id,
-        file_path,
-        &policy,
-        max_count,
-        max_days,
-    );
-
-    // 删除被清理快照对应的物理文件
-    for id in &deleted_ids {
-        // 查找快照文件路径（快照文件名格式为 <id>.<ext>）
-        // 直接在 snapshots 目录下按 ID 前缀查找
-        if let Ok(entries) = std::fs::read_dir(&snapshot_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with(&format!("{}.", id)) {
-                    if let Err(e) = std::fs::remove_file(entry.path()) {
-                        log::warn!("删除快照文件失败: {}, 错误: {}", name, e);
-                    } else {
-                        log::debug!("已删除过期快照文件: {}", name);
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

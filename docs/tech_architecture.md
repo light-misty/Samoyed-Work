@@ -16,7 +16,7 @@
 | 样式方案 | Tailwind CSS | 4.x | 原子化CSS |
 | 状态管理 | Zustand | 5.x | 轻量级全局状态管理 |
 | 后端语言 | Rust | 1.80+ (edition 2021) | Tauri后端逻辑 |
-| 本地数据库 | SQLite (rusqlite, bundled) | 0.31 | 会话历史、版本快照 |
+| 本地数据库 | SQLite (rusqlite, bundled) | 0.31 | 会话历史 |
 | 配置存储 | JSON (serde_json) | - | LLM配置、应用设置、工作区配置 |
 | Python Sidecar | Python | 3.12+ | 文档处理脚本运行时（Document 模式） |
 | 文档处理（Document 模式） | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six | - | Word/Excel/PPT/PDF生成与修改 |
@@ -92,7 +92,6 @@ samoyed-work/
 │   │   │   ├── session_repo.rs      # 会话表操作
 │   │   │   ├── session_summary_repo.rs # 会话摘要表操作
 │   │   │   ├── message_repo.rs      # 消息表操作
-│   │   │   ├── snapshot_repo.rs     # 快照表操作
 │   │   │   ├── template_repo.rs     # 模板表操作
 │   │   │   └── user_preference_repo.rs # 用户偏好表操作
 │   │   ├── config/                  # 配置管理
@@ -148,7 +147,6 @@ samoyed-work/
 │   │   │   ├── PreviewOverlay.tsx    # 预览浮层 (懒加载)
 │   │   │   ├── MarkdownPreview.tsx   # Markdown渲染 (react-markdown+rehype)
 │   │   │   ├── PdfCanvasViewer.tsx   # PDF Canvas渲染 (pdfjs-dist)
-│   │   │   └── VersionHistoryPanel.tsx # 版本历史面板 (懒加载)
 │   │   ├── settings/                # 设置弹窗组件
 │   │   │   ├── SettingsDialog.tsx    # 设置弹窗 (懒加载, 9个标签页)
 │   │   │   ├── LLMConfig.tsx        # LLM Provider增删改查+测试
@@ -158,7 +156,7 @@ samoyed-work/
 │   │   │   ├── HandlersTab.tsx      # Handler/Tool列表
 │   │   │   ├── TemplatesTab.tsx     # Prompt模板管理
 │   │   │   ├── TemplateEditDialog.tsx # 模板编辑子弹窗
-│   │   │   ├── GeneralTab.tsx       # 通用设置 (作者名/确认级别/快照策略)
+│   │   │   ├── GeneralTab.tsx       # 通用设置 (作者名/确认级别)
 │   │   │   ├── AppearanceTab.tsx    # 外观 (主题/语言/字体缩放)
 │   │   │   ├── ShortcutsTab.tsx     # 快捷键自定义
 │   │   │   └── HelpTab.tsx          # 帮助信息

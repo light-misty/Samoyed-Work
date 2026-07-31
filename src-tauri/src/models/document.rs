@@ -26,21 +26,3 @@ pub struct DocumentMetadata {
     pub modified: Option<String>,
     pub word_count: Option<u32>,
 }
-
-/// 版本信息
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct VersionInfo {
-    pub version_id: String,
-    pub path: String,
-    /// ISO 8601 格式
-    pub timestamp: String,
-    /// "create" | "modify" | "convert" | "rollback"
-    pub operation: String,
-    /// 操作描述
-    pub description: String,
-    /// 文件大小（字节）
-    pub size: u64,
-    /// 关联的会话 ID
-    pub session_id: Option<String>,
-}

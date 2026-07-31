@@ -52,8 +52,6 @@ App
 │   ├── WordDocumentView               // Word 结构化渲染
 │   ├── ExcelTableRenderer             // Excel 表格渲染
 │   ├── PptDocumentView                // PPT 结构化渲染
-│   ├── VersionHistoryPanel            // 版本快照历史面板
-│   │   └── DiffView                   // 差异对比视图
 │   └── TextPreview                    // 纯文本预览
 ├── SettingsDialog  (lazy)             // 设置弹窗
 │   ├── LLMConfig                      // Provider 管理（含 ProviderFormDialog）

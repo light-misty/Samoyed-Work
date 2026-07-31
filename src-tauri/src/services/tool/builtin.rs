@@ -3707,7 +3707,7 @@ impl Tool for DeleteFileTool {
         "remove"
     }
     fn description(&self) -> &str {
-        "Delete the specified file. Note: this operation is irreversible and will automatically trigger user confirmation. Creating a version snapshot before deletion is recommended."
+        "Delete the specified file. Note: this operation is irreversible and will automatically trigger user confirmation."
     }
     fn category(&self) -> &str {
         "filesystem"

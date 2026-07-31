@@ -77,7 +77,6 @@
 - InputArea（内置 TemplateCards）
 - Sidebar（FileTree + AgentInfo + SessionList）
 - PreviewOverlay（Markdown/PDF/Word/Excel/PPT/Text/Diff）
-- VersionHistoryPanel（版本列表/对比/回滚）
 - SettingsDialog（8 个标签页）
 - SessionListSection（会话列表/搜索/切换/删除）
 - 懒加载（Preview/Settings/UpdateNotification）
@@ -87,7 +86,6 @@
 
 **数据管理 (100%)**：
 - 会话 CRUD（create/list/get/delete/update/clear）
-- 版本快照（create/list/delete/get_content/rollback）
 - Prompt 模板 CRUD（create/get/list/update/delete）
 - 文件监听服务（notify crate 递归监听）
 - 配置导入/导出（JSON 文件操作）

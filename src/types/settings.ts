@@ -5,7 +5,6 @@ export type SettingsTab = "llm" | "workspace" | "handler" | "template" | "permis
 // ----- 应用设置 -----
 
 export type ConfirmationLevel = "always" | "deleteOnly" | "never";
-export type RetentionPolicy = "byCount" | "byDays" | "both";
 export type ThemeMode = "light" | "dark" | "system";
 
 export interface LspSettings {
@@ -29,12 +28,6 @@ export interface AppearanceSettings {
   languageFollowSystem: boolean;
 }
 
-export interface VersionSnapshotSettings {
-  retentionPolicy: RetentionPolicy;
-  maxCount: number;
-  maxDays: number;
-}
-
 export interface WorkspaceDefaults {
   defaultWorkspaceId: string;
 }
@@ -55,7 +48,6 @@ export interface UpdateSettings {
 export interface AppSettings {
   general: GeneralSettings;
   appearance: AppearanceSettings;
-  versionSnapshot: VersionSnapshotSettings;
   workspace: WorkspaceDefaults;
   shortcuts: Shortcuts;
   update: UpdateSettings;

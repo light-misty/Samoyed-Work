@@ -739,9 +739,6 @@ pub fn run() {
             commands::workspace::get_workspace_git_status,
             // 文档命令
             commands::document::preview_document,
-            commands::document::get_document_versions,
-            commands::document::rollback_version,
-            commands::document::get_version_content,
             commands::document::create_file,
             commands::document::create_directory,
             commands::document::rename_file,

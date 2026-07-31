@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "./Icon";
 
-type DeleteType = "file" | "folder" | "session" | "workspace" | "provider" | "template" | "version" | "clear-sessions" | "permission";
+type DeleteType = "file" | "folder" | "session" | "workspace" | "provider" | "template" | "clear-sessions" | "permission";
 
 const DELETE_MESSAGE_KEY: Record<DeleteType, string> = {
   file: "deleteConfirm.fileMessage",
@@ -11,7 +11,6 @@ const DELETE_MESSAGE_KEY: Record<DeleteType, string> = {
   workspace: "deleteConfirm.workspaceMessage",
   provider: "deleteConfirm.providerMessage",
   template: "deleteConfirm.templateMessage",
-  version: "deleteConfirm.versionMessage",
   "clear-sessions": "deleteConfirm.clearSessionsMessage",
   permission: "deleteConfirm.permissionMessage",
 };

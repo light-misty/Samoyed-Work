@@ -43,7 +43,7 @@ Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code�
 | UI组件库 | Shadcn/ui + Radix | 白色简约风格 |
 | 样式方案 | Tailwind CSS 4 | 工具类优先 |
 | 状态管理 | Zustand 5 | 轻量状态管理 |
-| 本地数据库 | SQLite (rusqlite, bundled) | 会话历史、版本快照、模板 |
+| 本地数据库 | SQLite (rusqlite, bundled) | 会话历史、模板 |
 | 配置存储 | JSON文件 | LLM配置、应用设置、工作区配置 |
 | 文档处理（Document 模式） | python-docx / openpyxl / python-pptx / PyMuPDF / reportlab | 通过 Tauri Sidecar 调用 Python 脚本，仅 Document 模式启用 |
 | Markdown渲染 | react-markdown + remark-gfm + rehype-highlight | 实时渲染预览 |
@@ -73,7 +73,6 @@ Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code�
 |  |  - 4个Handler（read/convert/analyze）       |  |
 |  |  - 10个Tool（文件系统+脚本执行）             |  |
 |  |  - SQLite数据库管理（6张表）                  |  |
-|  |  - 版本快照管理                              |  |
 |  +--------------------------------------------+  |
 |  +--------------------------------------------+  |
 |  |           Python Sidecar (文档处理, Document 模式)  |  |
@@ -104,9 +103,6 @@ Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code�
               └───────┬───────┴───────────────┘
                       ▼
               文件系统操作（工作区目录）
-                      │
-                      ▼
-              版本快照自动保存 → SQLite
                       │
                       ▼
               UI更新（工作流 + 文件树）
@@ -216,28 +212,21 @@ Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code�
 | PDF | PdfCanvasViewer（pdfjs-dist Canvas 渲染，缩放/翻页） |
 | 文本 | TextPreview 纯文本渲染 |
 
-### 3.6 版本管理
-
-- 自动版本快照（修改前创建）
-- 版本历史列表（按时间倒序）
-- 版本对比（DiffView 并排/内联对比）
-- 一键回滚
-
-### 3.7 会话管理
+### 3.6 会话管理
 
 - 会话 CRUD（create/list/get/delete/update/clear）
 - 消息持久化到 SQLite
 - 会话摘要管理（session_summaries 表）
 - 历史会话面板（搜索/切换/删除）
 
-### 3.8 Prompt 模板系统
+### 3.7 Prompt 模板系统
 
 - 模板 CRUD（create/get/list/update/delete）
 - 模板存储在 SQLite（templates 表）
 - 变量占位符 `{{variable}}`
 - 内置模板 + 自定义模板
 
-### 3.9 命令执行安全
+### 3.8 命令执行安全
 
 - write_script Tool：将智能体生成的脚本写入系统临时目录 `<temp_dir>/samoyed_work/scripts/`
 - run_command Tool：通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制

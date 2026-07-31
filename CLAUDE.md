@@ -98,7 +98,7 @@ src/                     React 前端 (TypeScript)
     sidebar/             侧边栏: FileTreeSection, AgentInfoSection,
                             SessionListSection
     preview/             文档预览浮层: PreviewOverlay, MarkdownPreview,
-                            PdfCanvasViewer, VersionHistoryPanel
+                            PdfCanvasViewer
     settings/            设置弹窗: SettingsDialog + 10 标签页
                             (LLMConfig, WorkspaceTab, HandlersTab, TemplatesTab,
                              AppearanceTab, ShortcutsTab, GeneralTab, HelpTab,
@@ -398,7 +398,7 @@ AppState {
 - `useAgentModeStore`: Agent 模式管理（Plan/Build/Document）
 
 ### 数据存储
-- SQLite: 会话、消息、版本快照、Prompt 模板、会话摘要、用户偏好
+- SQLite: 会话、消息、Prompt 模板、会话摘要、用户偏好
 - JSON 文件: LLM Provider 配置、应用设置、工作区配置
 - 文件系统: 工作区文档和 Sidecar 日志 (`log/samoyed_work.log`)
 - 应用数据目录: `<app_data_dir>/samoyed_work.db` + `config/` 目录
@@ -472,7 +472,6 @@ AppState {
 - Python Sidecar 的 `input_path` 要映射为 handler 期望的 `path` 参数
 - Handler/Tool 的 `workspace_root` 由 executor 注入，不信任 LLM 提供的值，防止路径遍历攻击
 - 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染
-- 版本历史: `VersionHistoryPanel` 组件展示文档版本快照列表，支持版本对比（diff）和回滚操作
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
 - 命令超时由 LLM 通过 run_command 的 `timeout` 参数自主控制，最大 300 秒（无全局超时配置）
 - 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/doom_loop_detector/agent_mode_manager）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置后传入 `register_builtin_tools`，含 task/webfetch/websearch/question/skill 工具）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → Skill 注册表 → LSP 服务器管理器/路由器/缓存（读取 `lsp` 配置后初始化，注册服务器配置并传入 `register_builtin_tools`，仅在 `lsp.experimental_enabled=true` 时注册 LspTool；启动 LSP 健康检查后台任务） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控、LSP 按配置间隔）

@@ -26,7 +26,6 @@ import type {
   SearchOptions,
   SearchResult,
   PreviewContent,
-  VersionInfo,
   HandlerInfo,
   ToolInfo,
   AppSettings,
@@ -255,37 +254,6 @@ export async function getPdfData(
   path: string,
 ): Promise<string> {
   const result = await safeInvoke(() => invoke<string>("get_pdf_data", { workspaceId, path }), { context: "getPdfData" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
-/** 获取文档版本历史 */
-export async function getDocumentVersions(
-  workspaceId: string,
-  path: string,
-): Promise<VersionInfo[]> {
-  const result = await safeInvoke(() => invoke<VersionInfo[]>("get_document_versions", { workspaceId, path }), { context: "getDocumentVersions" });
-  if (!result.ok) throw result.error.raw;
-  return result.data;
-}
-
-/** 回滚到指定版本 */
-export async function rollbackVersion(
-  workspaceId: string,
-  path: string,
-  versionId: string,
-): Promise<void> {
-  const result = await safeInvoke(() => invoke("rollback_version", { workspaceId, path, versionId }), { context: "rollbackVersion" });
-  if (!result.ok) throw result.error.raw;
-}
-
-/** 获取指定版本快照的文档内容，用于版本预览和差异对比 */
-export async function getVersionContent(
-  workspaceId: string,
-  path: string,
-  versionId: string,
-): Promise<PreviewContent> {
-  const result = await safeInvoke(() => invoke<PreviewContent>("get_version_content", { workspaceId, path, versionId }), { context: "getVersionContent" });
   if (!result.ok) throw result.error.raw;
   return result.data;
 }

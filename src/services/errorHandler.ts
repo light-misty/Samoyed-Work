@@ -65,8 +65,6 @@ const ERROR_MESSAGE_MAP: Record<number, string> = {
   3005: i18n.t("errors.doc.convertFailed"),
   3006: i18n.t("errors.doc.templateNotFound"),
   3007: i18n.t("errors.doc.templateProcessFailed"),
-  3008: i18n.t("errors.doc.versionNotFound"),
-  3009: i18n.t("errors.doc.rollbackFailed"),
   3010: i18n.t("errors.doc.serviceError"),
   3011: i18n.t("errors.doc.noPermission"),
   3012: i18n.t("errors.doc.fileTooLarge"),

@@ -164,7 +164,6 @@
 - Agent 调用 `write_script + run_command` 编写修改脚本
 - 确认弹窗展示代码摘要
 - 修改后文档内容正确更新
-- 修改前自动创建版本快照
 
 ### E2E-08: 操作确认机制
 
@@ -262,15 +261,14 @@
 - WorkflowTimeline + 7 种节点类型（虚拟滚动）
 - InputArea（内置 TemplateCards）
 - Sidebar 三个分区（FileTree + AgentInfo + SessionList）
-- PreviewOverlay（Markdown/PDF/Word/Excel/PPT/Text/Diff）
-- VersionHistoryPanel（版本列表/对比/回滚）
+- PreviewOverlay（Markdown/PDF/Word/Excel/PPT/Text）
 - SettingsDialog（8 个标签页）
 - SessionListSection + DeleteConfirmDialog
 - ErrorBoundary + ToastContainer + NetworkStatusBanner
 - UpdateNotification
 
 ### 性能优化 (100%)
-- 懒加载（Preview/Settings/History/VersionHistory/Update）
+- 懒加载（Preview/Settings/Update）
 - 虚拟滚动（WorkflowTimeline/FileTree）
 - ErrorBoundary 全局错误边界
 - Toast 通知（3 秒自动消失，最大 5 条）

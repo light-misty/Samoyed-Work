@@ -16,8 +16,6 @@ import * as tauriCmd from "../../services/tauri";
 interface LeftSidebarProps {
   /** 文件预览回调 */
   onOpenPreview: (filePath: string, fileName: string) => void;
-  /** 版本历史回调 */
-  onOpenVersionHistory: (filePath: string, fileName: string) => void;
   /** 切换会话（父组件需同步切换工作区） */
   onSwitchSession: (sessionId: string, workspaceId?: string) => void;
   /** 为指定工作区新建会话（用于会话列表中按工作区新建） */
@@ -38,7 +36,6 @@ type LeftSidebarView = "sessions" | "files";
  */
 export function LeftSidebar({
   onOpenPreview,
-  onOpenVersionHistory,
   onSwitchSession,
   onCreateSession,
   onNewSession,
@@ -193,7 +190,6 @@ export function LeftSidebar({
           <div className="file-tree-wrapper">
             <FileTreeSection
               onOpenPreview={onOpenPreview}
-              onOpenVersionHistory={onOpenVersionHistory}
             />
           </div>
         </div>

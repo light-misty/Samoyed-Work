@@ -14,16 +14,6 @@ pub enum ConfirmationLevel {
     Never,
 }
 
-/// 版本快照保留策略
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-#[serde(rename_all = "camelCase")]
-pub enum RetentionPolicy {
-    #[default]
-    ByCount,
-    ByDays,
-    Both,
-}
-
 /// 主题模式
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -115,36 +105,6 @@ pub struct GeneralSettings {
     /// 上下文压缩配置
     #[serde(default)]
     pub compaction: CompactionConfig,
-}
-
-/// 版本快照设置
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct VersionSnapshot {
-    #[serde(default)]
-    pub retention_policy: RetentionPolicy,
-    #[serde(default = "default_max_count")]
-    pub max_count: u32,
-    #[serde(default = "default_max_days")]
-    pub max_days: u32,
-}
-
-fn default_max_count() -> u32 {
-    50
-}
-
-fn default_max_days() -> u32 {
-    30
-}
-
-impl Default for VersionSnapshot {
-    fn default() -> Self {
-        Self {
-            retention_policy: RetentionPolicy::default(),
-            max_count: default_max_count(),
-            max_days: default_max_days(),
-        }
-    }
 }
 
 /// 工作区默认设置
@@ -440,8 +400,6 @@ pub struct AppSettings {
     #[serde(default)]
     pub appearance: AppearanceSettings,
     #[serde(default)]
-    pub version_snapshot: VersionSnapshot,
-    #[serde(default)]
     pub workspace: WorkspaceDefaults,
     #[serde(default)]
     pub shortcuts: Shortcuts,
@@ -536,19 +494,6 @@ pub fn merge_with_defaults(
                 user_settings.appearance.language.clone()
             },
             language_follow_system: user_settings.appearance.language_follow_system,
-        },
-        version_snapshot: VersionSnapshot {
-            retention_policy: user_settings.version_snapshot.retention_policy.clone(),
-            max_count: if user_settings.version_snapshot.max_count == 0 {
-                default_settings.version_snapshot.max_count
-            } else {
-                user_settings.version_snapshot.max_count
-            },
-            max_days: if user_settings.version_snapshot.max_days == 0 {
-                default_settings.version_snapshot.max_days
-            } else {
-                user_settings.version_snapshot.max_days
-            },
         },
         workspace: WorkspaceDefaults {
             default_workspace_id: if user_settings.workspace.default_workspace_id.is_empty() {

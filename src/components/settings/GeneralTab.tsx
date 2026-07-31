@@ -118,36 +118,6 @@ export function GeneralTab() {
 
       <div className="settings-section">
         <div className="section-header">
-          <span className="section-title">{t('settings.general.versionSnapshot')}</span>
-        </div>
-
-        <div className="setting-row">
-          <div className="setting-info">
-            <div className="setting-label">{t('settings.general.retentionPolicy')}</div>
-          </div>
-          <select
-            className="setting-select"
-            value={settings.versionSnapshot.retentionPolicy}
-            onChange={(e) => updateSettings({ versionSnapshot: { retentionPolicy: e.target.value as typeof settings.versionSnapshot.retentionPolicy } })}
-          >
-            <option value="byCount">{t('settings.general.byCount', { count: settings.versionSnapshot.maxCount })}</option>
-            <option value="byDays">{t('settings.general.byDays', { days: settings.versionSnapshot.maxDays })}</option>
-            <option value="both">{t('settings.general.both')}</option>
-          </select>
-        </div>
-
-        <div className="setting-row">
-          <div className="setting-info">
-            <div className="setting-label">{t('settings.general.appDataDir')}</div>
-            <div className="setting-desc">{t('settings.general.appDataDirDesc')}</div>
-          </div>
-          <span className="setting-path">%APPDATA%/Samoyed Work</span>
-        </div>
-      </div>
-
-      {/* 数据管理 */}
-      <div className="settings-section">
-        <div className="section-header">
           <span className="section-title">{t('settings.general.dataManagement')}</span>
         </div>
 
