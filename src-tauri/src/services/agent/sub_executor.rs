@@ -757,9 +757,7 @@ impl SubAgentExecutor {
             );
             return Ok(false);
         }
-        if mode.is_explore()
-            && !EXPLORE_TOOL_NAMES.contains(&tool_name)
-        {
+        if mode.is_explore() && !EXPLORE_TOOL_NAMES.contains(&tool_name) {
             log::warn!(
                 "子 Agent 权限拒绝(Explore 模式): agent_id={}, tool={}",
                 config.agent_id,

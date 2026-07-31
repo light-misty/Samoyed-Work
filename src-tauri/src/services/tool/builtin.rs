@@ -1776,7 +1776,11 @@ mod tests {
             }))
             .await;
 
-        assert!(result.success, "归一化 replace_all 应成功: {:?}", result.error);
+        assert!(
+            result.success,
+            "归一化 replace_all 应成功: {:?}",
+            result.error
+        );
         let output = result.output.unwrap();
         assert_eq!(output["matches"], 2);
         assert_eq!(output["replacedCount"], 2);

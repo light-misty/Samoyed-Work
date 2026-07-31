@@ -605,9 +605,7 @@ impl AgentContext {
     /// 与旧的"截断删除"方案相比，已完成工具的结果消息不会被连带删除。
     /// 返回缺失结果的工具调用完整信息 (call_id, tool_name, arguments)，
     /// 供调用方重新发射带完整参数的 tool_call 事件（修复停止时前端节点参数不完整的问题）。
-    pub fn complete_incomplete_tool_calls(
-        &mut self,
-    ) -> Vec<(String, String, serde_json::Value)> {
+    pub fn complete_incomplete_tool_calls(&mut self) -> Vec<(String, String, serde_json::Value)> {
         let persisted = self.persisted_count;
         let total = self.messages.len();
         if total <= persisted {
@@ -630,9 +628,7 @@ impl AgentContext {
                 let has_result = self.messages[i + 1..].iter().any(|m| {
                     m.role == "tool" && m.tool_call_id.as_deref() == Some(call.id.as_str())
                 });
-                if !has_result
-                    && !incomplete.iter().any(|(call_id, _, _)| call_id == &call.id)
-                {
+                if !has_result && !incomplete.iter().any(|(call_id, _, _)| call_id == &call.id) {
                     // 参数解析失败时回退为空对象（与工具执行路径保持一致）
                     let arguments =
                         serde_json::from_str(&call.arguments).unwrap_or(serde_json::json!({}));
@@ -2218,9 +2214,9 @@ mod tests {
             .as_ref()
             .expect("应有 tool_calls")
         {
-            let has_result = ctx.messages[2..].iter().any(|m| {
-                m.role == "tool" && m.tool_call_id.as_deref() == Some(call.id.as_str())
-            });
+            let has_result = ctx.messages[2..]
+                .iter()
+                .any(|m| m.role == "tool" && m.tool_call_id.as_deref() == Some(call.id.as_str()));
             assert!(has_result, "call_id={} 应有对应的 tool 结果", call.id);
         }
     }

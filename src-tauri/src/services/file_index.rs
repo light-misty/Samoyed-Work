@@ -151,19 +151,15 @@ mod tests {
         let dir = build_temp_tree();
         let index = build_file_index(&dir);
         assert_eq!(index.files.len(), 4);
-        assert!(
-            index
-                .files
-                .iter()
-                .any(|f| Path::new(&f.path) == Path::new("a/b/c/deep.txt"))
-        );
+        assert!(index
+            .files
+            .iter()
+            .any(|f| Path::new(&f.path) == Path::new("a/b/c/deep.txt")));
         assert!(index.files.iter().all(|f| !f.path.starts_with(".git")));
-        assert!(
-            index
-                .files
-                .iter()
-                .any(|f| Path::new(&f.path) == Path::new(".agent/skill.md"))
-        );
+        assert!(index
+            .files
+            .iter()
+            .any(|f| Path::new(&f.path) == Path::new(".agent/skill.md")));
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct PreviewContent {
     pub path: String,
-    /// "docx" | "xlsx" | "pptx" | "pdf" | "md"
+    /// 预览文件类型："docx" | "xlsx" | "pptx" | "pdf" | 文本/源码文件的原扩展名
     pub file_type: String,
     /// 预览文本内容
     pub content: String,

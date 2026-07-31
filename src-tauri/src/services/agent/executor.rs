@@ -562,10 +562,7 @@ impl<R: Runtime> AgentExecutor<R> {
                 tool_name
             );
             return Ok(PermissionResult::Deny {
-                reason: format!(
-                    "Explore mode prohibits using tool: {}",
-                    tool_name
-                ),
+                reason: format!("Explore mode prohibits using tool: {}", tool_name),
             });
         }
 

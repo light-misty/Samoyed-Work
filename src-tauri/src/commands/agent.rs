@@ -1744,10 +1744,7 @@ async fn run_agent(
             "{}\n\n<skill_content>\n{}\n</skill_content>",
             ctx.system_prompt, skill_content
         );
-        log::info!(
-            "已注入 Skill 内容到系统提示词, session_id={}",
-            session_id
-        );
+        log::info!("已注入 Skill 内容到系统提示词, session_id={}", session_id);
     }
 
     ctx.add_user_message_with_attachments(

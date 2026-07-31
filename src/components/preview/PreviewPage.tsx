@@ -1,5 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, isValidElement, type ReactNode, type HTMLAttributes } from "react";
 import { useTranslation } from "react-i18next";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { Icon } from "../common/Icon";
 import { PdfCanvasViewer } from "./PdfCanvasViewer";
 import { MarkdownPreview } from "./MarkdownPreview";
@@ -23,7 +26,7 @@ interface PreviewPageProps {
  * 文档预览页面
  * 替换主内容区（新建会话/工作流页面）显示文档预览内容
  * - 顶部栏：返回按钮 + 文件名标题
- * - 主体：按文件类型分派渲染（PDF / Markdown / Excel / Word / PPT / 纯文本）
+ * - 主体：按文件类型分派渲染（PDF / Markdown / Excel / Word / PPT / 源码文件）
  */
 export function PreviewPage({
   title = "",
@@ -80,7 +83,6 @@ export function PreviewPage({
  * 根据 fileType 选择对应的渲染方式
  */
 function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string; fileType?: string; pdfBase64Data?: string | null }) {
-  const { t } = useTranslation();
   const normalizedType = fileType?.toLowerCase()?.trim() ?? "";
 
   // PDF 真实渲染预览：使用 pdfjs-dist Canvas 渲染
@@ -107,17 +109,289 @@ function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string
     return <DocumentStructureRenderer content={content} fileType={normalizedType} />;
   }
 
-  // 其他格式：纯文本显示
+  // 其他格式：源码/文本文件渲染为带行号的只读代码视图
+  return <CodePreview content={content} fileType={normalizedType} />;
+}
+
+/**
+ * 源码文件预览组件
+ * 将源码包装为 Markdown 围栏代码块，通过 react-markdown + rehype-highlight
+ * 渲染为带行号的只读代码视图（类似 VS Code 预览模式，无边框/无复制按钮/不可编辑）
+ */
+
+// 扩展名 -> highlight.js 语言标识（对应 lowlight common 语言集）
+const CODE_LANGUAGES: Record<string, string> = {
+  // JavaScript / TypeScript 生态
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascript",
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "typescript",
+  // Python / Rust / Go / Java / C# / C/C++
+  py: "python",
+  pyw: "python",
+  pyi: "python",
+  pyx: "python",
+  ipynb: "json",
+  rs: "rust",
+  go: "go",
+  java: "java",
+  cs: "csharp",
+  csx: "csharp",
+  c: "c",
+  h: "c",
+  cc: "cpp",
+  cpp: "cpp",
+  cxx: "cpp",
+  hpp: "cpp",
+  hxx: "cpp",
+  hh: "cpp",
+  ino: "cpp",
+  // 脚本与 Shell
+  php: "php",
+  phtml: "php",
+  rb: "ruby",
+  rake: "ruby",
+  gemspec: "ruby",
+  swift: "swift",
+  kt: "kotlin",
+  kts: "kotlin",
+  sh: "bash",
+  bash: "bash",
+  zsh: "bash",
+  fish: "bash",
+  ksh: "bash",
+  ps1: "powershell",
+  psd1: "powershell",
+  psm1: "powershell",
+  bat: "dos",
+  cmd: "dos",
+  lua: "lua",
+  r: "r",
+  rmd: "r",
+  pl: "perl",
+  pm: "perl",
+  // Web 前端
+  html: "xml",
+  htm: "xml",
+  css: "css",
+  scss: "scss",
+  sass: "scss",
+  less: "less",
+  xml: "xml",
+  svg: "xml",
+  // 数据与配置
+  json: "json",
+  jsonc: "json",
+  json5: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  sql: "sql",
+  txt: "plaintext",
+  text: "plaintext",
+  log: "plaintext",
+};
+
+/** 计算包裹源码的 Markdown 围栏长度，避免与源码中的反引号串冲突 */
+function buildFence(content: string): string {
+  let maxRun = 2;
+  const matches = content.match(/`+/g);
+  if (matches) {
+    for (const m of matches) {
+      if (m.length > maxRun) maxRun = m.length;
+    }
+  }
+  return "`".repeat(maxRun + 1);
+}
+
+// react-markdown 传递给自定义组件的额外属性
+type MdExtraProps = { node?: unknown; siblingCount?: number };
+
+/** 从高亮后的 React 节点树中提取纯文本（用于计算代码行数） */
+function extractPlainText(node: ReactNode): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractPlainText).join("");
+  if (isValidElement(node)) {
+    return extractPlainText((node.props as { children?: ReactNode }).children);
+  }
+  return "";
+}
+
+/**
+ * 源码预览代码块：左侧行号列 + 只读代码区
+ * 不显示 Markdown 代码块的边框、标题栏与复制按钮
+ */
+function SourceCodeBlock({
+  children,
+  node: _node,
+  siblingCount: _sc,
+  ...rest
+}: HTMLAttributes<HTMLPreElement> & MdExtraProps) {
+  // 提取 code 子元素的纯文本，按行生成行号
+  const childElements = Array.isArray(children) ? children : children ? [children] : [];
+  const codeChild = childElements.find(isValidElement);
+  const plainText = codeChild ? extractPlainText(codeChild) : "";
+  const lines = plainText.split("\n");
+  // 末尾换行产生的空行不显示行号
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const lineNumbers = Array.from({ length: Math.max(lines.length, 1) }, (_, i) => i + 1);
+
   return (
-    <div className="px-10 py-8 leading-[1.8] text-text-secondary text-[14px] whitespace-pre-wrap">
-      {content || (
-        <div className="flex items-center justify-center h-full text-text-tertiary">
-          {t("preview.noContent")}
-        </div>
-      )}
+    <div className="code-preview-block">
+      <div className="code-preview-gutter" aria-hidden="true">
+        {lineNumbers.map((n) => (
+          <span key={n}>{n}</span>
+        ))}
+      </div>
+      <pre {...rest} className="code-preview-content">
+        {children}
+      </pre>
     </div>
   );
 }
+
+function CodePreview({ content, fileType }: { content: string; fileType: string }) {
+  // 已识别的扩展名使用对应的 hljs 语言标识，未识别时以扩展名本身作为标识（无高亮但保持代码样式）
+  const language = CODE_LANGUAGES[fileType] ?? fileType;
+  const fence = buildFence(content);
+  const markdown = `${fence}${language}\n${content}\n${fence}`;
+  return (
+    <div className="code-preview">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{ pre: SourceCodeBlock }}
+      >
+        {markdown}
+      </ReactMarkdown>
+      <style>{codePreviewStyles}</style>
+    </div>
+  );
+}
+
+// 源码预览样式：行号列 + 只读代码（无边框、无复制按钮、自包含 hljs 高亮配色）
+const codePreviewStyles = `
+/* ===== 源码预览布局 ===== */
+/* 容器不固定高度：短文件背景铺满视口（min-height），长文件随内容撑高，
+   由外层页面级容器统一垂直滚动（行号与代码同步滚动） */
+.code-preview {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-preview-block {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  /* 不能设置 min-height: 100%，否则会覆盖 flex 子项默认的 min-height: auto，
+     导致容器高度被压缩为视口高度、内容溢出并产生双滚动条 */
+  background: var(--color-bg-elevated);
+}
+
+/* 行号列 */
+.code-preview-gutter {
+  flex-shrink: 0;
+  min-width: 3.5rem;
+  padding: 14px 0.8rem;
+  text-align: right;
+  user-select: none;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-sub);
+  border-right: 1px solid var(--color-border-light);
+}
+
+.code-preview-gutter span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* 代码区：长行横向滚动时行号保持固定；
+   overflow-y 必须用 clip，避免与 overflow-x: auto 联动产生内部垂直滚动条 */
+.code-preview-content {
+  flex: 1;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 14px 16px !important;
+  overflow-x: auto;
+  overflow-y: clip;
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  white-space: pre !important;
+  tab-size: 4;
+  color: var(--color-text-secondary) !important;
+}
+
+.code-preview-content code {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  background: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+}
+
+/* ===== highlight.js 语法高亮 - 深色主题 ===== */
+.code-preview-content .hljs-keyword,
+.code-preview-content .hljs-selector-tag,
+.code-preview-content .hljs-literal { color: #569cd6; }
+
+.code-preview-content .hljs-string,
+.code-preview-content .hljs-doctag,
+.code-preview-content .hljs-template-tag,
+.code-preview-content .hljs-template-variable { color: #ce9178; }
+
+.code-preview-content .hljs-number,
+.code-preview-content .hljs-built_in { color: #b5cea8; }
+
+.code-preview-content .hljs-comment,
+.code-preview-content .hljs-quote { color: #6a9955; font-style: italic; }
+
+.code-preview-content .hljs-function .hljs-title,
+.code-preview-content .hljs-title.function_ { color: #dcdcaa; }
+
+.code-preview-content .hljs-class .hljs-title,
+.code-preview-content .hljs-title.class_ { color: #4ec9b0; }
+
+.code-preview-content .hljs-variable,
+.code-preview-content .hljs-attr { color: #9cdcfe; }
+
+.code-preview-content .hljs-type,
+.code-preview-content .hljs-params { color: #4ec9b0; }
+
+.code-preview-content .hljs-meta { color: #569cd6; }
+
+.code-preview-content .hljs-tag { color: #569cd6; }
+
+.code-preview-content .hljs-name { color: #569cd6; }
+
+.code-preview-content .hljs-attribute { color: #9cdcfe; }
+
+.code-preview-content .hljs-symbol,
+.code-preview-content .hljs-bullet { color: #d7ba7d; }
+
+.code-preview-content .hljs-addition { color: #b5cea8; background: rgba(181, 206, 168, 0.1); }
+
+.code-preview-content .hljs-deletion { color: #ce9178; background: rgba(206, 145, 120, 0.1); }
+
+.code-preview-content .hljs-emphasis { font-style: italic; }
+
+.code-preview-content .hljs-strong { font-weight: 600; }
+
+.code-preview-content .hljs-regexp { color: #d16969; }
+
+.code-preview-content .hljs-property { color: #9cdcfe; }
+
+.code-preview-content .hljs-section { color: #4ec9b0; }
+`;
 
 /**
  * Excel 表格渲染组件
