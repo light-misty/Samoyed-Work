@@ -186,6 +186,9 @@
     "expandError": "展开详情",
     "collapseError": "收起详情"
   },
+  "pausedNode": {
+    "message": "用户手动停止"
+  },
   "compactionNode": {
     "compressing": "正在压缩上下文 ({{tokens}} tokens)...",
     "completed": "上下文压缩完成: {{before}} -> {{after}} tokens",

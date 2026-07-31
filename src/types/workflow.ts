@@ -4,7 +4,7 @@ export type NodeStatus = "pending" | "running" | "completed" | "failed" | "cance
 
 export type ExecutionStatus = "idle" | "running" | "stopping" | "paused" | "completed" | "failed" | "cancelled";
 
-export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question" | "stats";
+export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question" | "stats" | "paused";
 
 export interface Attachment {
   id: string;
@@ -148,6 +148,14 @@ export interface StatsNodeData {
   usageInfo: ContextUsageInfo | null;
 }
 
+/** 用户手动停止提示节点数据 */
+export interface PausedNodeData {
+  /** 停止提示文案（如"用户手动停止"） */
+  message: string;
+  /** 对应数据库中消息的 ID，用于删除操作 */
+  messageId?: string;
+}
+
 export interface NodeDataMap {
   user: UserNodeData;
   thinking: ThinkingNodeData;
@@ -159,6 +167,7 @@ export interface NodeDataMap {
   sub_agent: SubAgentNodeData;
   question: QuestionNodeData;
   stats: StatsNodeData;
+  paused: PausedNodeData;
 }
 
 export interface WorkflowNode<T extends WorkflowNodeType = WorkflowNodeType> {

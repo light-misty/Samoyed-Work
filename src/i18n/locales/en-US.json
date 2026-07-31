@@ -186,6 +186,9 @@
     "expandError": "Show details",
     "collapseError": "Hide details"
   },
+  "pausedNode": {
+    "message": "Stopped by user"
+  },
   "compactionNode": {
     "compressing": "Compressing context ({{tokens}} tokens)...",
     "completed": "Context compacted: {{before}} -> {{after}} tokens",

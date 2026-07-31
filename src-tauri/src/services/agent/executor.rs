@@ -340,8 +340,26 @@ impl<R: Runtime> AgentExecutor<R> {
     ) -> Option<ExecutionResult> {
         if self.check_stopped(&ctx.session_id) {
             log::info!("Agent 被用户停止, session_id={}", ctx.session_id);
-            // 先清理不完整的 tool_calls 消息链，避免将损坏的对话历史持久化
-            ctx.cleanup_incomplete_tool_calls();
+            // 先补全不完整的 tool_calls 消息链（为缺失结果的工具补"用户手动停止"结果），
+            // 保证消息链完整后可安全持久化，且已完成的工具结果不会被删除
+            let incomplete_tools = ctx.complete_incomplete_tool_calls();
+            // 为未完成执行的工具重新发射带完整参数的 tool_call 事件，
+            // 前端据此通过 callId 更新节点参数（如文件路径），
+            // 修复停止时节点只显示工具名、与重启后从历史还原的节点不一致的问题
+            for (call_id, tool_name, arguments) in &incomplete_tools {
+                self.emitter
+                    .emit_tool_call(ToolCallPayload {
+                        session_id: ctx.session_id.clone(),
+                        call_id: call_id.clone(),
+                        tool_name: tool_name.clone(),
+                        arguments: arguments.clone(),
+                        iteration: None,
+                    })
+                    .ok();
+            }
+            // 添加"用户手动停止"提示消息并随消息一并持久化，
+            // 前端据此在工作流中渲染停止提示节点（重启后仍可显示）
+            ctx.add_stop_notice();
             self.persist_new_messages(ctx);
             ctx.mark_persisted();
             self.emitter

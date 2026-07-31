@@ -8,7 +8,7 @@ export type IconName =
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
   | "search" | "close" | "warning" | "check" | "check-circle" | "dot"
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
-  | "refresh" | "edit" | "trash" | "stop" | "back"
+  | "refresh" | "edit" | "trash" | "stop" | "stop-circle" | "back"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "clock" | "git-compare" | "git-branch" | "undo"
   | "theme" | "moon" | "keyboard" | "slash" | "info" | "image" | "book" | "more-vertical"
@@ -287,6 +287,13 @@ const paths: Record<IconName, React.JSX.Element> = {
   stop: (
     <g key="stop">
       <rect x="6" y="6" width="12" height="12" rx="1" />
+    </g>
+  ),
+  // 圆形停止（圆圈内一条横线），用于"用户手动停止"提示节点
+  "stop-circle": (
+    <g key="stop-circle">
+      <circle cx="12" cy="12" r="9" />
+      <line x1="8" y1="12" x2="16" y2="12" />
     </g>
   ),
   // 返回

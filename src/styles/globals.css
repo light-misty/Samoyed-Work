@@ -2096,6 +2096,23 @@
   filter: brightness(0.9);
 }
 
+/* 用户手动停止提示节点：灰色停止图标 + 灰色文字（与"思考过程"标签同尺寸） */
+.wf-paused-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  padding-left: 10px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  line-height: 1.6;
+}
+
+/* 缩小提示节点与上一节点的间距（默认 12px -> 6px） */
+.wf-node-paused {
+  margin-top: -6px;
+}
+
 .btn {
   padding: 6px 14px;
   border-radius: var(--radius-sm);

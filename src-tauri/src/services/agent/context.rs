@@ -548,6 +548,18 @@ impl AgentContext {
         });
     }
 
+    /// 添加用户手动停止提示消息
+    /// 当 Agent 被用户手动停止时调用，将提示作为带 metadata 的 assistant 消息
+    /// 持久化到数据库，前端据此在工作流中渲染"用户手动停止"提示节点（重启后仍可显示）
+    pub fn add_stop_notice(&mut self) {
+        self.add_assistant_message_with_metadata(
+            "用户手动停止",
+            Some(serde_json::json!({
+                "nodeType": "paused_notice",
+            })),
+        );
+    }
+
     /// 添加工具执行结果消息
     pub fn add_tool_result(&mut self, call_id: &str, content: &str) {
         self.add_tool_result_with_metadata(call_id, content, None);
@@ -582,53 +594,76 @@ impl AgentContext {
         }
     }
 
-    /// 清理上下文中不完整的 tool_calls 消息链
+    /// 补全上下文中不完整的 tool_calls 消息链
     /// 当 Agent 被用户停止时，可能已经添加了带 tool_calls 的 assistant 消息
     /// 但尚未添加对应的 tool 结果消息。此类不完整的消息链被持久化后，
     /// 下次发起会话时 LLM API 会返回 400 错误：
     /// "assistant message with 'tool_calls' must be followed by tool messages..."
-    /// 此方法从未持久化的消息中，扫描并移除所有不完整的 tool_calls 链
-    /// （即 assistant 消息声明了 tool_calls，但缺少部分或全部 tool 回应）
-    pub fn cleanup_incomplete_tool_calls(&mut self) {
+    /// 此方法从未持久化的消息中，扫描缺少 tool 回应的 tool_call，
+    /// 为每个缺失的 call_id 补一条"用户手动停止"的 tool 结果消息（metadata 标记 nodeType=paused），
+    /// 使消息链完整后可安全持久化，前端据此还原为已取消的工具节点（重启后仍可显示）。
+    /// 与旧的"截断删除"方案相比，已完成工具的结果消息不会被连带删除。
+    /// 返回缺失结果的工具调用完整信息 (call_id, tool_name, arguments)，
+    /// 供调用方重新发射带完整参数的 tool_call 事件（修复停止时前端节点参数不完整的问题）。
+    pub fn complete_incomplete_tool_calls(
+        &mut self,
+    ) -> Vec<(String, String, serde_json::Value)> {
         let persisted = self.persisted_count;
         let total = self.messages.len();
         if total <= persisted {
-            return;
+            return Vec::new();
         }
-        // 从未持久化的最后一条向前扫描
-        let mut i = total;
-        while i > persisted {
-            i -= 1;
-            if self.messages[i].role == "assistant" && self.messages[i].tool_calls.is_some() {
-                let tool_call_ids: Vec<String> = self.messages[i]
-                    .tool_calls
-                    .as_ref()
-                    .map(|calls| calls.iter().map(|c| c.id.clone()).collect())
-                    .unwrap_or_default();
-                if tool_call_ids.is_empty() {
-                    continue;
-                }
-                // 检查这个 assistant 之后是否有完整的 tool 回应
-                let missing_ids: Vec<&str> = tool_call_ids
-                    .iter()
-                    .filter(|call_id| {
-                        !self.messages[i + 1..].iter().any(|m| {
-                            m.role == "tool" && m.tool_call_id.as_deref() == Some(call_id.as_str())
-                        })
-                    })
-                    .map(|s| s.as_str())
-                    .collect();
-                if !missing_ids.is_empty() {
-                    log::info!(
-                        "清理未完成的 tool_calls, session_id={}, 缺少 {} 个 tool 回应 (call_ids={:?}), 从索引 {} 处截断",
-                        self.session_id, missing_ids.len(), missing_ids, i
-                    );
-                    // 截断从此 assistant 消息开始的所有未持久化消息
-                    self.messages.truncate(i);
-                    return;
+        // 收集所有缺失 tool 回应的调用信息（按 assistant 消息出现顺序）
+        let mut incomplete: Vec<(String, String, serde_json::Value)> = Vec::new();
+        for i in persisted..total {
+            if self.messages[i].role != "assistant" {
+                continue;
+            }
+            let Some(tool_calls) = self.messages[i].tool_calls.as_ref() else {
+                continue;
+            };
+            if tool_calls.is_empty() {
+                continue;
+            }
+            // 检查这个 assistant 之后是否有完整的 tool 回应
+            for call in tool_calls {
+                let has_result = self.messages[i + 1..].iter().any(|m| {
+                    m.role == "tool" && m.tool_call_id.as_deref() == Some(call.id.as_str())
+                });
+                if !has_result
+                    && !incomplete.iter().any(|(call_id, _, _)| call_id == &call.id)
+                {
+                    // 参数解析失败时回退为空对象（与工具执行路径保持一致）
+                    let arguments =
+                        serde_json::from_str(&call.arguments).unwrap_or(serde_json::json!({}));
+                    incomplete.push((call.id.clone(), call.name.clone(), arguments));
                 }
             }
         }
+        if incomplete.is_empty() {
+            return incomplete;
+        }
+        let call_ids: Vec<&str> = incomplete
+            .iter()
+            .map(|(call_id, _, _)| call_id.as_str())
+            .collect();
+        log::info!(
+            "补全未完成的 tool_calls, session_id={}, 缺少 {} 个 tool 回应 (call_ids={:?})",
+            self.session_id,
+            incomplete.len(),
+            call_ids
+        );
+        // 为每个缺失的 call_id 添加"用户手动停止"结果消息，保持链完整
+        for (call_id, _, _) in &incomplete {
+            self.add_tool_result_with_metadata(
+                call_id,
+                "用户手动停止",
+                Some(serde_json::json!({
+                    "nodeType": "paused",
+                })),
+            );
+        }
+        incomplete
     }
 
     /// 更新任务类型（基于已调用的工具）
@@ -2042,6 +2077,174 @@ mod tests {
     fn test_context_window_minimum_protection() {
         let budget = TokenBudgetManager::new(100); // 极小值
         assert_eq!(budget.context_window(), 4096); // 应被保护为 4096
+    }
+
+    /// 测试 add_stop_notice 添加用户手动停止提示消息
+    #[test]
+    fn test_add_stop_notice() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        ctx.add_stop_notice();
+
+        let last = ctx.messages.last().expect("应存在停止提示消息");
+        assert_eq!(last.role, "assistant");
+        assert_eq!(last.content, "用户手动停止");
+        let metadata = last.metadata.as_ref().expect("应存在 metadata");
+        assert_eq!(metadata["nodeType"], "paused_notice");
+    }
+
+    /// 测试停止提示消息在不完整 tool_calls 链被补全后仍保留
+    /// 场景：Agent 停止时补全未完成的 tool_calls 消息链，
+    /// 之后添加的停止提示消息应作为最后一条消息持久化
+    #[test]
+    fn test_add_stop_notice_after_complete_incomplete_tool_calls() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        // 模拟 LLM 返回带 tool_calls 的 assistant 消息（尚无 tool 结果，链不完整）
+        let tool_call = LlmToolCall {
+            index: 0,
+            id: "call_1".to_string(),
+            name: "bash".to_string(),
+            arguments: "{}".to_string(),
+        };
+        ctx.add_assistant_message("", Some(vec![tool_call]), None);
+
+        // 停止时先补全不完整链，再添加停止提示消息
+        let incomplete = ctx.complete_incomplete_tool_calls();
+        ctx.add_stop_notice();
+
+        // 返回值应包含未完成的 call_1
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].0, "call_1");
+
+        // 消息顺序：user, assistant(tool_calls), tool(补全结果), assistant(停止提示)
+        assert_eq!(ctx.messages.len(), 4);
+        // 不完整链被补全为完整链（assistant 之后有对应 tool 结果）
+        let tool_msg = &ctx.messages[2];
+        assert_eq!(tool_msg.role, "tool");
+        assert_eq!(tool_msg.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(tool_msg.content, "用户手动停止");
+        let tool_metadata = tool_msg.metadata.as_ref().expect("应存在 metadata");
+        assert_eq!(tool_metadata["nodeType"], "paused");
+        // 停止提示消息作为最后一条
+        let last = ctx.messages.last().expect("应存在停止提示消息");
+        assert_eq!(last.role, "assistant");
+        assert_eq!(last.content, "用户手动停止");
+        let metadata = last.metadata.as_ref().expect("应存在 metadata");
+        assert_eq!(metadata["nodeType"], "paused_notice");
+    }
+
+    /// 测试补全单个未完成的 tool_calls 链
+    /// 场景：assistant 消息声明了 tool_calls 但缺少 tool 结果，
+    /// 补全后应添加带 paused 标记的 tool 结果消息，使链完整可持久化，
+    /// 并返回未完成工具的完整信息（call_id, tool_name, arguments）
+    #[test]
+    fn test_complete_incomplete_tool_calls() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        let tool_call = LlmToolCall {
+            index: 0,
+            id: "call_1".to_string(),
+            name: "read".to_string(),
+            arguments: r#"{"path": "src/main.rs"}"#.to_string(),
+        };
+        ctx.add_assistant_message("", Some(vec![tool_call]), None);
+
+        let incomplete = ctx.complete_incomplete_tool_calls();
+
+        // 返回值包含未完成工具的完整信息（供重新发射 tool_call 事件）
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].0, "call_1");
+        assert_eq!(incomplete[0].1, "read");
+        assert_eq!(incomplete[0].2["path"], "src/main.rs");
+
+        // 补全后链完整：assistant + tool 结果
+        assert_eq!(ctx.messages.len(), 3);
+        let tool_msg = &ctx.messages[2];
+        assert_eq!(tool_msg.role, "tool");
+        assert_eq!(tool_msg.tool_call_id.as_deref(), Some("call_1"));
+        assert_eq!(tool_msg.content, "用户手动停止");
+        let metadata = tool_msg.metadata.as_ref().expect("应存在 metadata");
+        assert_eq!(metadata["nodeType"], "paused");
+    }
+
+    /// 测试部分完成的 tool_calls 链：已完成的结果保留，缺失的补全
+    /// 场景：LLM 一次返回 [A, B] 两个 tool_calls，A 已执行完成（有结果），
+    /// B 未执行（无结果）。补全后 A 的结果保留，B 被补全，链完整
+    #[test]
+    fn test_complete_incomplete_tool_calls_partial() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        let tool_calls = vec![
+            LlmToolCall {
+                index: 0,
+                id: "call_a".to_string(),
+                name: "read".to_string(),
+                arguments: r#"{"path": "a.txt"}"#.to_string(),
+            },
+            LlmToolCall {
+                index: 1,
+                id: "call_b".to_string(),
+                name: "bash".to_string(),
+                arguments: "{}".to_string(),
+            },
+        ];
+        ctx.add_assistant_message("", Some(tool_calls), None);
+        // A 已完成，B 未完成
+        ctx.add_tool_result("call_a", r#"{"content": "ok"}"#);
+
+        let incomplete = ctx.complete_incomplete_tool_calls();
+
+        // 返回值只包含未完成的 B（A 已完成，不返回）
+        assert_eq!(incomplete.len(), 1);
+        assert_eq!(incomplete[0].0, "call_b");
+        assert_eq!(incomplete[0].1, "bash");
+
+        // 消息顺序：user, assistant(tool_calls=[A,B]), tool(A 结果), tool(B 补全结果)
+        assert_eq!(ctx.messages.len(), 4);
+        // A 的结果保留
+        assert_eq!(ctx.messages[2].role, "tool");
+        assert_eq!(ctx.messages[2].tool_call_id.as_deref(), Some("call_a"));
+        assert_eq!(ctx.messages[2].content, r#"{"content": "ok"}"#);
+        // B 被补全
+        assert_eq!(ctx.messages[3].role, "tool");
+        assert_eq!(ctx.messages[3].tool_call_id.as_deref(), Some("call_b"));
+        assert_eq!(ctx.messages[3].content, "用户手动停止");
+        let metadata = ctx.messages[3].metadata.as_ref().expect("应存在 metadata");
+        assert_eq!(metadata["nodeType"], "paused");
+        // 链完整：两个 call_id 都有对应的 tool 结果
+        for call in ctx.messages[1]
+            .tool_calls
+            .as_ref()
+            .expect("应有 tool_calls")
+        {
+            let has_result = ctx.messages[2..].iter().any(|m| {
+                m.role == "tool" && m.tool_call_id.as_deref() == Some(call.id.as_str())
+            });
+            assert!(has_result, "call_id={} 应有对应的 tool 结果", call.id);
+        }
+    }
+
+    /// 测试消息链完整时不进行任何补全
+    #[test]
+    fn test_complete_incomplete_tool_calls_complete_chain() {
+        let mut ctx = AgentContext::new_default("session-1".to_string(), "你是助手".to_string());
+        ctx.add_user_message("你好");
+        let tool_call = LlmToolCall {
+            index: 0,
+            id: "call_1".to_string(),
+            name: "bash".to_string(),
+            arguments: "{}".to_string(),
+        };
+        ctx.add_assistant_message("", Some(vec![tool_call]), None);
+        ctx.add_tool_result("call_1", "执行成功");
+
+        let incomplete = ctx.complete_incomplete_tool_calls();
+
+        // 链已完整，不应有任何改动，返回值应为空
+        assert!(incomplete.is_empty());
+        assert_eq!(ctx.messages.len(), 3);
+        assert!(ctx.messages[2].metadata.is_none());
     }
 
     /// 测试 build_system_prompt_with_task 在小窗口中不注入规范层（规范层已移除）

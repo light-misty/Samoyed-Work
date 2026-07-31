@@ -146,6 +146,8 @@ interface WorkflowState {
    *  - 优先通过 callId 精确匹配 running 工具节点
    *  - 回退到最后一个 running 工具节点（callId 缺失或不匹配时） */
   updateToolResultFromEvent: (payload: ToolResultPayload) => void;
+  /** 关闭所有执行中的工具节点（Agent 停止后调用，取消"执行中"状态显示） */
+  closeRunningToolNodes: () => void;
   removeNode: (id: string) => void;
   clearNodes: () => void;
   setExecutionStatus: (status: ExecutionStatus) => void;
@@ -326,6 +328,22 @@ function convertMessagesToNodes(
         continue; // 跳过 thinking/content/tool 节点创建
       }
 
+      // 检查是否为用户手动停止提示节点
+      if (msg.metadata?.nodeType === "paused_notice") {
+        nodes.push({
+          id: `node_${++nodeCounter}`,
+          type: "paused",
+          status: "cancelled",
+          timestamp: msgTimestamp,
+          data: {
+            message: msg.content,
+            messageId: msg.id,
+          },
+          isExpanded: true,
+        });
+        continue; // 跳过 thinking/content/tool 节点创建
+      }
+
       // 每条 assistant 消息递增迭代计数
       iterationCounter += 1;
       const currentIteration = iterationCounter;
@@ -420,6 +438,24 @@ function convertMessagesToNodes(
                 cancelLabel: "取消",
                 confirmed: (metadata.approved as boolean) ?? false,
                 riskLevel: (metadata.riskLevel as string) ?? "normal",
+                messageId: msg.id,
+              },
+              isExpanded: true,
+              iteration: currentIteration,
+            });
+          } else if (metadata?.nodeType === "paused") {
+            // 用户手动停止时未完成执行的工具节点（从持久化消息恢复）
+            // 展示工具名与完整参数（路径），状态为 cancelled，不显示"执行中"与失败样式
+            nodes.push({
+              id: `node_${++nodeCounter}`,
+              type: "tool",
+              status: "cancelled" as NodeStatus,
+              timestamp: msgTimestamp,
+              data: {
+                toolName: tc.name,
+                filePath: extractToolPath(tc.name, (tc.arguments ?? {}) as Record<string, unknown>, getWorkspaceRoot()),
+                input: (tc.arguments ?? {}) as Record<string, unknown>,
+                callId: tc.id,
                 messageId: msg.id,
               },
               isExpanded: true,
@@ -667,6 +703,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     );
 
     set({ nodes: updatedNodes });
+  },
+
+  // 关闭所有执行中的工具节点（Agent 停止后调用）
+  // 停止时部分工具已发射 tool_call 事件但不会收到 tool_result，
+  // 若保持 running 状态会一直显示"执行中..."，故统一置为 cancelled
+  closeRunningToolNodes: () => {
+    const { nodes } = get();
+    let changed = false;
+    const updatedNodes = nodes.map((n) => {
+      if (n.type === "tool" && n.status === "running") {
+        changed = true;
+        return { ...n, status: "cancelled" as NodeStatus };
+      }
+      return n;
+    });
+    if (changed) {
+      set({ nodes: updatedNodes });
+    }
   },
 
   removeNode: (id) => {
@@ -1213,24 +1267,51 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               : n
           );
         } else {
-          if (!seenToolCallIds.includes(event.callId)) {
-            seenToolCallIds.push(event.callId);
+          // streaming_ 节点复用：真实 callId 到达时复用流式阶段创建的 streaming_X 节点
+          // （与主会话 addToolNodeFromEvent 的逻辑保持一致）
+          const streamingToolNode = event.callId && !event.callId.startsWith("streaming_")
+            ? nodes.find(
+                (n) =>
+                  n.type === "tool" &&
+                  n.status === "running" &&
+                  (n.data as { callId?: string }).callId?.startsWith("streaming_")
+              )
+            : undefined;
+          if (streamingToolNode) {
+            nodes = nodes.map((n) =>
+              n.id === streamingToolNode.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      toolName: event.toolName,
+                      input: event.arguments,
+                      callId: event.callId,
+                      filePath: extractToolPath(event.toolName, event.arguments, getWorkspaceRoot()),
+                    },
+                  }
+                : n
+            );
+          } else {
+            if (!seenToolCallIds.includes(event.callId)) {
+              seenToolCallIds.push(event.callId);
+            }
+            const nodeId = `bg_node_${++bgNodeCounter}`;
+            nodes.push({
+              id: nodeId,
+              type: "tool",
+              status: "running",
+              timestamp: now,
+              data: {
+                toolName: event.toolName,
+                input: event.arguments,
+                filePath: extractToolPath(event.toolName, event.arguments, getWorkspaceRoot()),
+                callId: event.callId,
+              },
+              isExpanded: true,
+              iteration: event.iteration,
+            });
           }
-          const nodeId = `bg_node_${++bgNodeCounter}`;
-          nodes.push({
-            id: nodeId,
-            type: "tool",
-            status: "running",
-            timestamp: now,
-            data: {
-              toolName: event.toolName,
-              input: event.arguments,
-              filePath: extractToolPath(event.toolName, event.arguments, getWorkspaceRoot()),
-              callId: event.callId,
-            },
-            isExpanded: true,
-            iteration: event.iteration,
-          });
         }
         break;
       }
@@ -1352,6 +1433,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           );
           bgStreamingNodeId = null;
         }
+        // 关闭所有执行中的工具节点，取消"执行中"状态显示
+        nodes = nodes.map((n) =>
+          n.type === "tool" && n.status === "running"
+            ? { ...n, status: "cancelled" as NodeStatus }
+            : n
+        );
+        // 添加"用户手动停止"提示节点
+        nodes.push({
+          id: `bg_node_${++bgNodeCounter}`,
+          type: "paused",
+          status: "cancelled",
+          timestamp: now,
+          data: { message: event.reason },
+          isExpanded: true,
+        });
         executionStatus = "cancelled";
         bgLastClosedStreamingNodeId = null;
         break;

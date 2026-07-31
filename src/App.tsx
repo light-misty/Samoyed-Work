@@ -485,9 +485,13 @@ export default function App() {
     if (isStopped) {
       closeThinkingNode("cancelled");
       closeStreamingNode("cancelled");
+      // 关闭所有执行中的工具节点，停止后不再显示"执行中"
+      useWorkflowStore.getState().closeRunningToolNodes();
+      // 添加"用户手动停止"提示节点（后端会同步持久化提示消息，重启后仍可显示）
+      addNode("paused", { message: t("pausedNode.message") }, "cancelled");
       setExecutionStatus("cancelled");
     }
-  }, [isStopped, updateNode, setExecutionStatus]);
+  }, [isStopped, updateNode, setExecutionStatus, addNode, t]);
 
   useEffect(() => {
     if (pendingConfirmation) {
