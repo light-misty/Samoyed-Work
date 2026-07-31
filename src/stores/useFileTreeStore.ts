@@ -4,21 +4,27 @@ import * as tauriCmd from "../services/tauri";
 import { onFileChange, type FileChangePayload } from "../services/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
-/** 递归过滤文件树，仅保留名称匹配关键词的节点（及其父目录） */
-function filterTree(nodes: FileNode[], keyword: string): FileNode[] {
-  if (!keyword) return nodes;
-  const lower = keyword.toLowerCase();
-  return nodes.reduce<FileNode[]>((acc, node) => {
-    if (node.isDir) {
-      const filteredChildren = filterTree(node.children || [], keyword);
-      if (filteredChildren.length > 0) {
-        acc.push({ ...node, children: filteredChildren });
-      }
-    } else if (node.name.toLowerCase().includes(lower)) {
-      acc.push(node);
+/** 在树中按路径查找节点（用于展开时判断是否需要懒加载） */
+function findNodeInTree(nodes: FileNode[], path: string): FileNode | null {
+  for (const node of nodes) {
+    if (node.path === path) return node;
+    if (node.children) {
+      const found = findNodeInTree(node.children, path);
+      if (found) return found;
     }
-    return acc;
-  }, []);
+  }
+  return null;
+}
+
+/** 更新树中指定路径节点的子节点数据（懒加载完成后回填） */
+function updateNodeChildren(nodes: FileNode[], path: string, children: FileNode[]): FileNode[] {
+  return nodes.map((node) => {
+    if (node.path === path) return { ...node, children };
+    if (node.children) {
+      return { ...node, children: updateNodeChildren(node.children, path, children) };
+    }
+    return node;
+  });
 }
 
 interface FileTreeState {
@@ -38,10 +44,12 @@ interface FileTreeState {
   selectNode: (key: string) => void;
   setSearchKeyword: (keyword: string) => void;
   loadTree: (workspaceId: string) => Promise<void>;
+  /** 懒加载指定目录的子节点（后端仅返回一层，深度截断后展开时按需补齐） */
+  loadChildren: (path: string) => Promise<void>;
+  /** 递归恢复已展开目录的子节点数据（文件变更刷新后保持展开状态） */
+  restoreExpanded: (nodes: FileNode[]) => Promise<void>;
   /** 清空文件树数据（用于工作区被删除后） */
   clearTree: () => void;
-  /** 获取经过搜索过滤后的文件树 */
-  getFilteredTree: () => FileNode[];
   /** 初始化文件变更事件监听 */
   initFileChangeListener: () => Promise<void>;
   /** 销毁文件变更事件监听 */
@@ -60,12 +68,35 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
 
   // 展开/折叠节点
   toggleNode: (key) => {
-    set((state) => {
-      const next = new Set(state.expandedKeys);
+    const state = get();
+    const node = findNodeInTree(state.treeData, key);
+    const isExpanded = state.expandedKeys.has(key);
+
+    set((s) => {
+      const next = new Set(s.expandedKeys);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return { expandedKeys: next };
     });
+
+    // 展开且目录子节点数据缺失（深度截断）时按需懒加载
+    if (!isExpanded && node?.isDir && !node.children) {
+      void get().loadChildren(key);
+    }
+  },
+
+  // 懒加载指定目录的子节点（深度 1 只返回该目录的直接子项）
+  loadChildren: async (path) => {
+    const workspaceId = get().activeWorkspaceId;
+    if (!workspaceId) return;
+    try {
+      const children = await tauriCmd.getFileTree(workspaceId, path, 1);
+      set((state) => ({
+        treeData: updateNodeChildren(state.treeData, path, children),
+      }));
+    } catch (error) {
+      console.error("[FileTreeStore] 懒加载子节点失败:", path, error);
+    }
   },
 
   // 选中节点
@@ -78,15 +109,33 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
     set({ searchKeyword: keyword });
   },
 
-  // 从后端加载文件树
+  // 从后端加载文件树（默认仅第一层，展开时按需懒加载）
   loadTree: async (workspaceId) => {
     set({ isLoading: true, activeWorkspaceId: workspaceId });
     try {
       const treeData = await tauriCmd.getFileTree(workspaceId);
       set({ treeData, isLoading: false });
+      // 刷新后恢复已展开目录的子节点，保持用户展开状态
+      void get().restoreExpanded(treeData);
     } catch (error) {
       console.error("[FileTreeStore] 加载文件树失败:", error);
       set({ isLoading: false });
+    }
+  },
+
+  // 递归恢复已展开目录的子节点数据（深度截断后刷新时保持展开状态）
+  restoreExpanded: async (nodes) => {
+    const expandedKeys = get().expandedKeys;
+    for (const node of nodes) {
+      if (!node.isDir || !expandedKeys.has(node.path)) continue;
+      if (node.children == null) {
+        // 子节点数据缺失（未加载），按需加载该层
+        await get().loadChildren(node.path);
+      }
+      const updated = findNodeInTree(get().treeData, node.path);
+      if (updated?.children) {
+        await get().restoreExpanded(updated.children);
+      }
     }
   },
 
@@ -99,12 +148,6 @@ export const useFileTreeStore = create<FileTreeState>((set, get) => ({
       searchKeyword: "",
       activeWorkspaceId: null,
     });
-  },
-
-  // 获取经过搜索过滤后的文件树
-  getFilteredTree: () => {
-    const { treeData, searchKeyword } = get();
-    return filterTree(treeData, searchKeyword);
   },
 
   // 初始化文件变更事件监听

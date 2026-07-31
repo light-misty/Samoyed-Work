@@ -2,6 +2,7 @@ pub mod agent;
 pub mod attachment;
 pub mod code;
 pub mod document;
+pub mod file_index;
 pub mod fs_watcher;
 pub mod handler;
 pub mod llm;

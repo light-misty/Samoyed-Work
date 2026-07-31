@@ -68,6 +68,8 @@ pub struct AppState {
     pub skill_registry: Arc<crate::services::skill::registry::SkillRegistry>,
     /// LSP 服务器管理器：管理 LSP 语言服务器进程
     pub lsp_manager: Arc<crate::services::lsp::manager::LspServerManager>,
+    /// 文件索引缓存：加速工作区文件搜索（文件变更时由 FsWatcher 失效）
+    pub file_index_cache: Arc<crate::services::file_index::FileIndexCache>,
 }
 
 /// 从系统 PATH 中查找 Python 可执行文件（开发模式兜底）
@@ -529,10 +531,12 @@ pub fn run() {
 
             log::info!("Samoyed Work 应用初始化完成");
 
-            // 初始化文件监听服务
+            // 初始化文件监听服务（联动失效 LSP 缓存与文件索引缓存）
+            let file_index_cache = crate::services::file_index::FileIndexCache::new();
             let fs_watcher = crate::services::fs_watcher::FsWatcherService::new(
                 app.handle().clone(),
                 Some(Arc::clone(&lsp_cache)),
+                Some(Arc::clone(&file_index_cache)),
             );
 
             // 初始化网络监控服务
@@ -561,6 +565,7 @@ pub fn run() {
                 scratchpad_states,
                 skill_registry,
                 lsp_manager,
+                file_index_cache,
             };
 
             app.manage(state);

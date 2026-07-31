@@ -245,13 +245,14 @@ pub async fn get_file_tree(
         None => root.clone(),
     };
 
-    let max_depth = depth.unwrap_or(3);
+    // 默认只返回第一层，深层目录由前端展开时按需懒加载（传 path + depth 获取指定目录子节点）
+    let max_depth = depth.unwrap_or(1);
     let result = build_file_tree(&base, &root, max_depth, 0);
     log::info!("get_file_tree: 文件树构建完成, 节点数={}", result.len());
     Ok(result)
 }
 
-/// 搜索文件，目前只做文件名搜索
+/// 搜索文件（基于内存文件名索引，文件变更时索引自动失效重建）
 #[tauri::command]
 pub async fn search_files(
     workspace_id: String,
@@ -286,22 +287,45 @@ pub async fn search_files(
         .and_then(|o| o.extensions.clone())
         .unwrap_or_default();
 
-    if !extensions.is_empty() {
-        log::debug!("search_files: 扩展名过滤={:?}", extensions);
-    }
-
     let root = PathBuf::from(&workspace.path);
-    let query_lower = query.to_lowercase();
-    let mut results = Vec::new();
 
-    search_files_recursive(
-        &root,
-        &root,
-        &query_lower,
-        &extensions,
-        max_results,
-        &mut results,
-    );
+    // 从内存索引检索（未构建时自动扫描构建），避免每次搜索全盘遍历
+    let index = state.file_index_cache.get_or_build(&workspace_id, &root);
+    let matches = index.search(&query, max_results);
+
+    // 仅对命中的文件读取元数据，避免全盘 stat
+    let mut results = Vec::with_capacity(matches.len());
+    for m in matches {
+        if !extensions.is_empty() && !extensions.iter().any(|e| e.to_lowercase() == m.extension) {
+            continue;
+        }
+        let (size, modified) = match std::fs::metadata(root.join(&m.path)) {
+            Ok(meta) => (
+                meta.len(),
+                meta.modified()
+                    .ok()
+                    .map(|t| {
+                        let dt: chrono::DateTime<chrono::Utc> = t.into();
+                        dt.to_rfc3339()
+                    })
+                    .unwrap_or_default(),
+            ),
+            Err(_) => (0, String::new()),
+        };
+        results.push(SearchResult {
+            path: m.path.clone(),
+            name: m.name.clone(),
+            extension: m.extension.clone(),
+            size,
+            modified,
+            match_type: "name".to_string(),
+            match_preview: None,
+            line_number: None,
+        });
+        if results.len() >= max_results {
+            break;
+        }
+    }
 
     log::info!("search_files: 搜索完成, 结果数={}", results.len());
     Ok(results)
@@ -445,89 +469,6 @@ fn build_file_tree(
     nodes
 }
 
-/// 递归搜索文件名
-fn search_files_recursive(
-    dir: &PathBuf,
-    root: &PathBuf,
-    query: &str,
-    extensions: &[String],
-    max_results: usize,
-    results: &mut Vec<SearchResult>,
-) {
-    if results.len() >= max_results {
-        return;
-    }
-
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-
-    for entry in entries.filter_map(|e| e.ok()) {
-        if results.len() >= max_results {
-            return;
-        }
-
-        let name = entry.file_name().to_string_lossy().to_string();
-        // 跳过隐藏文件和目录（保留 .agent 以便智能体感知工作区 Skill）
-        if name.starts_with('.') && name != ".agent" {
-            continue;
-        }
-
-        let path = entry.path();
-
-        if path.is_dir() {
-            search_files_recursive(&path, root, query, extensions, max_results, results);
-            continue;
-        }
-
-        let name_lower = name.to_lowercase();
-        if !name_lower.contains(query) {
-            continue;
-        }
-
-        // 检查扩展名过滤
-        let ext = path
-            .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        if !extensions.is_empty() && !extensions.iter().any(|e| e.to_lowercase() == ext) {
-            continue;
-        }
-
-        let relative = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .to_string();
-
-        let metadata = match entry.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        let modified = metadata
-            .modified()
-            .ok()
-            .map(|t| {
-                let dt: chrono::DateTime<chrono::Utc> = t.into();
-                dt.to_rfc3339()
-            })
-            .unwrap_or_default();
-
-        results.push(SearchResult {
-            path: relative,
-            name,
-            extension: ext,
-            size: metadata.len(),
-            modified,
-            match_type: "name".to_string(),
-            match_preview: None,
-            line_number: None,
-        });
-    }
-}
-
 /// 统计目录中的文件数量
 fn count_files_in_dir(dir: &PathBuf) -> Result<u32, CommandError> {
     if !dir.exists() {
@@ -543,4 +484,60 @@ fn count_files_in_dir(dir: &PathBuf) -> Result<u32, CommandError> {
         }
     }
     Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 创建临时目录结构：a/root.txt、a/b/mid.txt、a/b/c/deep.txt
+    fn build_temp_tree() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "samoyed_file_tree_test_{}_{}",
+            std::process::id(),
+            std::thread::current()
+                .name()
+                .unwrap_or("main")
+                .replace(':', "_")
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("a/b/c")).expect("创建临时目录失败");
+        std::fs::write(dir.join("a/root.txt"), "root").expect("写入临时文件失败");
+        std::fs::write(dir.join("a/b/mid.txt"), "mid").expect("写入临时文件失败");
+        std::fs::write(dir.join("a/b/c/deep.txt"), "deep").expect("写入临时文件失败");
+        dir
+    }
+
+    /// 默认 depth=1 时仅返回第一层，目录的 children 为 None（深层由前端懒加载）
+    #[test]
+    fn test_build_file_tree_depth_one_only_first_level() {
+        let dir = build_temp_tree();
+        let nodes = build_file_tree(&dir, &dir, 1, 0);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].name, "a");
+        assert!(nodes[0].is_dir);
+        assert!(nodes[0].children.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// depth=3 时第三层目录的 children 为 None（深度截断边界）
+    #[test]
+    fn test_build_file_tree_depth_three_cutoff_at_third_level() {
+        let dir = build_temp_tree();
+        let nodes = build_file_tree(&dir, &dir, 3, 0);
+        assert_eq!(nodes.len(), 1);
+        let a = &nodes[0];
+        let a_children = a.children.as_ref().expect("第一层目录应有 children");
+        let b = a_children
+            .iter()
+            .find(|n| n.name == "b")
+            .expect("缺少目录 b");
+        let b_children = b.children.as_ref().expect("第二层目录应有 children");
+        let c = b_children
+            .iter()
+            .find(|n| n.name == "c")
+            .expect("缺少目录 c");
+        assert!(c.children.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

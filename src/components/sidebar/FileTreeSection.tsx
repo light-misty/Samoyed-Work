@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, useEffect, memo } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from 'react-i18next';
 import { useFileTreeStore } from "../../stores/useFileTreeStore";
@@ -7,7 +7,7 @@ import { Icon } from "../common/Icon";
 import { ContextMenu, type ContextMenuItem } from "../common/ContextMenu";
 import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
 import * as tauriCmd from "../../services/tauri";
-import type { FileNode } from "../../types";
+import type { FileNode, SearchResult } from "../../types";
 
 /* ---- 内联重命名输入框 ---- */
 function InlineRenameInput({
@@ -63,6 +63,25 @@ function InlineRenameInput({
       onClick={(e) => e.stopPropagation()}
     />
   );
+}
+
+/* ---- 文件类型图标（扩展名 → 颜色类 + 图标） ---- */
+function FileTypeIcon({ extension, size = 13 }: { extension?: string; size?: number }) {
+  const colorClass =
+    extension === "docx" ? "ft-ext-docx" :
+    extension === "xlsx" ? "ft-ext-xlsx" :
+    extension === "pptx" ? "ft-ext-pptx" :
+    extension === "pdf" ? "ft-ext-pdf" :
+    "ft-ext-default";
+
+  const icon =
+    extension === "docx" ? <Icon name="doc" size={size} /> :
+    extension === "xlsx" ? <Icon name="xlsx" size={size} /> :
+    extension === "pptx" ? <Icon name="ppt" size={size} /> :
+    extension === "pdf" ? <Icon name="pdf" size={size} /> :
+    <Icon name="file" size={size} />;
+
+  return <span className={`ft-file-icon ${colorClass}`}>{icon}</span>;
 }
 
 /* ---- 文件树节点组件 ---- */
@@ -134,21 +153,6 @@ const FileTreeItem = memo(function FileTreeItem({
     );
   }
 
-  /* 文件类型颜色映射 */
-  const extColorClass =
-    node.extension === "docx" ? "ft-ext-docx" :
-    node.extension === "xlsx" ? "ft-ext-xlsx" :
-    node.extension === "pptx" ? "ft-ext-pptx" :
-    node.extension === "pdf" ? "ft-ext-pdf" :
-    "ft-ext-default";
-
-  const extIcon =
-    node.extension === "docx" ? <Icon name="doc" size={13} /> :
-    node.extension === "xlsx" ? <Icon name="xlsx" size={13} /> :
-    node.extension === "pptx" ? <Icon name="ppt" size={13} /> :
-    node.extension === "pdf" ? <Icon name="pdf" size={13} /> :
-    <Icon name="file" size={13} />;
-
   return (
     <div
       className={`ft-item ft-file ${isSelected ? "ft-selected" : ""}`}
@@ -158,9 +162,7 @@ const FileTreeItem = memo(function FileTreeItem({
       onDoubleClick={() => onDoubleClickFile?.(node.path, node.name)}
       onContextMenu={(e) => onContextMenu(e, node)}
     >
-      <span className={`ft-file-icon ${extColorClass}`}>
-        {extIcon}
-      </span>
+      <FileTypeIcon extension={node.extension} />
       {isRenaming ? (
         <InlineRenameInput
           defaultValue={node.name}
@@ -390,9 +392,33 @@ function NewItemInput({
 /* ---- 主组件 ---- */
 export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPreview?: (filePath: string, fileName: string) => void; hideSearchBar?: boolean }) {
   const { t } = useTranslation();
-  const { searchKeyword, setSearchKeyword, getFilteredTree, loadTree, isLoading, activeWorkspaceId } = useFileTreeStore();
+  const { searchKeyword, setSearchKeyword, selectNode, loadTree, isLoading, activeWorkspaceId, treeData } = useFileTreeStore();
   const { workspaces } = useWorkspaceStore();
-  const filteredTree = getFilteredTree();
+
+  /* 搜索结果状态（搜索关键词非空时展示后端 search_files 结果） */
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+
+  /* 搜索防抖：关键词变化后调用后端全量搜索（不受树懒加载深度限制） */
+  useEffect(() => {
+    if (!searchKeyword.trim() || !activeWorkspaceId) {
+      setSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const results = await tauriCmd.searchFiles(activeWorkspaceId, searchKeyword.trim());
+        if (!cancelled) setSearchResults(results);
+      } catch (err) {
+        console.error("[FileTreeSection] 搜索文件失败:", err);
+        if (!cancelled) setSearchResults([]);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchKeyword, activeWorkspaceId]);
 
   /* 右键菜单状态 */
   const [contextMenu, setContextMenu] = useState<{
@@ -600,8 +626,37 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
         </button>
       </div>
 
-      {/* 文件树内容 */}
-      {isLoading && filteredTree.length === 0 ? (
+      {/* 文件树内容：搜索关键词非空时展示后端搜索结果列表 */}
+      {searchKeyword.trim() ? (
+        <div className="ft-tree-wrapper">
+          {searchResults === null ? (
+            <div className="ft-empty" role="status">
+              <span className="ft-empty-text">{t('fileTree.loading')}</span>
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="ft-empty" role="status">
+              <Icon name="file" size={20} className="ft-empty-icon" />
+              <span className="ft-empty-text">{t('fileTree.noMatch')}</span>
+            </div>
+          ) : (
+            <div className="ft-tree" role="tree" aria-label={t('fileTree.treeLabel')}>
+              {searchResults.map((r) => (
+                <div
+                  key={r.path}
+                  className="ft-item ft-file"
+                  role="treeitem"
+                  onClick={() => selectNode(r.path)}
+                  onDoubleClick={() => onOpenPreview?.(r.path, r.name)}
+                >
+                  <FileTypeIcon extension={r.extension} />
+                  <span className="ft-name">{r.name}</span>
+                  <span className="ft-search-path" title={r.path}>{r.path}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : isLoading && treeData.length === 0 ? (
         <div className="ft-skeleton" role="status" aria-label={t('fileTree.loading')}>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="ft-skeleton-item">
@@ -610,17 +665,17 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
             </div>
           ))}
         </div>
-      ) : filteredTree.length === 0 ? (
+      ) : treeData.length === 0 ? (
         <div className="ft-empty" role="status">
           <Icon name="file" size={20} className="ft-empty-icon" />
           <span className="ft-empty-text">
-            {searchKeyword ? t('fileTree.noMatch') : t('fileTree.noFiles')}
+            {t('fileTree.noFiles')}
           </span>
         </div>
       ) : (
         <div className="ft-tree-wrapper">
           <div className="ft-tree" role="tree" aria-label={t('fileTree.treeLabel')}>
-            {filteredTree.map((node) => (
+            {treeData.map((node) => (
               <FileTreeItem
                 key={node.path}
                 node={node}
@@ -820,6 +875,16 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
           white-space: nowrap;
           font-size: 12px;
           line-height: 1.4;
+        }
+        .ft-search-path {
+          font-size: 11px;
+          color: var(--color-text-quaternary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 45%;
+          text-align: right;
+          flex-shrink: 1;
         }
         .ft-chevron {
           width: 14px;

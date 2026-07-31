@@ -28,6 +28,8 @@ pub struct FsWatcherService<R: Runtime> {
     deletion_emitted: Arc<AtomicBool>,
     /// LSP 结果缓存（文件变更时联动失效缓存）
     lsp_cache: Option<Arc<crate::services::lsp::cache::LspResultCache>>,
+    /// 文件索引缓存（文件变更时联动失效，下次搜索自动重建）
+    file_index_cache: Option<Arc<crate::services::file_index::FileIndexCache>>,
 }
 
 impl<R: Runtime> FsWatcherService<R> {
@@ -35,6 +37,7 @@ impl<R: Runtime> FsWatcherService<R> {
     pub fn new(
         app_handle: AppHandle<R>,
         lsp_cache: Option<Arc<crate::services::lsp::cache::LspResultCache>>,
+        file_index_cache: Option<Arc<crate::services::file_index::FileIndexCache>>,
     ) -> Self {
         Self {
             app_handle,
@@ -44,6 +47,7 @@ impl<R: Runtime> FsWatcherService<R> {
             active_watch: Arc::new(Mutex::new(None)),
             deletion_emitted: Arc::new(AtomicBool::new(false)),
             lsp_cache,
+            file_index_cache,
         }
     }
 
@@ -98,6 +102,7 @@ impl<R: Runtime> FsWatcherService<R> {
         let ws_wpath = wpath.clone();
         let ws_deletion_emitted = deletion_emitted.clone();
         let ws_lsp_cache = self.lsp_cache.clone();
+        let ws_file_index_cache = self.file_index_cache.clone();
         let workspace_callback = move |res: Result<Event, notify::Error>| {
             match res {
                 Ok(event) => {
@@ -131,6 +136,11 @@ impl<R: Runtime> FsWatcherService<R> {
                             tauri::async_runtime::spawn(async move {
                                 cache.invalidate_file(&p).await;
                             });
+                        }
+
+                        // 文件变更时联动失效文件索引缓存，避免返回过期的搜索结果
+                        if let Some(ref cache) = ws_file_index_cache {
+                            cache.invalidate(&ws_wid);
                         }
 
                         // 当收到删除事件时，检查工作区根目录是否仍然存在
@@ -222,6 +232,7 @@ impl<R: Runtime> FsWatcherService<R> {
             let parent_wpath = wpath.clone();
             let parent_ws_path = wpath_buf.clone();
             let parent_deletion_emitted = deletion_emitted.clone();
+            let parent_file_index_cache = self.file_index_cache.clone();
 
             let parent_callback = move |res: Result<Event, notify::Error>| {
                 match res {
@@ -239,6 +250,10 @@ impl<R: Runtime> FsWatcherService<R> {
                                         parent_wpath
                                     );
                                     parent_deletion_emitted.store(true, Ordering::SeqCst);
+                                    // 工作区目录被删除，联动失效文件索引缓存
+                                    if let Some(ref cache) = parent_file_index_cache {
+                                        cache.invalidate(&parent_wid);
+                                    }
                                     let deleted_payload = WorkspaceDirectoryDeletedPayload {
                                         workspace_id: parent_wid.clone(),
                                         workspace_name: parent_wname.clone(),
