@@ -674,6 +674,7 @@
     "renameSession": "Rename session"
   },
   "preview": {
+    "back": "Back",
     "loading": "Loading preview...",
     "previewFailed": "Preview failed",
     "fitWidth": "Fit Width",

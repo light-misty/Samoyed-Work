@@ -36,8 +36,9 @@ import { useSuperpowersStore } from "./stores/useSuperpowersStore";
 import { BUILTIN_SUPERPOWERS_NAME, BUILTIN_SUPERPOWERS_CONTENT } from "./commands/superpowersContent";
 
 // 懒加载浮层组件：这些组件体积较大且仅在用户打开时才需要，延迟加载可减少首屏 bundle 体积
-const PreviewOverlay = lazy(() =>
-  import("./components/preview/PreviewOverlay").then((m) => ({ default: m.PreviewOverlay }))
+// 文档预览页：打开预览时替换主内容区显示，带返回按钮
+const PreviewPage = lazy(() =>
+  import("./components/preview/PreviewPage").then((m) => ({ default: m.PreviewPage }))
 );
 const SettingsDialog = lazy(() =>
   import("./components/settings/SettingsDialog").then((m) => ({ default: m.SettingsDialog }))
@@ -922,7 +923,7 @@ export default function App() {
           setPreviewPdfBase64(base64Data);
         } catch (pdfErr) {
           console.error("[App] 获取PDF数据失败，降级为文本预览:", pdfErr);
-          // 降级：不设置 pdfBase64，PreviewOverlay 将使用文本模式
+          // 降级：不设置 pdfBase64，PreviewPage 将使用文本模式
         }
       }
     } catch (err) {
@@ -1095,7 +1096,7 @@ export default function App() {
       const isInputFocused = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
 
       if (e.key === "Escape") {
-        setPreviewOpen(false);
+        handleClosePreview();
       }
       // Ctrl+N: 新建会话
       if (e.ctrlKey && e.key === "n") {
@@ -1136,7 +1137,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleNewSession, currentSessionId]);
+  }, [handleNewSession, handleClosePreview, currentSessionId]);
 
   return (
     <div className="app flex flex-col h-screen">
@@ -1148,9 +1149,9 @@ export default function App() {
 
       <MainLayout
         mainArea={
-          // 主工作流始终挂载以保留滚动位置；子 Agent 详情页通过 display 叠加显示
+          // 主工作流始终挂载以保留滚动位置；子 Agent 详情页/预览页通过 display 叠加显示
           <>
-            <div style={{ display: currentSubAgentId ? 'none' : 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
+            <div style={{ display: currentSubAgentId || previewOpen ? 'none' : 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative' }}>
               {nodes.length === 0 && <WorkspaceGitStatus pageLevel />}
               <MainArea
                 isEmpty={nodes.length === 0}
@@ -1175,6 +1176,21 @@ export default function App() {
                 </Suspense>
               </div>
             )}
+            {/* 文档预览页：预览打开时替换主内容区，返回按钮恢复工作流视图 */}
+            {previewOpen && (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+                <Suspense fallback={<LazyFallback />}>
+                  <PreviewPage
+                    title={previewTitle}
+                    content={previewContent}
+                    fileType={previewFileType}
+                    pdfBase64Data={previewPdfBase64}
+                    loading={previewLoading}
+                    onBack={handleClosePreview}
+                  />
+                </Suspense>
+              </div>
+            )}
           </>
         }
         sidebarVisible={sidebarVisible}
@@ -1190,28 +1206,7 @@ export default function App() {
         }
       />
 
-      {/* 浮层面板（懒加载） */}
-      <Suspense fallback={<LazyFallback />}>
-        <PreviewOverlay
-          open={previewOpen}
-          onClose={handleClosePreview}
-          title={previewTitle}
-          content={previewContent}
-          fileType={previewFileType}
-          pdfBase64Data={previewPdfBase64}
-        />
-      </Suspense>
-      {previewLoading && (
-        <div className="fixed inset-0 bg-black/10 z-[199] flex items-center justify-center pointer-events-none">
-          <div className="bg-bg-elevated px-5 py-3 rounded-[var(--radius-md)] shadow-md text-[13px] text-text-secondary flex items-center gap-2">
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            {t('preview.loading')}
-          </div>
-        </div>
-      )}
+      {/* 设置对话框（懒加载） */}
       <Suspense fallback={<LazyFallback />}>
         <SettingsDialog />
       </Suspense>

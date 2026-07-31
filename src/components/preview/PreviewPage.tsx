@@ -1,60 +1,66 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../common/Icon";
 import { PdfCanvasViewer } from "./PdfCanvasViewer";
 import { MarkdownPreview } from "./MarkdownPreview";
 
-interface PreviewOverlayProps {
-  open: boolean;
-  onClose: () => void;
+interface PreviewPageProps {
+  /** 预览文件名（作为页面标题） */
   title?: string;
+  /** 预览文本内容 */
   content?: string;
+  /** 预览文件类型 */
   fileType?: string;
-  // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
+  /** PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染 */
   pdfBase64Data?: string | null;
+  /** 内容加载中状态 */
+  loading?: boolean;
+  /** 返回回调（关闭预览，恢复工作流视图） */
+  onBack: () => void;
 }
 
-export function PreviewOverlay({
-  open,
-  onClose,
+/**
+ * 文档预览页面
+ * 替换主内容区（新建会话/工作流页面）显示文档预览内容
+ * - 顶部栏：返回按钮 + 文件名标题
+ * - 主体：按文件类型分派渲染（PDF / Markdown / Excel / Word / PPT / 纯文本）
+ */
+export function PreviewPage({
   title = "",
   content = "",
   fileType,
   pdfBase64Data = null,
-}: PreviewOverlayProps) {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
-
-  if (!open) return null;
+  loading = false,
+  onBack,
+}: PreviewPageProps) {
+  const { t } = useTranslation();
 
   return (
-    <div
-      className="fixed inset-0 bg-black/30 z-[200] flex items-center justify-center animate-fade-in"
-    >
-      <div
-        className="w-4/5 max-w-[960px] h-[85vh] bg-bg rounded-[var(--radius-lg)] shadow-lg flex flex-col overflow-hidden animate-slide-up"
-      >
-        {/* 顶部栏 */}
-        <div className="flex items-center px-5 py-3 border-b border-border gap-3 flex-shrink-0">
-          <span className="font-semibold text-[14px] flex-1 truncate">{title}</span>
-          <div className="flex gap-[6px] items-center">
-            <button
-              className="w-[30px] h-[30px] flex items-center justify-center rounded-[var(--radius-sm)] transition-colors text-text-secondary hover:bg-bg-sub"
-              onClick={onClose}
-            >
-              <Icon name="close" size={18} />
-            </button>
-          </div>
-        </div>
+    <div className="preview-page">
+      {/* 顶部栏：返回按钮 + 标题 */}
+      <div className="preview-header">
+        <button
+          className="preview-back-btn"
+          onClick={onBack}
+          title={t("preview.back")}
+        >
+          <Icon name="back" size={16} />
+          <span>{t("preview.back")}</span>
+        </button>
+        <h3 className="preview-title">{title}</h3>
+      </div>
 
-        {/* 内容区 */}
-        {fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
+      {/* 主体内容区 */}
+      <div className="preview-body">
+        {loading ? (
+          <div className="preview-status">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span>{t("preview.loading")}</span>
+          </div>
+        ) : fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
           // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
           // 必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
           <div className="flex-1 overflow-hidden flex flex-col">
@@ -66,6 +72,66 @@ export function PreviewOverlay({
           </div>
         )}
       </div>
+
+      <style>{`
+        .preview-page {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          min-height: 0;
+        }
+        .preview-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 16px;
+          border-bottom: 1px solid var(--color-border, #e5e6eb);
+          flex-shrink: 0;
+          height: 44px;
+        }
+        .preview-back-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          background: transparent;
+          border: none;
+          color: var(--color-text-secondary, #646a73);
+          cursor: pointer;
+          font-size: 13px;
+          border-radius: 4px;
+          transition: background 0.15s, color 0.15s;
+        }
+        .preview-back-btn:hover {
+          background: var(--color-bg-hover, #f0f1f5);
+          color: var(--color-text-primary, #1f2329);
+        }
+        .preview-title {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--color-text-primary, #1f2329);
+          margin: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .preview-body {
+          flex: 1;
+          min-height: 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+        }
+        .preview-status {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex: 1;
+          color: var(--color-text-tertiary, #8f959e);
+          font-size: 13px;
+        }
+      `}</style>
     </div>
   );
 }

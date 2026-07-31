@@ -674,6 +674,7 @@
     "renameSession": "重命名会话"
   },
   "preview": {
+    "back": "返回",
     "loading": "加载预览中...",
     "previewFailed": "预览失败",
     "fitWidth": "适合宽度",
