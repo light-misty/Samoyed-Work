@@ -18,6 +18,8 @@ interface PreviewPageProps {
   pdfBase64Data?: string | null;
   /** 预览文件所在目录的绝对路径，用于 Markdown 相对路径图片的解析 */
   baseDir?: string;
+  /** 点击 Markdown 相对路径文件链接时的回调 */
+  onOpenLink?: (href: string) => void;
   /** 内容加载中状态 */
   loading?: boolean;
   /** 返回回调（关闭预览，恢复工作流视图） */
@@ -36,10 +38,13 @@ export function PreviewPage({
   fileType,
   pdfBase64Data = null,
   baseDir,
+  onOpenLink,
   loading = false,
   onBack,
 }: PreviewPageProps) {
   const { t } = useTranslation();
+  // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
+  const isPdfMode = fileType?.toLowerCase() === "pdf" && !!pdfBase64Data;
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -66,15 +71,10 @@ export function PreviewPage({
             </svg>
             <span>{t("preview.loading")}</span>
           </div>
-        ) : fileType?.toLowerCase() === "pdf" && pdfBase64Data ? (
-          // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
-          // 必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} />
-          </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
-            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} />
+          // PDF 模式容器必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
+          <div className={isPdfMode ? "flex-1 overflow-hidden flex flex-col" : "flex-1 overflow-y-auto"}>
+            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} onOpenLink={onOpenLink} />
           </div>
         )}
       </div>
@@ -85,7 +85,7 @@ export function PreviewPage({
 /**
  * 根据 fileType 选择对应的渲染方式
  */
-function ContentRenderer({ content, fileType, pdfBase64Data, baseDir }: { content: string; fileType?: string; pdfBase64Data?: string | null; baseDir?: string }) {
+function ContentRenderer({ content, fileType, pdfBase64Data, baseDir, onOpenLink }: { content: string; fileType?: string; pdfBase64Data?: string | null; baseDir?: string; onOpenLink?: (href: string) => void }) {
   const normalizedType = fileType?.toLowerCase()?.trim() ?? "";
 
   // PDF 真实渲染预览：使用 pdfjs-dist Canvas 渲染
@@ -97,7 +97,7 @@ function ContentRenderer({ content, fileType, pdfBase64Data, baseDir }: { conten
   if (normalizedType === "md" || normalizedType === "markdown") {
     return (
       <div className="px-10 py-8">
-        <MarkdownPreview content={content} baseDir={baseDir} />
+        <MarkdownPreview content={content} baseDir={baseDir} onOpenLink={onOpenLink} />
       </div>
     );
   }

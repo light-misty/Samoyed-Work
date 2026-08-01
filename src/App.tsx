@@ -56,6 +56,40 @@ function LazyFallback() {
   return null;
 }
 
+/**
+ * 将 Markdown 内链接（相对路径 / Windows 绝对路径 / file:// 协议）解析为本地绝对路径
+ * @param baseDir 当前预览文件所在目录的绝对路径（目录分隔符为反斜杠）
+ * @param href 链接原始 href（可能携带 # 锚点）
+ * @returns 解析后的绝对路径与文件名；无法解析时返回 null
+ */
+function resolveMarkdownLink(baseDir: string | undefined, href: string): { filePath: string; fileName: string } | null {
+  if (!baseDir) return null;
+  // 去掉 # 锚点部分
+  let target = href.split("#")[0];
+  if (!target) return null;
+  // 去掉 file:// 协议前缀（file:///C:/x → C:/x）
+  if (/^file:\/\//i.test(target)) {
+    target = target.slice(7);
+    if (/^\/[a-zA-Z]:\//.test(target)) target = target.slice(1);
+  }
+  // Windows 盘符绝对路径：直接使用
+  if (/^[a-zA-Z]:[\\/]/.test(target)) {
+    const filePath = target.replace(/\//g, "\\");
+    return { filePath, fileName: filePath.split("\\").pop() || target };
+  }
+  // 相对路径：规范化为 / 分隔后逐段解析 ./ 与 ../
+  const parts = target.replace(/\\/g, "/").replace(/^\.\//, "").split("/").filter((p) => p !== "" && p !== ".");
+  const baseParts = baseDir.split(/[\\/]/).filter((p) => p !== "");
+  const dirs = [...baseParts];
+  for (const part of parts) {
+    if (part === "..") dirs.pop();
+    else dirs.push(part);
+  }
+  if (dirs.length === 0) return null;
+  const filePath = dirs.join("\\");
+  return { filePath, fileName: dirs[dirs.length - 1] };
+}
+
 export default function App() {
   const { t } = useTranslation();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -937,9 +971,8 @@ export default function App() {
     // 计算预览文件所在目录的绝对路径（Markdown 相对路径图片解析用）
     const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
     if (currentWorkspace) {
-      // 去掉文件名部分，保留目录；目录分隔符统一为反斜杠
-      const lastSep = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
-      const dirPart = lastSep >= 0 ? filePath.substring(0, lastSep + 1).replace(/\//g, "\\") : "";
+      // 正则去掉末尾文件名部分保留目录；分隔符统一为反斜杠
+      const dirPart = filePath.replace(/[^\\/]*$/, "").replace(/\//g, "\\");
       setPreviewBaseDir(dirPart ? `${currentWorkspace.path}\\${dirPart}` : currentWorkspace.path);
     } else {
       setPreviewBaseDir(undefined);
@@ -969,6 +1002,19 @@ export default function App() {
       setPreviewLoading(false);
     }
   }, [currentWorkspaceId, workspaces]);
+
+  // Markdown 相对链接点击：基于当前预览文件目录解析为工作区内绝对路径，再打开预览
+  const handleOpenMarkdownLink = useCallback((href: string) => {
+    const workspace = workspaces.find((w) => w.id === currentWorkspaceId);
+    if (!workspace || !previewBaseDir) return;
+    const resolved = resolveMarkdownLink(previewBaseDir, href);
+    if (!resolved) return;
+    // 仅处理工作区内的文件：截取工作区根路径前缀后转换为相对路径
+    const wsPrefix = workspace.path.replace(/[\\/]+$/, "");
+    if (resolved.filePath.toLowerCase().startsWith(`${wsPrefix.toLowerCase()}\\`)) {
+      handleOpenPreview(resolved.filePath.slice(wsPrefix.length + 1), resolved.fileName);
+    }
+  }, [workspaces, currentWorkspaceId, previewBaseDir, handleOpenPreview]);
 
   // 错误重试回调：使用最后一次发送的文本重新发送消息
   const handleRetryError = useCallback(async () => {
@@ -1213,6 +1259,7 @@ export default function App() {
                     pdfBase64Data={previewPdfBase64}
                     loading={previewLoading}
                     baseDir={previewBaseDir}
+                    onOpenLink={handleOpenMarkdownLink}
                     onBack={handleClosePreview}
                   />
                 </Suspense>

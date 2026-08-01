@@ -1,16 +1,35 @@
 import { useState, useRef, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { open as shellOpen } from "@tauri-apps/plugin-shell";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import remarkEmoji from "remark-emoji";
 import rehypeRaw from "rehype-raw";
+import rehypeSlug from "rehype-slug";
+import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
+// KaTeX 公式渲染样式（字体随包打包，由 Vite 输出为静态资源）
+import "katex/dist/katex.min.css";
 
 interface MarkdownPreviewProps {
   content: string;
   className?: string;
   /** 预览文件所在目录的绝对路径；提供时可将 Markdown 内相对路径图片解析到本地文件 */
   baseDir?: string;
+  /** 点击相对路径文件链接时的回调（参数为链接原始 href） */
+  onOpenLink?: (href: string) => void;
+}
+
+// 外部链接（http/https/mailto）用系统默认浏览器打开
+async function openExternal(url: string) {
+  try {
+    await shellOpen(url);
+  } catch {
+    // 非 Tauri 环境（纯浏览器调试）兜底：新窗口打开
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
 }
 
 // react-markdown 传递给自定义组件的额外属性
@@ -72,14 +91,17 @@ export function MarkdownPreview({
   content,
   className = "",
   baseDir,
+  onOpenLink,
 }: MarkdownPreviewProps) {
   return (
     <>
       <div className={`markdown-preview ${className}`}>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          // rehype-raw 将 Markdown 内嵌的 HTML 标签（如 <div align="center">、<img>）解析为真实元素渲染
-          rehypePlugins={[rehypeRaw, rehypeHighlight]}
+          // remark-gfm 4 原生支持脚注（footnoteReference/footnoteDefinition）
+          remarkPlugins={[remarkGfm, remarkMath, remarkEmoji]}
+          // rehype-raw 将 Markdown 内嵌的 HTML 标签（如 <div align="center">、<img>）解析为真实元素渲染；
+          // rehype-slug 为标题生成锚点 id，配合下方 a 组件实现目录跳转
+          rehypePlugins={[rehypeRaw, rehypeSlug, rehypeKatex, rehypeHighlight]}
           components={{
             // 代码块：包装为带标题栏的容器
             pre: CodeBlock,
@@ -98,23 +120,33 @@ export function MarkdownPreview({
               </div>
             ),
 
-            // 链接：在新窗口打开
+            // 链接：外部链接（http/https/mailto）用系统浏览器打开；
+            // 相对路径文件链接回调 onOpenLink 由应用内打开预览；锚点链接保持页面内跳转
             a: ({
               node: _node,
               siblingCount: _sc,
               href,
               children,
               ...rest
-            }: React.AnchorHTMLAttributes<HTMLAnchorElement> & MdExtraProps) => (
-              <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                {...rest}
-              >
-                {children}
-              </a>
-            ),
+            }: React.AnchorHTMLAttributes<HTMLAnchorElement> & MdExtraProps) => {
+              const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+                // 锚点链接（#xxx）保持默认行为：页面内滚动跳转
+                if (!href || href.startsWith("#")) return;
+                e.preventDefault();
+                if (/^(https?:|mailto:)/i.test(href)) {
+                  // 外部链接：用系统默认浏览器打开
+                  openExternal(href);
+                } else if (!/^(data:|asset:|blob:|javascript:)/i.test(href)) {
+                  // 相对路径文件链接：回调应用内打开预览
+                  onOpenLink?.(href);
+                }
+              };
+              return (
+                <a href={href} onClick={handleClick} {...rest}>
+                  {children}
+                </a>
+              );
+            },
 
             // 图片：限制最大宽度；相对路径基于文件所在目录解析为本地绝对路径，通过 asset 协议加载
             img: ({
@@ -370,6 +402,8 @@ const markdownStyles = `
   height: auto;
   border-radius: var(--radius-sm);
   margin: 0.5em 0;
+  /* 覆盖 Tailwind preflight 的 display:block，使多个图片（如 README 徽章）保持水平排列 */
+  display: inline-block;
 }
 
 /* 分隔线 */
@@ -382,6 +416,52 @@ const markdownStyles = `
 /* 删除线 */
 .markdown-preview del {
   color: var(--color-text-tertiary);
+}
+
+/* ===== 锚点跳转 ===== */
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  /* 锚点跳转时预留顶部空间，避免标题被遮挡 */
+  scroll-margin-top: 8px;
+}
+
+/* ===== KaTeX 数学公式 ===== */
+.markdown-preview .math-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+/* 行内公式字号与正文（14px）协调 */
+.markdown-preview .katex {
+  font-size: 1.05em;
+}
+
+/* ===== 脚注 ===== */
+.markdown-preview .footnotes {
+  margin-top: 1.5em;
+  padding-top: 0.8em;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.875em;
+  color: var(--color-text-tertiary);
+}
+
+.markdown-preview .footnotes ol {
+  padding-left: 1.4em;
+}
+
+.markdown-preview .footnotes li {
+  margin-bottom: 0.3em;
+}
+
+.markdown-preview .footnotes a,
+.markdown-preview a[href^="#fn-"],
+.markdown-preview a[href^="#fnref-"] {
+  text-decoration: none;
 }
 
 /* ===== highlight.js 语法高亮 - 深色主题 ===== */
