@@ -92,7 +92,7 @@ const FileTreeItem = memo(function FileTreeItem({
   onRenameConfirm,
   onRenameCancel,
   onContextMenu,
-  onDoubleClickFile,
+  onOpenFile,
 }: {
   node: FileNode;
   depth?: number;
@@ -100,7 +100,7 @@ const FileTreeItem = memo(function FileTreeItem({
   onRenameConfirm: (oldPath: string, newName: string) => void;
   onRenameCancel: () => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
-  onDoubleClickFile?: (filePath: string, fileName: string) => void;
+  onOpenFile?: (filePath: string, fileName: string) => void;
 }) {
   const { expandedKeys, selectedKey, toggleNode, selectNode } = useFileTreeStore();
   const isExpanded = expandedKeys.has(node.path);
@@ -144,7 +144,7 @@ const FileTreeItem = memo(function FileTreeItem({
                 onRenameConfirm={onRenameConfirm}
                 onRenameCancel={onRenameCancel}
                 onContextMenu={onContextMenu}
-                onDoubleClickFile={onDoubleClickFile}
+                onOpenFile={onOpenFile}
               />
             ))}
           </div>
@@ -158,8 +158,10 @@ const FileTreeItem = memo(function FileTreeItem({
       className={`ft-item ft-file ${isSelected ? "ft-selected" : ""}`}
       role="treeitem"
       aria-selected={isSelected}
-      onClick={() => selectNode(node.path)}
-      onDoubleClick={() => onDoubleClickFile?.(node.path, node.name)}
+      onClick={() => {
+        selectNode(node.path);
+        onOpenFile?.(node.path, node.name);
+      }}
       onContextMenu={(e) => onContextMenu(e, node)}
     >
       <FileTypeIcon extension={node.extension} />
@@ -645,8 +647,10 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
                   key={r.path}
                   className="ft-item ft-file"
                   role="treeitem"
-                  onClick={() => selectNode(r.path)}
-                  onDoubleClick={() => onOpenPreview?.(r.path, r.name)}
+                  onClick={() => {
+                    selectNode(r.path);
+                    onOpenPreview?.(r.path, r.name);
+                  }}
                 >
                   <FileTypeIcon extension={r.extension} />
                   <span className="ft-name">{r.name}</span>
@@ -683,7 +687,7 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
                 onRenameConfirm={handleRenameConfirm}
                 onRenameCancel={handleRenameCancel}
                 onContextMenu={handleContextMenu}
-                onDoubleClickFile={onOpenPreview}
+                onOpenFile={onOpenPreview}
               />
             ))}
           </div>

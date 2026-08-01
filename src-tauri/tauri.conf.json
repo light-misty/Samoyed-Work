@@ -24,7 +24,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://* http://* http://localhost:* http://127.0.0.1:*; img-src 'self' data: asset: https:; worker-src 'self'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://* http://* http://localhost:* http://127.0.0.1:*; img-src 'self' data: asset: http://asset.localhost https:; worker-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "requireLiteralLeadingDot": false,
+          "allow": ["**/*"]
+        }
+      }
     }
   },
   "bundle": {

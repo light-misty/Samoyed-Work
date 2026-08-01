@@ -16,6 +16,8 @@ interface PreviewPageProps {
   fileType?: string;
   /** PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染 */
   pdfBase64Data?: string | null;
+  /** 预览文件所在目录的绝对路径，用于 Markdown 相对路径图片的解析 */
+  baseDir?: string;
   /** 内容加载中状态 */
   loading?: boolean;
   /** 返回回调（关闭预览，恢复工作流视图） */
@@ -33,6 +35,7 @@ export function PreviewPage({
   content = "",
   fileType,
   pdfBase64Data = null,
+  baseDir,
   loading = false,
   onBack,
 }: PreviewPageProps) {
@@ -67,11 +70,11 @@ export function PreviewPage({
           // PDF 真实渲染模式：PdfCanvasViewer 自带滚动和工具栏，不需要外层滚动包裹
           // 必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
           <div className="flex-1 overflow-hidden flex flex-col">
-            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} />
+            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} />
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto">
-            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} />
+            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} />
           </div>
         )}
       </div>
@@ -82,7 +85,7 @@ export function PreviewPage({
 /**
  * 根据 fileType 选择对应的渲染方式
  */
-function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string; fileType?: string; pdfBase64Data?: string | null }) {
+function ContentRenderer({ content, fileType, pdfBase64Data, baseDir }: { content: string; fileType?: string; pdfBase64Data?: string | null; baseDir?: string }) {
   const normalizedType = fileType?.toLowerCase()?.trim() ?? "";
 
   // PDF 真实渲染预览：使用 pdfjs-dist Canvas 渲染
@@ -94,7 +97,7 @@ function ContentRenderer({ content, fileType, pdfBase64Data }: { content: string
   if (normalizedType === "md" || normalizedType === "markdown") {
     return (
       <div className="px-10 py-8">
-        <MarkdownPreview content={content} />
+        <MarkdownPreview content={content} baseDir={baseDir} />
       </div>
     );
   }
@@ -339,58 +342,112 @@ const codePreviewStyles = `
   color: inherit !important;
 }
 
-/* ===== highlight.js 语法高亮 - 深色主题 ===== */
+/* ===== highlight.js 语法高亮 - 浅色主题（默认，白底高对比度配色） ===== */
 .code-preview-content .hljs-keyword,
 .code-preview-content .hljs-selector-tag,
-.code-preview-content .hljs-literal { color: #569cd6; }
+.code-preview-content .hljs-literal { color: #cf222e; }
 
 .code-preview-content .hljs-string,
 .code-preview-content .hljs-doctag,
 .code-preview-content .hljs-template-tag,
-.code-preview-content .hljs-template-variable { color: #ce9178; }
+.code-preview-content .hljs-template-variable { color: #0a3069; }
 
-.code-preview-content .hljs-number,
-.code-preview-content .hljs-built_in { color: #b5cea8; }
+.code-preview-content .hljs-number { color: #0550ae; }
+
+.code-preview-content .hljs-built_in { color: #953800; }
 
 .code-preview-content .hljs-comment,
-.code-preview-content .hljs-quote { color: #6a9955; font-style: italic; }
+.code-preview-content .hljs-quote { color: #57606a; font-style: italic; }
 
 .code-preview-content .hljs-function .hljs-title,
-.code-preview-content .hljs-title.function_ { color: #dcdcaa; }
+.code-preview-content .hljs-title.function_ { color: #8250df; }
 
 .code-preview-content .hljs-class .hljs-title,
-.code-preview-content .hljs-title.class_ { color: #4ec9b0; }
+.code-preview-content .hljs-title.class_ { color: #0550ae; }
 
 .code-preview-content .hljs-variable,
-.code-preview-content .hljs-attr { color: #9cdcfe; }
+.code-preview-content .hljs-attr { color: #953800; }
 
 .code-preview-content .hljs-type,
-.code-preview-content .hljs-params { color: #4ec9b0; }
+.code-preview-content .hljs-params { color: #0550ae; }
 
-.code-preview-content .hljs-meta { color: #569cd6; }
+.code-preview-content .hljs-meta { color: #cf222e; }
 
-.code-preview-content .hljs-tag { color: #569cd6; }
+.code-preview-content .hljs-tag { color: #116329; }
 
-.code-preview-content .hljs-name { color: #569cd6; }
+.code-preview-content .hljs-name { color: #116329; }
 
-.code-preview-content .hljs-attribute { color: #9cdcfe; }
+.code-preview-content .hljs-attribute { color: #0a3069; }
 
 .code-preview-content .hljs-symbol,
-.code-preview-content .hljs-bullet { color: #d7ba7d; }
+.code-preview-content .hljs-bullet { color: #0550ae; }
 
-.code-preview-content .hljs-addition { color: #b5cea8; background: rgba(181, 206, 168, 0.1); }
+.code-preview-content .hljs-addition { color: #116329; background: rgba(17, 99, 41, 0.1); }
 
-.code-preview-content .hljs-deletion { color: #ce9178; background: rgba(206, 145, 120, 0.1); }
+.code-preview-content .hljs-deletion { color: #82071e; background: rgba(130, 7, 30, 0.1); }
 
 .code-preview-content .hljs-emphasis { font-style: italic; }
 
 .code-preview-content .hljs-strong { font-weight: 600; }
 
-.code-preview-content .hljs-regexp { color: #d16969; }
+.code-preview-content .hljs-regexp { color: #0a3069; }
 
-.code-preview-content .hljs-property { color: #9cdcfe; }
+.code-preview-content .hljs-property { color: #0550ae; }
 
-.code-preview-content .hljs-section { color: #4ec9b0; }
+.code-preview-content .hljs-section { color: #953800; }
+
+/* ===== highlight.js 语法高亮 - 深色主题 ===== */
+.dark .code-preview-content .hljs-keyword,
+.dark .code-preview-content .hljs-selector-tag,
+.dark .code-preview-content .hljs-literal { color: #569cd6; }
+
+.dark .code-preview-content .hljs-string,
+.dark .code-preview-content .hljs-doctag,
+.dark .code-preview-content .hljs-template-tag,
+.dark .code-preview-content .hljs-template-variable { color: #ce9178; }
+
+.dark .code-preview-content .hljs-number,
+.dark .code-preview-content .hljs-built_in { color: #b5cea8; }
+
+.dark .code-preview-content .hljs-comment,
+.dark .code-preview-content .hljs-quote { color: #6a9955; font-style: italic; }
+
+.dark .code-preview-content .hljs-function .hljs-title,
+.dark .code-preview-content .hljs-title.function_ { color: #dcdcaa; }
+
+.dark .code-preview-content .hljs-class .hljs-title,
+.dark .code-preview-content .hljs-title.class_ { color: #4ec9b0; }
+
+.dark .code-preview-content .hljs-variable,
+.dark .code-preview-content .hljs-attr { color: #9cdcfe; }
+
+.dark .code-preview-content .hljs-type,
+.dark .code-preview-content .hljs-params { color: #4ec9b0; }
+
+.dark .code-preview-content .hljs-meta { color: #569cd6; }
+
+.dark .code-preview-content .hljs-tag { color: #569cd6; }
+
+.dark .code-preview-content .hljs-name { color: #569cd6; }
+
+.dark .code-preview-content .hljs-attribute { color: #9cdcfe; }
+
+.dark .code-preview-content .hljs-symbol,
+.dark .code-preview-content .hljs-bullet { color: #d7ba7d; }
+
+.dark .code-preview-content .hljs-addition { color: #b5cea8; background: rgba(181, 206, 168, 0.1); }
+
+.dark .code-preview-content .hljs-deletion { color: #ce9178; background: rgba(206, 145, 120, 0.1); }
+
+.dark .code-preview-content .hljs-emphasis { font-style: italic; }
+
+.dark .code-preview-content .hljs-strong { font-weight: 600; }
+
+.dark .code-preview-content .hljs-regexp { color: #d16969; }
+
+.dark .code-preview-content .hljs-property { color: #9cdcfe; }
+
+.dark .code-preview-content .hljs-section { color: #4ec9b0; }
 `;
 
 /**

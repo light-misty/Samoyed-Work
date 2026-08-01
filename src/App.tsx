@@ -73,6 +73,8 @@ export default function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
   const [previewPdfBase64, setPreviewPdfBase64] = useState<string | null>(null);
+  // 预览文件所在目录的绝对路径，用于 Markdown 内相对路径图片（如 <img src="assets/xxx.png">）的解析
+  const [previewBaseDir, setPreviewBaseDir] = useState<string | undefined>(undefined);
 
   // 子 Agent 工作流详情页：当前查看的子 Agent ID，非空时切换到详情页替代主工作流
   const currentSubAgentId = useWorkflowStore((s) => s.currentSubAgentId);
@@ -721,6 +723,7 @@ export default function App() {
     setPreviewTitle("");
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
+    setPreviewBaseDir(undefined);
   }, []);
 
   // 新建会话：先保存当前会话状态到缓存，再清空 UI
@@ -931,6 +934,17 @@ export default function App() {
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
 
+    // 计算预览文件所在目录的绝对路径（Markdown 相对路径图片解析用）
+    const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+    if (currentWorkspace) {
+      // 去掉文件名部分，保留目录；目录分隔符统一为反斜杠
+      const lastSep = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+      const dirPart = lastSep >= 0 ? filePath.substring(0, lastSep + 1).replace(/\//g, "\\") : "";
+      setPreviewBaseDir(dirPart ? `${currentWorkspace.path}\\${dirPart}` : currentWorkspace.path);
+    } else {
+      setPreviewBaseDir(undefined);
+    }
+
     try {
       const result = await tauriCmd.previewDocument(currentWorkspaceId, filePath);
       setPreviewContent(result.content);
@@ -954,7 +968,7 @@ export default function App() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [currentWorkspaceId]);
+  }, [currentWorkspaceId, workspaces]);
 
   // 错误重试回调：使用最后一次发送的文本重新发送消息
   const handleRetryError = useCallback(async () => {
@@ -1198,6 +1212,7 @@ export default function App() {
                     fileType={previewFileType}
                     pdfBase64Data={previewPdfBase64}
                     loading={previewLoading}
+                    baseDir={previewBaseDir}
                     onBack={handleClosePreview}
                   />
                 </Suspense>

@@ -1,12 +1,16 @@
 import { useState, useRef, useCallback } from "react";
 import { useTranslation } from 'react-i18next';
+import { convertFileSrc } from "@tauri-apps/api/core";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
 
 interface MarkdownPreviewProps {
   content: string;
   className?: string;
+  /** 预览文件所在目录的绝对路径；提供时可将 Markdown 内相对路径图片解析到本地文件 */
+  baseDir?: string;
 }
 
 // react-markdown 传递给自定义组件的额外属性
@@ -67,13 +71,15 @@ function CodeBlock({
 export function MarkdownPreview({
   content,
   className = "",
+  baseDir,
 }: MarkdownPreviewProps) {
   return (
     <>
       <div className={`markdown-preview ${className}`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeHighlight]}
+          // rehype-raw 将 Markdown 内嵌的 HTML 标签（如 <div align="center">、<img>）解析为真实元素渲染
+          rehypePlugins={[rehypeRaw, rehypeHighlight]}
           components={{
             // 代码块：包装为带标题栏的容器
             pre: CodeBlock,
@@ -110,14 +116,27 @@ export function MarkdownPreview({
               </a>
             ),
 
-            // 图片：限制最大宽度
+            // 图片：限制最大宽度；相对路径基于文件所在目录解析为本地绝对路径，通过 asset 协议加载
             img: ({
               node: _node,
               siblingCount: _sc,
+              src,
               ...rest
-            }: React.ImgHTMLAttributes<HTMLImageElement> & MdExtraProps) => (
-              <img className="md-image" {...rest} />
-            ),
+            }: React.ImgHTMLAttributes<HTMLImageElement> & MdExtraProps) => {
+              // 仅处理相对路径（http/https/data/asset/blob 等协议除外）
+              let resolvedSrc = src;
+              if (src && baseDir && !/^(https?:|data:|asset:|blob:)/i.test(src)) {
+                const clean = src.split(/[?#]/)[0];
+                if (/^[a-zA-Z]:[\\/]/.test(clean)) {
+                  // Windows 绝对路径：直接转换
+                  resolvedSrc = convertFileSrc(clean);
+                } else if (!clean.startsWith("/")) {
+                  // 常规相对路径：基于文件所在目录拼接
+                  resolvedSrc = convertFileSrc(`${baseDir}\\${clean.replace(/\//g, "\\")}`);
+                }
+              }
+              return <img className="md-image" src={resolvedSrc} {...rest} />;
+            },
           }}
         >
           {content}
