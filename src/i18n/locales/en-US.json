@@ -690,7 +690,10 @@
     "pageNumber": "Page {{number}}",
     "emptyPage": "No text content on this page",
     "pdfLoadFailed": "PDF loading failed",
-    "loadingPdf": "Loading PDF..."
+    "loadingPdf": "Loading PDF...",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "zoomReset": "Reset zoom (default 100%)"
   },
   "update": {
     "later": "Remind Later",

@@ -427,8 +427,9 @@ async fn preview_document(workspace_id: String, path: String, state: State<'_, A
 
 支持预览格式：
 - Office/PDF（docx/doc/xlsx/xls/pptx/ppt/pdf）：通过 Sidecar 解析
+- 图片（png/jpg/jpeg/gif/webp/svg/bmp）：不读取内容，`fileType` 统一返回 `image`，由前端通过 asset 协议（convertFileSrc）直接渲染
 - 文本与源码文件（md/txt/js/ts/py/rs/go/java/c/cpp 等主流编程语言与配置文件）：直接读取解码（UTF-8 优先，GBK 回退），`fileType` 返回原扩展名供前端语法高亮
-- 已知二进制格式（exe/dll/图片/音视频/压缩包等）：拒绝预览
+- 已知二进制格式（exe/dll/ico/tiff/heic/音视频/压缩包等少见格式）：拒绝预览
 - 未知扩展名：内容检测（前 8KB 是否含 NUL 字节）区分文本与二进制
 
 ### 7.2 create_file

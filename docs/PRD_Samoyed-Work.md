@@ -210,6 +210,7 @@ Samoyed Work 是一款通用 AI 编程 Agent 桌面应用（类似 Claude Code�
 | Excel | ExcelTableRenderer 表格渲染（工作表标签/表头/数据） |
 | PPT | PptDocumentView 结构化渲染（幻灯片/形状/文本） |
 | PDF | PdfCanvasViewer（pdfjs-dist Canvas 渲染，缩放/翻页） |
+| 图片（png/jpg/jpeg/gif/webp/svg/bmp） | 原生 `<img>` 渲染（asset 协议读取本地文件，自适应宽度） |
 | 文本 | CodePreview 带行号只读代码视图 |
 | 源码/代码文件（js/ts/py/rs 等主流编程语言与配置文件） | CodePreview 带行号只读代码视图（react-markdown + rehype-highlight 语法高亮，VS Code 风格行号列，无编辑功能） |
 | 未知扩展名文件 | 内容检测（NUL 字节）区分：文本直接预览，二进制拒绝 |

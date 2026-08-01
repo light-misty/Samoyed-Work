@@ -99,8 +99,24 @@ pub async fn preview_document(
         });
     }
 
+    // 图片文件：不读取二进制内容，file_type 统一为 image 标识，由前端通过 asset 协议（convertFileSrc）直接渲染
+    if matches!(kind, Some(FileKind::Image)) {
+        log::info!(
+            "preview_document: 图片预览, file_type=image, extension={}",
+            extension
+        );
+        return Ok(PreviewContent {
+            path: path.clone(),
+            file_type: "image".to_string(),
+            content: String::new(),
+            page_count: None,
+            sheet_names: None,
+            metadata: None,
+        });
+    }
+
     // 文本/源码文件（含未知扩展名）：读取内容并做二进制检测
-    // 已知二进制格式（如 exe、图片、压缩包等）直接拒绝
+    // 已知二进制格式（如 exe、压缩包等）直接拒绝
     if matches!(kind, Some(FileKind::Binary)) {
         log::error!("preview_document: 不支持预览二进制文件: .{}", extension);
         return Err(CommandError::doc(
@@ -142,6 +158,8 @@ pub async fn preview_document(
 enum FileKind {
     /// 通过 Sidecar 解析的二进制文档（docx/xlsx/pptx/pdf）
     Sidecar(&'static str),
+    /// 图片文件（前端通过 asset 协议直接渲染）
+    Image,
     /// 文本/源码文件（直接读取解码）
     Text,
     /// 已知二进制格式（拒绝预览）
@@ -157,16 +175,19 @@ fn classify_extension(extension: &str) -> Option<FileKind> {
         "xlsx" | "xls" => Some(FileKind::Sidecar("xlsx")),
         "pptx" | "ppt" => Some(FileKind::Sidecar("pptx")),
         "pdf" => Some(FileKind::Sidecar("pdf")),
-        // 已知二进制格式：可执行文件、图片、音视频、压缩包、字体、数据库等
+        // 常用图片格式：前端通过 asset 协议直接渲染（少见的 ico/tiff/heic/psd 等仍归为二进制拒绝）
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" => Some(FileKind::Image),
+        // 已知二进制格式：可执行文件、音视频、压缩包、字体、数据库等
         "exe" | "dll" | "so" | "dylib" | "bin" | "o" | "obj" | "lib" | "a" | "pdb" | "class"
-        | "jar" | "war" | "pyc" | "pyo" | "pyd" | "whl" | "wasm" | "png" | "jpg" | "jpeg"
-        | "gif" | "bmp" | "ico" | "webp" | "avif" | "tiff" | "tif" | "heic" | "psd" | "mp3"
-        | "mp4" | "avi" | "mkv" | "mov" | "wav" | "flac" | "ogg" | "oga" | "ogv" | "webm"
-        | "aac" | "wma" | "m4a" | "m4v" | "wmv" | "mpg" | "mpeg" | "zip" | "rar" | "7z" | "tar"
-        | "gz" | "bz2" | "xz" | "zst" | "iso" | "dmg" | "cab" | "deb" | "rpm" | "apk" | "ipa"
-        | "ttf" | "otf" | "woff" | "woff2" | "eot" | "db" | "sqlite" | "sqlite3" | "sdb"
-        | "mdb" | "accdb" | "dmp" | "dat" | "pak" | "h5" | "hdf5" | "npy" | "npz" | "pkl"
-        | "pickle" | "der" | "swf" | "flv" => Some(FileKind::Binary),
+        | "jar" | "war" | "pyc" | "pyo" | "pyd" | "whl" | "wasm" | "ico" | "avif" | "tiff"
+        | "tif" | "heic" | "psd" | "mp3" | "mp4" | "avi" | "mkv" | "mov" | "wav" | "flac"
+        | "ogg" | "oga" | "ogv" | "webm" | "aac" | "wma" | "m4a" | "m4v" | "wmv" | "mpg"
+        | "mpeg" | "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" | "zst" | "iso" | "dmg"
+        | "cab" | "deb" | "rpm" | "apk" | "ipa" | "ttf" | "otf" | "woff" | "woff2" | "eot"
+        | "db" | "sqlite" | "sqlite3" | "sdb" | "mdb" | "accdb" | "dmp" | "dat" | "pak" | "h5"
+        | "hdf5" | "npy" | "npz" | "pkl" | "pickle" | "der" | "swf" | "flv" => {
+            Some(FileKind::Binary)
+        }
         // 文本/源码文件
         _ if is_text_extension(&extension) => Some(FileKind::Text),
         // 未知扩展名：交由内容检测兜底
@@ -197,7 +218,7 @@ fn is_text_extension(extension: &str) -> bool {
         | "pp" | "f" | "f90" | "f95" | "cob" | "cbl" | "adb" | "ads" | "lisp" | "lsp" | "cl"
         | "scm" | "ss" | "m" | "mm" | "cr" | "elm" | "vim"
         // Web 前端
-        | "html" | "htm" | "css" | "scss" | "sass" | "less" | "styl" | "xml" | "svg"
+        | "html" | "htm" | "css" | "scss" | "sass" | "less" | "styl" | "xml"
         // 数据与配置文件
         | "json" | "jsonc" | "json5" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf"
         | "properties" | "env" | "editorconfig" | "gitignore" | "gitattributes" | "lock"
@@ -544,11 +565,23 @@ mod tests {
         }
     }
 
+    /// 分类：常用图片扩展名走 Image（前端 asset 协议直接渲染）
+    #[test]
+    fn classify_image_extensions() {
+        for ext in ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "PNG"] {
+            assert!(
+                matches!(classify_extension(ext), Some(FileKind::Image)),
+                "扩展名 .{} 应被分类为图片",
+                ext
+            );
+        }
+    }
+
     /// 分类：已知二进制扩展名（扩展名大小写不敏感）
     #[test]
     fn classify_binary_extensions() {
         for ext in [
-            "exe", "dll", "png", "jpg", "zip", "mp4", "wasm", "pyc", "EXE",
+            "exe", "dll", "zip", "mp4", "wasm", "pyc", "EXE", "ico", "tiff", "heic", "psd",
         ] {
             assert!(
                 matches!(classify_extension(ext), Some(FileKind::Binary)),

@@ -1,4 +1,4 @@
-import { useMemo, isValidElement, type ReactNode, type HTMLAttributes } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef, isValidElement, type ReactNode, type HTMLAttributes } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,6 +16,8 @@ interface PreviewPageProps {
   fileType?: string;
   /** PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染 */
   pdfBase64Data?: string | null;
+  /** 图片文件的 asset 协议 URL（convertFileSrc 转换），用于图片预览渲染 */
+  imageSrc?: string | null;
   /** 预览文件所在目录的绝对路径，用于 Markdown 相对路径图片的解析 */
   baseDir?: string;
   /** 点击 Markdown 相对路径文件链接时的回调 */
@@ -37,6 +39,7 @@ export function PreviewPage({
   content = "",
   fileType,
   pdfBase64Data = null,
+  imageSrc = null,
   baseDir,
   onOpenLink,
   loading = false,
@@ -74,7 +77,7 @@ export function PreviewPage({
         ) : (
           // PDF 模式容器必须设置 flex flex-col，否则 PdfCanvasViewer 的 flex-1 不生效，导致高度为0
           <div className={isPdfMode ? "flex-1 overflow-hidden flex flex-col" : "flex-1 overflow-y-auto"}>
-            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} baseDir={baseDir} onOpenLink={onOpenLink} />
+            <ContentRenderer content={content} fileType={fileType} pdfBase64Data={pdfBase64Data} imageSrc={imageSrc} title={title} baseDir={baseDir} onOpenLink={onOpenLink} />
           </div>
         )}
       </div>
@@ -85,8 +88,13 @@ export function PreviewPage({
 /**
  * 根据 fileType 选择对应的渲染方式
  */
-function ContentRenderer({ content, fileType, pdfBase64Data, baseDir, onOpenLink }: { content: string; fileType?: string; pdfBase64Data?: string | null; baseDir?: string; onOpenLink?: (href: string) => void }) {
+function ContentRenderer({ content, fileType, pdfBase64Data, imageSrc, title, baseDir, onOpenLink }: { content: string; fileType?: string; pdfBase64Data?: string | null; imageSrc?: string | null; title?: string; baseDir?: string; onOpenLink?: (href: string) => void }) {
   const normalizedType = fileType?.toLowerCase()?.trim() ?? "";
+
+  // 图片预览：asset 协议 URL 直接渲染（默认 100% 显示，工具栏与 Ctrl+滚轮可缩放）
+  if (imageSrc) {
+    return <ImagePreview imageSrc={imageSrc} title={title} />;
+  }
 
   // PDF 真实渲染预览：使用 pdfjs-dist Canvas 渲染
   if (normalizedType === "pdf" && pdfBase64Data) {
@@ -114,6 +122,131 @@ function ContentRenderer({ content, fileType, pdfBase64Data, baseDir, onOpenLink
 
   // 其他格式：源码/文本文件渲染为带行号的只读代码视图
   return <CodePreview content={content} fileType={normalizedType} />;
+}
+
+// 图片预览缩放参数
+// 显示百分比以「原图 20%」为 100% 基准：新 100% = 原图 20%，默认显示 100%
+const IMAGE_ZOOM_BASE = 0.2;
+const IMAGE_ZOOM_STEP = 10;
+const IMAGE_ZOOM_MIN = 50; // 显示 50% = 原图 10%
+const IMAGE_ZOOM_MAX = 2000; // 显示 2000% = 原图 400%
+const IMAGE_ZOOM_DEFAULT = 100;
+
+/**
+ * 图片预览组件
+ * 默认以原图 20% 尺寸显示（显示为 100%），支持工具栏按钮与 Ctrl+鼠标滚轮缩放，
+ * 点击百分比重置为默认
+ */
+function ImagePreview({ imageSrc, title }: { imageSrc: string; title?: string }) {
+  const { t } = useTranslation();
+  const [zoom, setZoom] = useState(IMAGE_ZOOM_DEFAULT);
+  // 图片原始宽度（px），null 表示尚未加载就绪（就绪前不渲染 img，避免以原始尺寸瞬间闪出）
+  const [naturalWidth, setNaturalWidth] = useState<number | null>(null);
+  // 图片内容区容器引用（原生 wheel 监听用）
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // 实际渲染比例：显示百分比 × 基准（新 100% = 原图 20%）
+  const renderScale = (zoom / 100) * IMAGE_ZOOM_BASE;
+
+  // 预加载图片获取原始尺寸：img 挂载时即可带正确缩放宽度，消除加载瞬间的放大图闪烁
+  useEffect(() => {
+    let cancelled = false;
+    setNaturalWidth(null);
+    const probe = new Image();
+    probe.onload = () => {
+      if (!cancelled) setNaturalWidth(probe.naturalWidth);
+    };
+    probe.onerror = () => {
+      // 加载失败（如损坏文件）：置 0 退出加载态，img 以原始尺寸显示
+      if (!cancelled) setNaturalWidth(0);
+    };
+    probe.src = imageSrc;
+    return () => {
+      cancelled = true;
+    };
+  }, [imageSrc]);
+
+  const zoomBy = useCallback((delta: number) => {
+    setZoom((z) => Math.min(IMAGE_ZOOM_MAX, Math.max(IMAGE_ZOOM_MIN, z + delta)));
+  }, []);
+
+  const handleZoomIn = useCallback(() => zoomBy(IMAGE_ZOOM_STEP), [zoomBy]);
+
+  const handleZoomOut = useCallback(() => zoomBy(-IMAGE_ZOOM_STEP), [zoomBy]);
+
+  const handleReset = useCallback(() => setZoom(IMAGE_ZOOM_DEFAULT), []);
+
+  // Ctrl + 鼠标滚轮缩放：原生监听（passive: false）确保能 preventDefault 阻止页面缩放
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey || e.deltaY === 0) return;
+      e.preventDefault();
+      zoomBy(e.deltaY < 0 ? IMAGE_ZOOM_STEP : -IMAGE_ZOOM_STEP);
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomBy]);
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* 缩放工具栏 */}
+      <div className="flex items-center gap-2 px-5 py-2 border-b border-border bg-bg-sub flex-shrink-0">
+        <button
+          className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          onClick={handleZoomOut}
+          disabled={zoom <= IMAGE_ZOOM_MIN}
+          title={t("preview.zoomOut")}
+        >
+          <Icon name="minus" size={14} />
+        </button>
+        <button
+          className="text-[12px] text-text-secondary tabular-nums min-w-[40px] text-center hover:text-text-primary transition-colors cursor-pointer"
+          onClick={handleReset}
+          title={t("preview.zoomReset")}
+        >
+          {zoom}%
+        </button>
+        <button
+          className="w-7 h-7 flex items-center justify-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          onClick={handleZoomIn}
+          disabled={zoom >= IMAGE_ZOOM_MAX}
+          title={t("preview.zoomIn")}
+        >
+          <Icon name="plus" size={14} />
+        </button>
+      </div>
+
+      {/* 图片内容区：flex 居中，超出容器尺寸时由 m-auto 保证滚动定位正确 */}
+      <div ref={contentRef} className="flex-1 overflow-auto bg-bg-sub min-h-0 flex">
+        {naturalWidth === null ? (
+          // 图片加载占位：就绪前不渲染 img，避免以原始尺寸瞬间闪出放大图
+          <div className="m-auto flex items-center gap-2 text-text-tertiary text-[13px]">
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span>{t("preview.loading")}</span>
+          </div>
+        ) : (
+          <div className="m-auto p-8">
+            <img
+              src={imageSrc}
+              alt={title ?? ""}
+              style={{
+                width:
+                  naturalWidth > 0 ? Math.round(naturalWidth * renderScale) : undefined,
+              }}
+              className="h-auto"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -185,7 +318,6 @@ const CODE_LANGUAGES: Record<string, string> = {
   sass: "scss",
   less: "less",
   xml: "xml",
-  svg: "xml",
   // 数据与配置
   json: "json",
   jsonc: "json",

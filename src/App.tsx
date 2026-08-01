@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { TopBar } from "./components/layout/TopBar";
 import { MainLayout } from "./components/layout/MainLayout";
 import { MainArea } from "./components/layout/MainArea";
@@ -107,6 +108,8 @@ export default function App() {
   const [previewLoading, setPreviewLoading] = useState(false);
   // PDF 文件的 base64 编码数据，用于 pdfjs-dist 渲染
   const [previewPdfBase64, setPreviewPdfBase64] = useState<string | null>(null);
+  // 图片文件的 asset 协议 URL（convertFileSrc 转换），用于图片预览渲染
+  const [previewImageSrc, setPreviewImageSrc] = useState<string | null>(null);
   // 预览文件所在目录的绝对路径，用于 Markdown 内相对路径图片（如 <img src="assets/xxx.png">）的解析
   const [previewBaseDir, setPreviewBaseDir] = useState<string | undefined>(undefined);
 
@@ -757,6 +760,7 @@ export default function App() {
     setPreviewTitle("");
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
+    setPreviewImageSrc(null);
     setPreviewBaseDir(undefined);
   }, []);
 
@@ -967,6 +971,7 @@ export default function App() {
     setPreviewContent("");
     setPreviewFileType(undefined);
     setPreviewPdfBase64(null);
+    setPreviewImageSrc(null);
 
     // 计算预览文件所在目录的绝对路径（Markdown 相对路径图片解析用）
     const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
@@ -982,6 +987,12 @@ export default function App() {
       const result = await tauriCmd.previewDocument(currentWorkspaceId, filePath);
       setPreviewContent(result.content);
       setPreviewFileType(result.fileType);
+
+      // 图片文件：fileType 为 image（后端统一标识），通过 asset 协议构造本地路径 URL 直接渲染
+      if (result.fileType === "image" && currentWorkspace) {
+        const absolutePath = `${currentWorkspace.path}\\${filePath.replace(/\//g, "\\")}`;
+        setPreviewImageSrc(convertFileSrc(absolutePath));
+      }
 
       // 对 PDF 文件额外获取 base64 数据用于 pdfjs-dist 渲染
       const ext = fileName.split(".").pop()?.toLowerCase();
@@ -1257,6 +1268,7 @@ export default function App() {
                     content={previewContent}
                     fileType={previewFileType}
                     pdfBase64Data={previewPdfBase64}
+                    imageSrc={previewImageSrc}
                     loading={previewLoading}
                     baseDir={previewBaseDir}
                     onOpenLink={handleOpenMarkdownLink}

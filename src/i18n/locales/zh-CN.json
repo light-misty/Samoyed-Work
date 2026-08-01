@@ -690,7 +690,10 @@
     "pageNumber": "第 {{number}} 页",
     "emptyPage": "此页无文本内容",
     "pdfLoadFailed": "PDF 加载失败",
-    "loadingPdf": "加载 PDF 中..."
+    "loadingPdf": "加载 PDF 中...",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "zoomReset": "重置缩放（默认 100%）"
   },
   "update": {
     "later": "稍后提醒",
