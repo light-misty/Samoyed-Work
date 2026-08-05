@@ -25,9 +25,11 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 ### AI Agent
 - Multi-mode agent (Plan / Code / Document modes), autonomous task execution
 - SubAgent workflow for complex task decomposition
+- Read-only explore mode for safely browsing and analyzing project code
 - LSP (Language Server Protocol) integration with real-time code diagnostics
 - Permission system with granular control over file and command operations
 - Extensible Skill system for loading custom capabilities
+- Built-in Superpowers skill development workflow framework
 - Multi-turn conversational operations
 - Real-time streaming of AI thoughts and results
 - Visual workflow timeline showing each step
@@ -52,12 +54,15 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 - PPT (.pptx): read, create, edit, slide extraction
 - PDF: text extraction
 - Markdown / Plain Text: read and convert
-- Python code: sandboxed execution with plotting and data analysis support
+- Markdown preview supports internal links, math formulas, and emoji rendering
+- Markdown preview supports loading images from local relative paths
+- Document preview refactored into independent page mode with improved multi-format support
 
 ### Session Management
 - Switch between multiple sessions
 - AI continues running in background after switching
 - Auto-generated session titles
+- Session todo tasks
 - Session list pagination for large history
 
 ### Prompt Templates
@@ -70,5 +75,6 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 - Chinese / English interface
 - Global shortcuts (Ctrl+N new session, Ctrl+W close, Ctrl+B sidebar, Ctrl+, settings)
 - File attachment upload (images, documents, text)
+- Image file preview with zoom support
 - Automatic update detection and installation
 
