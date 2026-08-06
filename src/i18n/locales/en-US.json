@@ -916,7 +916,7 @@
     "menu": {
       "title": "Slash Commands",
       "empty": "No matching commands",
-      "hint": "Arrow keys to select, Enter to execute, Esc to close",
+      "hint": "Arrow keys to select, Enter to execute",
       "disabledInAgent": "Unavailable while Agent is running"
     },
     "help": {

@@ -16,7 +16,7 @@ interface SlashCommandMenuProps {
   onSelect: (command: SlashCommand) => void;
   /** 选择 Skill 时的回调 */
   onSkillSelect: (skill: SkillInfo) => void;
-  /** 关闭菜单的回调（Esc 或点击外部） */
+  /** 关闭菜单的回调（点击菜单外部触发） */
   onClose: () => void;
   /** Agent 是否正在运行（用于禁用某些命令的显示） */
   agentRunning: boolean;
@@ -57,7 +57,7 @@ function buildRenderItems(commands: SlashCommand[], skills: SkillInfo[]): Render
  *
  * 在用户输入 / 时弹出，展示匹配的 Skill 和命令列表供用户选择。
  * Skills 在上方，Commands 在下方，中间用分隔线隔开。
- * 键盘导航（上下键/回车/Esc）由父组件 InputArea 处理并更新 highlightIndex，
+ * 键盘导航（上下键/回车）由父组件 InputArea 处理并更新 highlightIndex，
  * 本组件只负责渲染高亮状态、自动滚动以及鼠标点击交互。
  */
 export function SlashCommandMenu(props: SlashCommandMenuProps) {
@@ -260,6 +260,8 @@ export function SlashCommandMenu(props: SlashCommandMenuProps) {
           flex-direction: column;
         }
         .slash-menu-container.slash-menu-up {
+          left: auto;
+          right: 0;
           bottom: calc(100% + 6px);
           animation: slash-menu-in-up 0.15s ease-out;
         }

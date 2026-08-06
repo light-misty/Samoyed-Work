@@ -916,7 +916,7 @@
     "menu": {
       "title": "斜杠命令",
       "empty": "无匹配命令",
-      "hint": "上下键选择，回车执行，Esc 关闭",
+      "hint": "上下键选择，回车执行",
       "disabledInAgent": "Agent 运行中不可用"
     },
     "help": {

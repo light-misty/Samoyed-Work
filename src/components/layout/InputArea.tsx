@@ -182,15 +182,19 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
     setSlashMenuOpen(false);
   }, [executionStatus, t, text, onSlashCommand]);
 
-  // / 按钮点击：弹出完整命令列表
+  // / 按钮点击：菜单已打开时收起，否则弹出完整命令列表
   const handleSlashTrigger = useCallback(() => {
+    // 菜单已打开：直接收起
+    if (slashMenuOpen) {
+      setSlashMenuOpen(false);
+      return;
+    }
     const commands = centered
       ? SLASH_COMMANDS.filter((cmd) => !NEW_SESSION_HIDDEN_COMMANDS.has(cmd.name))
       : SLASH_COMMANDS;
     setSlashMenuCommands(commands);
     setSlashMenuSkills([]);
     setHighlightIndex(0);
-    setSlashMenuOpen(true);
     // 异步获取 Skills（不阻塞菜单打开）
     const ws = workspaces.find((w) => w.id === currentWorkspaceId);
     if (ws?.path) {
@@ -200,7 +204,8 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         // Skills 获取失败不影响菜单使用
       });
     }
-  }, [text, centered, workspaces, currentWorkspaceId]);
+    setSlashMenuOpen(true);
+  }, [slashMenuOpen, centered, workspaces, currentWorkspaceId]);
 
   /** 计算总 item 数量（含分隔线等不可选中项） */
   const totalMenuItems = useCallback(() => {
@@ -233,7 +238,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
 
   const handleKeyDown = useCallback(
     (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-      // 斜杠命令菜单导航：菜单打开时拦截方向键/回车/Esc
+      // 斜杠命令菜单导航：菜单打开时拦截方向键/回车
       if (slashMenuOpen && (slashMenuCommands.length > 0 || slashMenuSkills.length > 0)) {
         const total = totalMenuItems();
         if (e.key === "ArrowDown") {
@@ -244,11 +249,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         if (e.key === "ArrowUp") {
           e.preventDefault();
           setHighlightIndex((prev) => (prev - 1 + total) % total);
-          return;
-        }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setSlashMenuOpen(false);
           return;
         }
         if (e.key === "Enter" || matchesShortcut(e, sendMessageShortcut)) {
@@ -456,6 +456,23 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           : t('inputArea.configReminder.noProvider'))
     : "";
 
+  // 斜杠命令菜单公共属性（centered 与非 centered 两处渲染共用）
+  const slashMenuProps = {
+    commands: slashMenuCommands,
+    skills: slashMenuSkills,
+    highlightIndex,
+    onSelect: handleSlashCommandSelect,
+    onSkillSelect: (skill: SkillInfo) => {
+      setText(`/${skill.name} `);
+      setSlashMenuOpen(false);
+      textareaRef.current?.focus();
+    },
+    onClose: () => setSlashMenuOpen(false),
+    agentRunning: executionStatus === "running",
+  };
+  // 菜单渲染条件：打开且有可选项
+  const slashMenuVisible = slashMenuOpen && (slashMenuCommands.length > 0 || slashMenuSkills.length > 0);
+
   return (
     <div className={`input-area-wrapper ${centered ? "input-area-wrapper-centered" : ""}`} role="form" aria-label={t('inputArea.messageInput')}>
       <div className="input-container-wrapper">
@@ -488,22 +505,9 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         )}
 
         <div className="input-relative-wrap" style={{ position: "relative" }}>
-          {/* 斜杠命令选择菜单（新建会话/居中模式下从下方弹出，历史会话模式从上方弹出） */}
-          {slashMenuOpen && (slashMenuCommands.length > 0 || slashMenuSkills.length > 0) && (
-            <SlashCommandMenu
-              commands={slashMenuCommands}
-              skills={slashMenuSkills}
-              highlightIndex={highlightIndex}
-              onSelect={handleSlashCommandSelect}
-              onSkillSelect={(skill) => {
-                setText(`/${skill.name} `);
-                setSlashMenuOpen(false);
-                textareaRef.current?.focus();
-              }}
-              onClose={() => setSlashMenuOpen(false)}
-              agentRunning={executionStatus === "running"}
-              dropdownUp={!centered}
-            />
+          {/* 斜杠命令选择菜单（新建会话/居中模式下从输入框下方弹出） */}
+          {centered && slashMenuVisible && (
+            <SlashCommandMenu {...slashMenuProps} dropdownUp={false} />
           )}
 
           <div
@@ -537,31 +541,18 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
             <div className="input-inner-bottom">
               <div className="input-inner-left">
                 {/* centered 模式下，/ 按钮放在 WorkspaceSelector 之前 */}
-                {centered && (
-                  <button
-                    className="input-btn slash-trigger-btn"
-                    title={t("slash.button.tooltip")}
-                    onClick={handleSlashTrigger}
-                    type="button"
-                    aria-label={t("slash.button.tooltip")}
-                  >
-                    <Icon name="slash" />
-                  </button>
-                )}
+                {centered && <SlashTriggerButton onClick={handleSlashTrigger} />}
                 {centered ? <WorkspaceSelector /> : <WorkspaceGitStatus />}
               </div>
               <div className="input-inner-right">
-                {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前 */}
+                {/* 非 centered 模式下，/ 按钮放在 ModeSelector 之前，菜单在按钮上方弹出 */}
                 {!centered && (
-                  <button
-                    className="input-btn slash-trigger-btn"
-                    title={t("slash.button.tooltip")}
-                    onClick={handleSlashTrigger}
-                    type="button"
-                    aria-label={t("slash.button.tooltip")}
-                  >
-                    <Icon name="slash" />
-                  </button>
+                  <div className="slash-trigger-wrap">
+                    <SlashTriggerButton onClick={handleSlashTrigger} />
+                    {slashMenuVisible && (
+                      <SlashCommandMenu {...slashMenuProps} dropdownUp />
+                    )}
+                  </div>
                 )}
                 <ModeSelector dropdownUp={!centered} />
                 <ProviderSelector dropdownUp={!centered} />
@@ -881,6 +872,11 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           gap: 2px;
           flex-shrink: 0;
         }
+        .slash-trigger-wrap {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
         .template-cards-section {
           margin-top: 16px;
         }
@@ -938,6 +934,26 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         }
       `}</style>
     </div>
+  );
+}
+
+/**
+ * 斜杠命令触发按钮：点击展开/收起斜杠命令菜单
+ * 阻止 mousedown 冒泡，避免菜单的点击外部关闭逻辑抢在 toggle 之前关闭菜单
+ */
+function SlashTriggerButton({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      className="input-btn slash-trigger-btn"
+      title={t("slash.button.tooltip")}
+      onClick={onClick}
+      onMouseDown={(e) => e.stopPropagation()}
+      type="button"
+      aria-label={t("slash.button.tooltip")}
+    >
+      <Icon name="slash" />
+    </button>
   );
 }
 
