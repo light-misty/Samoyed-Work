@@ -32,7 +32,7 @@ Explicitly write out your entire deliberation process, documenting every interme
 | `npm run build` | `tsc -b && vite build` |
 | `npm run tauri:build` | Production build (NSIS installer, auto builds sidecar) |
 | `cargo build -p samoyed_work_lib` | Compile Rust only |
-| `cargo test` | Runs Rust unit tests (170 tests, 19 `#[cfg(test)]` modules) |
+| `cargo test` | Runs Rust unit tests (203 tests, 24 `#[cfg(test)]` modules) |
 | `cargo clippy` | Rust lint |
 | `cargo fmt --check` | Rust format check |
 | `pip install -r sidecar/requirements.txt` | Python deps |
@@ -48,7 +48,7 @@ Env `SAMOYED_WORK_PYTHON` overrides the Python interpreter path for the Sidecar.
 - Types must be **manually synced** between Rust `src-tauri/src/models/` and `shared/types.ts` + `src/types/`
 - Python Sidecar: `sidecar/main.py` — stdin/stdout JSON line protocol (`{id, action, type, params}`), max 120s timeout per request
 - Path alias: `@/` → `src/`
-- CSP is strict: only `http://localhost:*` / `http://127.0.0.1:*` allowed for `connect-src`
+- CSP: `connect-src` allows `https://*`/`http://*` (LLM API calls), `img-src` allows `asset:`/`https:`, assetProtocol enabled for local image preview
 - i18n: zh-CN default, stored via `localStorage` key `i18n-language`
 - Read `docs/` before implementing features (especially `tauri_commands.md`, `handler_development.md`, `database_design.md`)
 

@@ -1785,7 +1785,6 @@ pub struct AgentExecutor<R: Runtime> {
     should_stop: Arc<dyn Fn(&str) -> bool + Send + Sync>,
     persist_fn: Option<PersistFn>,
     context_usage_persist_fn: Option<ContextUsagePersistFn>,
-    snapshot_fn: Option<SnapshotFn>,
     // [新增] 权限注册表
     permission_registry: Arc<PermissionRegistry>,
     // [新增] 会话白名单

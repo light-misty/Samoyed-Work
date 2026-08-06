@@ -16,7 +16,7 @@ Samoyed Work 是一个基于 Tauri 2.x 的 AI 编程助手桌面应用，定位�
 - **数据库**: SQLite (rusqlite, bundled)
 - **配置存储**: JSON 文件 (serde)
 - **文档处理（Document 模式）**: Python 3.12+ Sidecar (python-docx / openpyxl / python-pptx / PyMuPDF / reportlab / pdfminer.six / fpdf2 / pypdf / pdfplumber / Pillow)
-- **Markdown 渲染**: react-markdown + remark-gfm + rehype-highlight
+- **Markdown 渲染**: react-markdown + remark-gfm + rehype-highlight + remark-math + remark-emoji + rehype-katex + rehype-raw + rehype-slug
 - **PDF 预览**: pdfjs-dist
 - **差异对比**: diff 库
 - **图表绘制**: recharts
@@ -59,7 +59,7 @@ pip install -r sidecar/requirements.txt
 # 编译（不运行）
 cargo build -p samoyed_work_lib
 
-# 运行所有 Rust 测试（现有 170 个测试，19 个 #[cfg(test)] 模块）
+# 运行所有 Rust 测试（现有 203 个测试函数，24 个 #[cfg(test)] 模块）
 cargo test
 
 # 运行特定测试
@@ -86,19 +86,22 @@ cargo clean
 
 ```
 src/                     React 前端 (TypeScript)
+  commands/              斜杠命令: slashCommands.ts (命令注册表), superpowersContent.ts
+  commands/              斜杠命令: slashCommands.ts (命令注册表), superpowersContent.ts
   components/
     layout/              布局组件: TopBar, MainArea, LeftSidebar, Sidebar,
                             InputArea, MainLayout, NetworkStatusBanner,
                             WorkspaceSelector, WindowControls,
                             WorkspaceGitStatus
     workflow/            工作流时间线: WorkflowTimeline, WorkflowNode,
-                            WorkflowRightSidebar, SubAgentWorkflowPage
+                            WorkflowRightSidebar, SubAgentWorkflowPage,
+                            TodoPanel
                             (User/Thinking/Content/Tool/Confirm/Error/
-                             Compaction/Question/SubAgent)
+                             Compaction/Question/SubAgent/Paused/Stats)
+    input/               输入区: SlashCommandMenu, SlashCommandHelp, StatsOverlay
     sidebar/             侧边栏: FileTreeSection, AgentInfoSection,
                             SessionListSection
-    preview/             文档预览浮层: PreviewOverlay, MarkdownPreview,
-                            PdfCanvasViewer
+    preview/             文档预览: PreviewPage, MarkdownPreview, PdfCanvasViewer
     settings/            设置弹窗: SettingsDialog + 10 标签页
                             (LLMConfig, WorkspaceTab, HandlersTab, TemplatesTab,
                              AppearanceTab, ShortcutsTab, GeneralTab, HelpTab,
@@ -110,7 +113,7 @@ src/                     React 前端 (TypeScript)
                             Toast(ToastContainer), UpdateNotification
   stores/                Zustand stores: workflow, session, settings, workspace,
                             fileTree, toast, attachment, network, update,
-                            agentMode
+                            agentMode, slashCommand, superpowers
   i18n/                  国际化: index.ts, locales/zh-CN.json, locales/en-US.json
   services/              前端服务层: tauri.ts (invoke封装), event.ts (事件监听),
                             errorHandler.ts
@@ -123,19 +126,18 @@ src-tauri/               Rust 后端
   tauri.conf.json        Tauri 配置 (无边框窗口, CSP, 构建命令)
   capabilities/          Tauri 权限配置 (shell, dialog 等插件权限)
   src/
-    lib.rs               入口, AppState定义 (含 network_monitor), 命令注册,
-                           初始化流程
+    lib.rs               入口, AppState定义 (含 network_monitor/file_index_cache),
+                           命令注册, 初始化流程
     commands/            Tauri命令层 (13个模块): llm, session, workspace, document,
                             handler, settings, agent, template, log, lsp,
-                            permission, update (desktop)
+                            permission, skill, update (desktop)
     services/
       agent/             Agent调度引擎: executor, context (对话上下文管理),
                             sub_executor, compaction
         prompts/         System Prompt: agents_md_loader (AGENTS.md规则加载),
                             task_type, token_budget
       llm/               LLM多Provider适配: router, provider (trait),
-                            openai_adapter, anthropic_adapter, gemini_adapter,
-                            context_presets (30+模型上下文窗口预设表)
+                            openai_adapter, anthropic_adapter, gemini_adapter
       handler/           Handler引擎: registry (注册表), builtin (5个文档处理器)
       tool/              Tool引擎: registry, builtin (25个工具), trait_def
       document/          Python Sidecar进程管理 (自动重启、超时、重试)
@@ -149,17 +151,19 @@ src-tauri/               Rust 后端
       web/               网络服务: fetcher (网页抓取), searcher (网络搜索),
                             url_validator (URL安全校验)
       attachment.rs      文件附件处理
+      file_index.rs      文件索引缓存 (按工作区文件名索引, FsWatcher联动失效)
       network_monitor.rs 网络状态监控
       fs_watcher.rs      文件系统监听
     db/                  数据库层: init, session_repo, message_repo,
-                            snapshot_repo, template_repo, session_summary_repo,
+                            template_repo, session_summary_repo,
                             user_preference_repo, branch_repo, permission_repo,
                             skill_repo, sub_agent_message_repo, todo_repo
     config/              配置管理: app_settings, llm_config, workspace_config
     models/              数据模型: message, session, document, llm, handler,
-                            workspace, template, tool, context_memory
+                            workspace, template, tool, context_memory, lsp,
+                            permission, skill, sub_agent, todo, branch
     events/              事件系统: types, emitter
-    utils/               工具: logger (双输出日志)
+    utils/               工具: logger (双输出日志), git_utils, 路径工具
     errors.rs            统一错误码
 
 sidecar/                 Python 文档处理引擎
@@ -176,9 +180,9 @@ docs/                    详细开发文档
   tech_architecture.md, tauri_commands.md, database_design.md,
   handler_development.md, component_design.md, task_breakdown.md,
   PRD_Samoyed-Work.md,
-  plans/                  设计文档 (10+ 设计文档)
-  tests/                  e2e_test.md, tools_handlers_validation.md
-  prototypes/             samoyed-work-prototype.html
+  plans/                  设计文档 (10+ 设计文档, 含 coding-agent/ 分阶段设计)
+  tests/                  e2e_test.md, tools_handlers_validation.md,
+                            agent_self_test_document.md, agent_self_test_build.md
 ```
 
 ## 核心架构要点
@@ -186,8 +190,8 @@ docs/                    详细开发文档
 ### 前后端通信
 - **`invoke()`**: 请求-响应式调用（查询数据、操作触发），命令名 `snake_case`
 - **`emit()/listen()`**: 事件推送（Agent流式输出、进度更新、需确认操作等），事件名 `namespace:action`
-- Agent 事件: `agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:network_retry`, `agent:done`, `agent:error`, `agent:stopped`, `agent:compaction_start`, `agent:compaction_done`, `agent:sub_agent_status`, `agent:sub_agent_tool_call`, `agent:question`
-- 系统事件: `session:updated`, `workspace:directory_deleted`, `file:change`, `llm:provider_switch`, `system:network_change`
+- Agent 事件: `agent:thinking`, `agent:deep_thinking`, `agent:content`, `agent:tool_call`, `agent:tool_result`, `agent:confirm`, `agent:context_update`, `agent:network_retry`, `agent:done`, `agent:error`, `agent:stopped`, `agent:compaction_start`, `agent:compaction_done`, `agent:sub_agent_status`, `agent:sub_agent_tool_call`, `agent:sub_agent_thinking`, `agent:sub_agent_content`, `agent:sub_agent_tool_result`, `agent:question`
+- 系统事件: `session:updated`, `workspace:directory_deleted`, `file:change`, `llm:provider_switch`, `system:network_change`, `git:status_changed`
 
 ### Agent 执行流程
 1. 前端 `useAgent` hook 调用 `start_agent` 命令
@@ -206,7 +210,6 @@ docs/                    详细开发文档
 - **LlmRouter**: 管理多个 Provider，支持默认选择、顺序 Fallback、健康检查（5分钟自动恢复）、延迟 EMA 追踪
 - Provider 配置含 `context_window`（上下文窗口大小，自动推断）、`supports_vision`（是否支持图片多模态）、`extra_params`（扩展参数）
 - Provider 类型 (前端): `openai | anthropic | ollama | gemini | custom`；Rust 端以 String 存储，兼容更多类型
-- `context_presets.rs` 内置 30+ 模型家族的默认上下文窗口预设表（OpenAI/Anthropic/Gemini/DeepSeek/Llama/Qwen/Kimi/GLM/ERNIE/Doubao/MiniMax/Yi/Baichuan/Spark/Mistral/Hunyuan 等）
 - 每 5 分钟后台自动执行健康检查，自动标记不可用 Provider；Provider 切换时发射 `llm:provider_switch` 事件
 
 ### Handler 系统（文档处理，Document 模式启用）
@@ -301,6 +304,7 @@ AppState {
     scratchpad_states: SharedScratchpadStates,
     skill_registry: Arc<SkillRegistry>,
     lsp_manager: Arc<LspServerManager>,
+    file_index_cache: Arc<FileIndexCache>,
 }
 ```
 - `tool_registry` 在运行时不变，无需 Mutex 保护；`handler_registry` 使用 Mutex 保护运行时注册访问
@@ -308,8 +312,10 @@ AppState {
 - `sub_executor`（阶段 4）在 setup 中创建，通过延迟注入模式注入到 TaskTool（解决循环依赖）
 
 ### 前端组件要点
-- **懒加载**: PreviewOverlay、SettingsDialog 通过 `React.lazy` 延迟加载，减少首屏体积
+- **懒加载**: PreviewPage、SettingsDialog、UpdateNotification、SubAgentWorkflowPage 通过 `React.lazy` 延迟加载，减少首屏体积
 - **PDF 预览**: `PdfCanvasViewer` 使用 `pdfjs-dist` 在 Canvas 上渲染，支持缩放(0.5x-3x)、翻页、自适应宽度/页面模式
+- **图片预览**: 通过 `convertFileSrc` (asset 协议) 加载本地图片，支持缩放
+- **斜杠命令**: 输入 `/` 弹出 `SlashCommandMenu`，内置 help/compact/retry/stop/new/stats/skills 命令及 `/技能名` 快捷调用（Superpowers 技能自动加载）
 - **Toast 通知**: 全局 `ToastContainer` 渲染在固定右上角，3 秒自动消失，支持 error/success/warning 三种类型，最大 5 条同时显示
 - **错误边界**: `ErrorBoundary` 包裹应用根组件，捕获渲染异常，提供"恢复页面"和"重启应用"操作
 - **虚拟滚动**: 工作流时间线/文件树等长列表使用虚拟滚动优化大量节点渲染性能
@@ -317,19 +323,21 @@ AppState {
 
 ### Python Sidecar 通信协议
 - stdin/stdout JSON 行协议，SidecarManager 自动管理进程生命周期（启动、停止、崩溃时自动重启）
-- 请求: `{"id": "...", "action": "read|convert|analyze|execute|ping|validate", "type": "docx|xlsx|pptx|pdf|md|txt", "params": {...}}`
-- 响应: `{"id": "...", "success": true|false, "data": {...}, "error": "..."}`
-- 默认请求超时 120 秒，超时后自动重启 Sidecar 进程并重试一次
+- 请求: `{"id": "...", "action": "read|convert|analyze|execute|validate|ping", "type": "docx|xlsx|pptx|pdf|md|txt|health", "params": {...}}`（txt 复用 MarkdownHandler）
+- 响应: `{"id": "...", "success": true|false, "data": {...}, "error": "..."}`（异常时附带 traceback）
+- 默认请求超时 120 秒（可通过设置 `sidecar_timeout_secs` 调整），超时后自动重启 Sidecar 进程并重试一次
 
 ### 后台健康检查
 - LLM Provider 健康检查: 每 5 分钟执行一次 `health_check_all()`，自动标记不可用 Provider；切换时发射 `llm:provider_switch` 事件
 - Sidecar 健康检查: 每 3 分钟执行一次，不健康时记录警告日志
+- LSP 健康检查: 按配置间隔执行（`health_check_interval_seconds` > 0 时启动）
+- 工作区目录存在性检查: 每 10 秒执行一次（父目录监听器失效时的兜底），目录被删除时发射 `workspace:directory_deleted` 并停止监听
 - 网络状态监控: `NetworkMonitor` 定时检测网络连通性，状态变化时发射 `system:network_change` 事件；断网时自动暂停 LLM 请求并在恢复后重试
 
 ### 系统 Prompt 系统
 - `agents_md_loader`: 从工作区递归向上查找 AGENTS.md/CLAUDE.md 规则，合并全局规则（`~/.agent/AGENTS.md`），注入到 System Prompt
 - `task_type`: 任务类型推断（Docx/Xlsx/Pptx/Pdf/Md/FileSystem/Unknown），根据用户消息和工具调用自动识别，生成对应提示
-- `token_budget`: Token 预算管理（支持 30+ 模型预设上下文窗口），用于估算和分配 token 资源
+- `token_budget`: Token 预算管理（根据模型上下文窗口大小按比例分配: 系统提示词 15% / 工具定义 10% / 对话历史 50% / LLM 响应 25%，默认窗口 200K）
 
 ### 错误码体系
 统一通过 `CommandError` 结构体（定义在 `errors.rs`）返回给前端，结构为 `{ code: u32, message: String }`。Rust 标准错误类型通过 `From` trait 自动转换：
@@ -373,9 +381,8 @@ AppState {
 `AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 10 个标签页：
 - `GeneralSettings`: 作者名、作者邮箱、作者公司、确认级别(Always/DeleteOnly/Never)、`git_bash_path`（String，空表示自动检测）→ **GeneralTab**（含"代码执行环境"区域）
 - `AppearanceSettings`: 主题模式(light/dark/system)、界面语言(language)、跟随系统语言(languageFollowSystem) → **AppearanceTab**
-- `VersionSnapshot`: 保留策略(ByCount/ByDays/Both)、最大数量/天数
 - `WorkspaceDefaults`: 默认工作区 ID → **WorkspaceTab**
-- `Shortcuts`: 快捷键配置（newSession/closeSession/sendMessage/toggleSidebar/quickPrompt）→ **ShortcutsTab**
+- `Shortcuts`: 快捷键配置（newSession/closeSession/sendMessage/toggleSidebar/quickPrompt/switchMode）→ **ShortcutsTab**
 - `UpdateSettings`: 自动检查更新(autoCheck) → 与 **GeneralTab** 关联
 - LLM Provider 配置管理 → **LLMConfig**（含 ProviderFormDialog 子弹窗，Provider 支持 contextWindow/supportsVision/extraParams）
 - Prompt 模板管理 → **TemplatesTab**（含 TemplateEditDialog 子弹窗，支持带变量的 Prompt 模板）
@@ -383,7 +390,14 @@ AppState {
 ### 文件监听服务
 - 基于 `notify` crate 的 `RecommendedWatcher`，递归监听工作区目录
 - 文件变更时发射 `file:change` 事件到前端，用于实时刷新文件树
+- 文件变更联动失效 LSP 缓存与文件索引缓存（`file_index_cache`）
+- `.git/HEAD` 文件变化时发射 `git:status_changed` 事件（前端刷新 Git 状态展示）
 - 支持监听器切换（切换到新工作区时自动停止旧监听器）
+
+### 文件索引缓存
+- `FileIndexCache` 按工作区缓存文件名索引（仅文件名与相对路径，构建时无需 stat，速度快）
+- 搜索时大小写不敏感包含匹配，结果数受限；根目录变化时自动重建
+- 由 FsWatcher 联动失效（`invalidate`），`search_files` 命令懒加载使用
 
 ### 状态管理 (前端)
 - `useWorkflowStore`: 工作流节点列表、执行状态、确认回调、迭代分组
@@ -396,6 +410,8 @@ AppState {
 - `useNetworkStore`: 网络状态跟踪（online/offline，前端状态同步）
 - `useUpdateStore`: 更新状态管理（待安装更新包路径）
 - `useAgentModeStore`: Agent 模式管理（Plan/Build/Document）
+- `useSlashCommandStore`: 斜杠命令覆盖层开关（/help、/stats）
+- `useSuperpowersStore`: Superpowers 技能框架开关（localStorage 持久化，发送消息时自动注入技能内容）
 
 ### 数据存储
 - SQLite: 会话、消息、Prompt 模板、会话摘要、用户偏好
@@ -411,10 +427,10 @@ AppState {
 
 ### Tauri 安全与权限
 - 无边框窗口 (`decorations: false`)，自定义窗口控件
-- CSP 限制严格: 仅允许 `http://localhost:*` 和 `http://127.0.0.1:*` 的 connect-src（用于 LLM API 调用）
+- CSP: `connect-src 'self' https://* http://*`（允许任意 http/https 域名，用于 LLM API 调用）；`img-src` 含 `asset:` 与 `https:`；`font-src` 允许 `https://fonts.gstatic.com`；assetProtocol 启用（本地图片预览）
 - 使用 `capabilities/` 目录配置插件权限（shell、dialog 等）
 - Tauri 插件: `tauri-plugin-shell`, `tauri-plugin-dialog`；桌面端额外注册 `tauri-plugin-updater` + `tauri-plugin-process`
-- 70+ 注册命令覆盖 LLM 管理、会话 CRUD（含分支）、工作区操作、文档处理、Handler 管理、工具管理、设置、模板 CRUD、权限规则管理、日志读取、LSP 管理、更新检查/安装等
+- 73 个注册命令覆盖 LLM 管理、会话 CRUD（含分支）、工作区操作、文档处理、Handler 管理、工具管理、设置、模板 CRUD、权限规则管理、Skill 管理、日志读取、LSP 管理、更新检查/安装等
 
 ### 自动更新
 - 通过 `tauri-plugin-updater` 实现自动更新，NSIS 安装器打包
@@ -447,9 +463,8 @@ AppState {
 - `component_design.md` — 前端组件层级与交互设计
 - `task_breakdown.md` — 阶段任务分解与进度
 - `PRD_Samoyed-Work.md` — 产品需求文档
-- `plans/` — 设计文档 (上下文窗口设计、LLM 缓存优化、编程 Agent 重构等)
-- `tests/e2e_test.md` — E2E 测试计划
-- `tests/tools_handlers_validation.md` — Tools/Handlers 验证方案
+- `plans/` — 设计文档 (上下文窗口设计、LLM 缓存优化、编程 Agent 重构等，含 coding-agent 分阶段设计)
+- `tests/` — E2E 测试计划、Tools/Handlers 验证方案、Document/Build 模式自测文档
 
 ## 提交规范
 
@@ -471,8 +486,8 @@ AppState {
 - Rust 事件 payload 使用 `#[serde(rename_all = "camelCase")]`，前端直接接收 camelCase 字段
 - Python Sidecar 的 `input_path` 要映射为 handler 期望的 `path` 参数
 - Handler/Tool 的 `workspace_root` 由 executor 注入，不信任 LLM 提供的值，防止路径遍历攻击
-- 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染
+- 文档预览: 普通文件返回文本 `PreviewContent`，PDF 文件通过 `get_pdf_data` 返回 base64 数据由前端 `PdfCanvasViewer` 渲染；图片通过 `convertFileSrc` (asset 协议) 加载预览
 - 所有文件操作（创建/删除/重命名）通过 Tauri 命令在 Rust 端执行，前端不直接操作文件系统
 - 命令超时由 LLM 通过 run_command 的 `timeout` 参数自主控制，最大 300 秒（无全局超时配置）
-- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config → LLM Router → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/doom_loop_detector/agent_mode_manager）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置后传入 `register_builtin_tools`，含 task/webfetch/websearch/question/skill 工具）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → Skill 注册表 → LSP 服务器管理器/路由器/缓存（读取 `lsp` 配置后初始化，注册服务器配置并传入 `register_builtin_tools`，仅在 `lsp.experimental_enabled=true` 时注册 LspTool；启动 LSP 健康检查后台任务） → AppState 注册 → FS 监听器 → 网络状态监控器 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、网络监控、LSP 按配置间隔）
+- 应用初始化顺序: 应用数据目录 → 日志系统 → 数据库（含损坏检测+自动重建） → 配置管理器 → LLM Config（builtin_provider 注入） → LLM Router → Python 解释器路径解析（`SAMOYED_WORK_PYTHON` > 嵌入式 > 系统 PATH）与 Sidecar 超时配置 → Sidecar → Handler 注册表 + builtin handlers → 权限系统组件（permission_registry/doom_loop_detector/agent_mode_manager）→ question_channels → LSP 组件（manager/router/cache，根目录优先活动工作区；`lsp.enabled` 时注册服务器配置）→ Skill 注册表（全局 `~/.agent/skills/` + 项目 `.agent/skills/`）→ Tool 注册表 + builtin tools（读取 `git_bash_path` 和 `web_search` 配置，含 task/webfetch/websearch/question/skill 工具；仅在 `lsp.experimental_enabled=true` 时注册 LspTool）→ SubAgentExecutor 创建并通过 `set_sub_executor` 延迟注入 TaskTool → FileIndexCache + FS 监听器（联动失效 LSP 缓存与文件索引缓存）→ 网络状态监控器 → AppState 注册 → 自动监听活动工作区 → Skill 目录热重载监听 → 后台健康检查任务（LLM 每5分钟、Sidecar 每3分钟、LSP 按配置间隔、工作区目录存在性每10秒）→ 网络监控启动
 - 应用安装了自定义 panic hook，将 panic 信息记录到日志文件并尝试发射 `runtime:error` 事件到前端

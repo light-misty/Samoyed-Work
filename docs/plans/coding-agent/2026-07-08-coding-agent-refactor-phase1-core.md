@@ -201,8 +201,7 @@ pub mod document;
 3. `new()` 方法中 `registry` 参数和字段赋值保留
 4. 工具定义合并逻辑中 handler 的 tool_definitions 保留
 5. 工具执行逻辑中 `handler_arc` 分支保留
-6. `extract_snapshot_paths` 方法中 docx/xlsx/pptx/pdf 分支保留
-7. `needs_workspace_root` 匹配中 handler 名称保留
+6. `needs_workspace_root` 匹配中 handler 名称保留
 
 **步骤 6:确认 attachment.rs 保留 doc_service 依赖**
 
@@ -252,7 +251,6 @@ pub mod document;
 - 确认保留:`src/components/preview/PdfCanvasViewer.tsx`
 - 确认保留:`src/components/preview/PreviewOverlay.tsx`
 - 确认保留:`src/components/preview/MarkdownPreview.tsx`(若存在)
-- 确认保留:`src/components/preview/VersionHistoryPanel.tsx`
 - 确认保留:`src/components/settings/HandlersTab.tsx`
 - 确认保留:`src/components/settings/SettingsDialog.tsx` 中的 HandlersTab 引用
 - 确认保留:`src/services/tauri.ts` 中的 sidecar 相关命令封装
@@ -272,7 +270,6 @@ pub mod document;
 确认以下文件存在且未被修改:
 - `src/components/preview/PdfCanvasViewer.tsx`
 - `src/components/preview/PreviewOverlay.tsx`
-- `src/components/preview/VersionHistoryPanel.tsx`
 
 **步骤 3:确认 HandlersTab 保留**
 
@@ -1444,7 +1441,6 @@ impl Tool for EditTool {
         "对文件进行精确字符串替换编辑。\
          oldString 必须在文件中唯一匹配(若多匹配则报错,需提供更多上下文使其唯一)。\
          若 oldString 为空且文件不存在,则创建新文件并写入 newString。\
-         编辑前会自动创建版本快照,确保可回滚。\
          重要:oldString 不可为空(除非创建新文件),必须完整匹配文件中的内容(含缩进和换行)。"
     }
     fn category(&self) -> &str { "filesystem" }
@@ -1667,34 +1663,7 @@ fn format_diff_summary(old: &str, new: &str) -> String {
 }
 ```
 
-**步骤 3:在 executor.rs 中注册 edit 工具的快照路径**
-
-修改 [src-tauri/src/services/agent/executor.rs](file:///d:/DeskTop/Samoyed-Work/src-tauri/src/services/agent/executor.rs) 的 `extract_snapshot_paths` 方法,为 edit 工具添加快照创建:
-
-```rust
-fn extract_snapshot_paths(&self, handler_name: &str, params: &serde_json::Value) -> Vec<String> {
-    match handler_name {
-        "remove" => {
-            vec![params["path"].as_str().unwrap_or("").to_string()]
-        }
-        "write" => {
-            let append = params.get("append").and_then(|v| v.as_bool()).unwrap_or(false);
-            if !append {
-                vec![params["path"].as_str().unwrap_or("").to_string()]
-            } else {
-                Vec::new()
-            }
-        }
-        "edit" => {
-            // edit 工具修改前创建快照
-            vec![params["path"].as_str().unwrap_or("").to_string()]
-        }
-        _ => Vec::new(),
-    }
-}
-```
-
-**步骤 4:在 executor.rs 中将 edit 加入 needs_workspace_root 和 HIGH_RISK 列表**
+**步骤 3:在 executor.rs 中将 edit 加入 needs_workspace_root 和 HIGH_RISK 列表**
 
 修改 `needs_workspace_root` 匹配(第 1141 行附近),增加 `"edit"`,并移除已合并的 `"read_lines"`:
 
@@ -1738,7 +1707,7 @@ ConfirmationLevel::DeleteOnly => {
 }
 ```
 
-**步骤 5:编写测试**
+**步骤 4:编写测试**
 
 在 builtin.rs 测试模块中添加:
 
@@ -2822,7 +2791,6 @@ pub fn new(
         should_stop: Arc::new(|_| false),
         persist_fn: None,
         context_usage_persist_fn: None,
-        snapshot_fn: None,
         confirmation_level: ConfirmationLevel::default(),
     }
 }
@@ -2909,7 +2877,6 @@ let executor = AgentExecutor::new(
 .with_max_iterations(max_iterations)
 .with_persist_fn(persist_fn)
 .with_context_usage_persist_fn(context_usage_persist_fn)
-.with_snapshot_fn(snapshot_fn)
 .with_confirmation_level(confirmation_level);
 ```
 
@@ -3200,7 +3167,6 @@ cargo test test_read_with_line_numbers
 | 保留 Sidecar 的风险:Sidecar 进程崩溃影响文档处理 | 文档附件解析失败 | T1.02 已保留 doc_service 依赖,通过 Sidecar 处理文档附件 |
 | 数据库中已有 handler 相关记录 | 历史数据兼容 | 保留 errors.rs 中的错误码,不删除数据库表 |
 | 前端调用保留的命令 | 正常运行 | T1.03 已确认 tauri.ts 中 sidecar 命令封装保留,不做任何删除 |
-| edit 工具误操作覆盖文件 | 数据丢失 | edit 自动创建版本快照(通过 snapshot_fn) |
 | glob/grep 性能在大项目上不佳 | 响应延迟 | 默认排除 node_modules/.git 等;max_matches 限制结果数 |
 
 ### 5.2 回滚方案
