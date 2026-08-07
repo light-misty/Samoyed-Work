@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from 'react-i18next';
 import type { ProviderInfo, LLMProviderType, ConnectionResult } from "../../types";
 import * as tauriCmd from "../../services/tauri";
@@ -85,7 +85,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   const { t } = useTranslation();
   const [name, setName] = useState(provider?.name ?? "");
   const [providerType, setProviderType] = useState<LLMProviderType>(provider?.providerType ?? "openai");
-  const [apiBase, setApiBase] = useState(provider?.apiBase ?? "https://api.openai.com/v1");
+  const [apiBase, setApiBase] = useState(provider?.apiBase ?? "");
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(provider?.model ?? "");
   const [contextWindow, setContextWindow] = useState<string>(
@@ -105,12 +105,8 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
     label: opt.value === "custom" ? t('settings.providerForm.typeCustom') : providerTypeLabels[opt.value],
   }));
 
-  useEffect(() => {
-    const option = providerTypeValues.find((o) => o.value === providerType);
-    if (option && mode === "add") {
-      setApiBase(option.defaultBase);
-    }
-  }, [providerType, mode]);
+  // 根据服务商类型显示对应的默认地址占位符（灰色提示，不自动填充）
+  const apiBasePlaceholder = providerTypeValues.find((o) => o.value === providerType)?.defaultBase;
 
   const handleSave = async () => {
     if (!name.trim()) { setError(t('settings.providerForm.enterProviderName')); return; }
@@ -228,7 +224,7 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
             <label className="form-label">{t('settings.providerForm.apiBaseUrl')}</label>
             <input
               className="form-input form-input-mono"
-              placeholder="https://api.openai.com/v1"
+              placeholder={apiBasePlaceholder}
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
             />
