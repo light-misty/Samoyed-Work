@@ -195,10 +195,18 @@ pub fn update_session_timestamp(conn: &Connection, id: &str) -> Result<(), Comma
     Ok(())
 }
 
-/// 删除会话（同时删除关联的消息记录）
+/// 删除会话（同时删除关联的消息、快照与回退状态记录）
 pub fn delete_session(conn: &Connection, id: &str) -> Result<(), CommandError> {
     conn.execute(
         "DELETE FROM session_messages WHERE session_id = ?1",
+        rusqlite::params![id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_snapshots WHERE session_id = ?1",
+        rusqlite::params![id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_reverts WHERE session_id = ?1",
         rusqlite::params![id],
     )?;
 
@@ -212,7 +220,7 @@ pub fn delete_session(conn: &Connection, id: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
-/// 删除指定工作区下的所有会话（同时删除关联的消息记录）
+/// 删除指定工作区下的所有会话（同时删除关联的消息、快照与回退状态记录）
 /// 用于删除工作区时清理关联会话，避免出现孤儿会话导致前端分组错乱
 /// 返回被删除的会话 ID 列表，供前端清理本地状态使用
 pub fn delete_sessions_by_workspace(
@@ -237,6 +245,15 @@ pub fn delete_sessions_by_workspace(
         "DELETE FROM session_messages WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
         rusqlite::params![workspace_id],
     )?;
+    // 删除关联快照与回退状态记录
+    conn.execute(
+        "DELETE FROM session_snapshots WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        rusqlite::params![workspace_id],
+    )?;
+    conn.execute(
+        "DELETE FROM session_reverts WHERE session_id IN (SELECT id FROM sessions WHERE workspace_id = ?1)",
+        rusqlite::params![workspace_id],
+    )?;
 
     // 删除会话记录
     let deleted = conn.execute(
@@ -253,7 +270,7 @@ pub fn delete_sessions_by_workspace(
     Ok(session_ids)
 }
 
-/// 清除所有会话（同时删除所有关联的消息记录）
+/// 清除所有会话（同时删除所有关联的消息、快照与回退状态记录）
 pub fn clear_all_sessions(conn: &Connection) -> Result<u64, CommandError> {
     // 先统计要删除的会话数量
     let count: u64 = conn
@@ -262,6 +279,9 @@ pub fn clear_all_sessions(conn: &Connection) -> Result<u64, CommandError> {
 
     // 删除所有消息记录
     conn.execute("DELETE FROM session_messages", [])?;
+    // 删除所有快照与回退状态记录
+    conn.execute("DELETE FROM session_snapshots", [])?;
+    conn.execute("DELETE FROM session_reverts", [])?;
     // 删除所有会话
     conn.execute("DELETE FROM sessions", [])?;
 

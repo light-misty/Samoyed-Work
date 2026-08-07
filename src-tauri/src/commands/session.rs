@@ -1,3 +1,4 @@
+use tauri::Manager;
 use tauri::{AppHandle, State};
 
 use crate::db::message_repo;
@@ -91,12 +92,17 @@ pub async fn get_session(
     let active_branch_id = crate::db::branch_repo::get_session_active_branch(&conn, &session_id)?;
 
     // 加载当前分支的消息
-    let messages = message_repo::list_messages(&conn, &session_id, &active_branch_id);
+    let mut messages = message_repo::list_messages(&conn, &session_id, &active_branch_id);
+
+    // 检查是否存在 staged revert（回退后未发送新消息）：
+    // 若回退边界属于当前活跃分支，则只返回边界之前的消息，并返回 revert 信息供前端展示横幅
+    let revert = resolve_revert_info(&conn, &session_id, &active_branch_id, &mut messages)?;
 
     log::info!(
-        "get_session 成功: session_id={}, 消息数={}",
+        "get_session 成功: session_id={}, 消息数={}, revert={:?}",
         session_id,
-        messages.len()
+        messages.len(),
+        revert
     );
 
     // 加载会话的所有分支列表（供前端渲染切换器）
@@ -107,7 +113,51 @@ pub async fn get_session(
         messages,
         branches,
         active_branch_id,
+        revert,
     })
+}
+
+/// 计算 staged revert 信息：存在回退且边界属于当前活跃分支时，
+/// 截断 messages 到边界之前（不含边界），并返回 RevertInfo
+fn resolve_revert_info(
+    conn: &rusqlite::Connection,
+    session_id: &str,
+    active_branch_id: &str,
+    messages: &mut Vec<crate::models::message::Message>,
+) -> Result<Option<crate::models::snapshot::RevertInfo>, CommandError> {
+    let revert = match crate::db::revert_repo::get_revert(conn, session_id)? {
+        Some(r) => r,
+        None => return Ok(None),
+    };
+    // 边界消息属于当前活跃分支时才生效（分支切换后旧分支的 revert 被忽略）
+    let belongs = message_repo::get_message(conn, session_id, &revert.revert_message_id)?
+        .map(|(_, branch, _)| branch == active_branch_id)
+        .unwrap_or(false);
+    if !belongs {
+        return Ok(None);
+    }
+    // 在消息列表中定位边界消息，截断到边界之前
+    let idx = match messages
+        .iter()
+        .position(|m| m.id == revert.revert_message_id)
+    {
+        Some(idx) => idx,
+        None => return Ok(None),
+    };
+    let hidden_count = messages.len() - idx;
+    messages.truncate(idx);
+
+    // 读取 redo 基线快照类型（可能已不存在，容错处理）
+    let redo_snapshot_kind =
+        crate::db::snapshot_repo::get_snapshot_by_id(conn, &revert.redo_snapshot_id)?
+            .map(|s| s.kind)
+            .unwrap_or_default();
+
+    Ok(Some(crate::models::snapshot::RevertInfo {
+        revert_message_id: revert.revert_message_id,
+        hidden_count,
+        snapshot_kind: redo_snapshot_kind,
+    }))
 }
 
 /// 删除会话
@@ -506,4 +556,336 @@ pub async fn list_all_branch_user_messages(
     let conn = state.db.conn()?;
     let messages = crate::db::branch_repo::list_all_branch_user_messages(&conn, &session_id)?;
     Ok(messages)
+}
+
+/// 根据会话关联的工作区 ID 解析工作区绝对路径
+/// 同步版本：使用 blocking_lock（命令在 async runtime 内，通过 block_in_place 桥接）
+fn resolve_workspace_path(
+    session_id: &str,
+    workspace_id: &str,
+    config: &std::sync::Arc<tokio::sync::Mutex<crate::config::ConfigManager>>,
+) -> Result<String, CommandError> {
+    if workspace_id.is_empty() {
+        return Err(CommandError::fs(
+            crate::errors::FS_PATH_NOT_FOUND,
+            format!("会话 '{}' 未关联工作区，无法回退代码", session_id),
+        ));
+    }
+    let cfg = tokio::task::block_in_place(|| config.blocking_lock());
+    let ws_config = cfg.load_workspaces()?;
+    ws_config
+        .workspaces
+        .iter()
+        .find(|w| w.id == workspace_id)
+        .map(|w| w.path.clone())
+        .ok_or_else(|| {
+            CommandError::fs(
+                crate::errors::FS_PATH_NOT_FOUND,
+                format!("工作区 '{workspace_id}' 不存在或已被删除",),
+            )
+        })
+}
+
+/// 获取快照备份根目录（app_data_dir/snapshots），不存在则创建
+fn snapshot_backup_base(app_handle: &AppHandle) -> Result<std::path::PathBuf, CommandError> {
+    let app_data_dir = app_handle.path().app_data_dir()?;
+    let backup_base = app_data_dir.join("snapshots");
+    std::fs::create_dir_all(&backup_base).map_err(|e| {
+        CommandError::fs(crate::errors::FS_IO_ERROR, format!("创建快照目录失败: {e}"))
+    })?;
+    Ok(backup_base)
+}
+
+/// 回退消息：将工作流回退到指定用户消息节点之前
+///
+/// 流程（staged 模式，支持 redo）：
+/// 1. 校验：Agent 未运行、目标消息存在且是 user 消息且属于当前活跃分支
+/// 2. 首次回退时创建 redo 基线快照（当前文件状态）；重复回退保留首次的 redo 基线
+/// 3. 用目标消息的快照恢复被回退范围内工具调用涉及的文件
+/// 4. 写入 session_reverts 状态（消息隐藏而非物理删除，redo 时恢复）
+#[tauri::command]
+pub async fn rollback_session_messages(
+    session_id: String,
+    message_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<crate::models::snapshot::RollbackResult, CommandError> {
+    log::info!(
+        "rollback_session_messages 请求: session_id={}, message_id={}",
+        session_id,
+        message_id
+    );
+
+    // 1. Agent 运行中拒绝
+    {
+        let active = state.active_agents.lock().await;
+        if active.contains_key(&session_id) {
+            log::warn!(
+                "rollback_session_messages 失败: 会话 '{}' 的 Agent 正在运行",
+                session_id
+            );
+            return Err(CommandError::agent(
+                crate::errors::AGENT_ALREADY_RUNNING,
+                format!("会话 '{}' 的 Agent 正在运行，无法回退消息", session_id),
+            ));
+        }
+    }
+
+    let conn = state.db.conn()?;
+    let active_branch_id = crate::db::branch_repo::get_session_active_branch(&conn, &session_id)?;
+
+    // 2. 校验目标消息：存在、属于当前活跃分支、是 user 消息
+    let (role, msg_branch, _) = message_repo::get_message(&conn, &session_id, &message_id)?
+        .ok_or_else(|| {
+            CommandError::db(
+                crate::errors::DB_RECORD_NOT_FOUND,
+                format!("消息 '{message_id}' 不存在，无法回退"),
+            )
+        })?;
+    if msg_branch != active_branch_id {
+        return Err(CommandError::db(
+            crate::errors::DB_CONSTRAINT_VIOLATION,
+            "目标消息不属于当前活跃分支，无法回退".to_string(),
+        ));
+    }
+    if role != "user" {
+        return Err(CommandError::db(
+            crate::errors::DB_CONSTRAINT_VIOLATION,
+            "只能回退用户消息节点".to_string(),
+        ));
+    }
+
+    // 3. 解析会话工作区路径与快照备份目录
+    let session = session_repo::get_session(&conn, &session_id)?;
+    let workspace_path = resolve_workspace_path(
+        &session_id,
+        session.workspace_id.as_deref().unwrap_or(""),
+        &state.config,
+    )?;
+    let backup_base = snapshot_backup_base(&app_handle)?;
+
+    // 4. 已有 staged revert：保留首次的 redo 基线快照（OpenCode 行为），仅更新边界
+    let existing_revert = crate::db::revert_repo::get_revert(&conn, &session_id)?;
+    let redo_snapshot_id = match existing_revert {
+        Some(r) => {
+            log::info!(
+                "rollback: 会话 '{}' 已有 staged revert（边界 {}），保留原 redo 基线",
+                session_id,
+                r.revert_message_id
+            );
+            r.redo_snapshot_id
+        }
+        None => {
+            // 创建 redo 基线快照（当前文件状态，用于撤销回退）
+            let (kind, snapshot_ref) =
+                crate::services::snapshot::create_snapshot(&workspace_path, &backup_base)?;
+            let redo_id = uuid::Uuid::new_v4().to_string();
+            let now = chrono::Utc::now().to_rfc3339();
+            crate::db::snapshot_repo::create_snapshot(
+                &conn,
+                &crate::models::snapshot::SnapshotRecord {
+                    id: redo_id.clone(),
+                    session_id: session_id.clone(),
+                    message_id: None,
+                    kind: kind.as_str().to_string(),
+                    snapshot_ref,
+                    workspace_path: workspace_path.clone(),
+                    created_at: now,
+                },
+            )?;
+            redo_id
+        }
+    };
+
+    // 5. 查询目标消息的快照并恢复文件
+    let target_snapshot = crate::db::snapshot_repo::get_snapshot_by_message_id(&conn, &message_id)?;
+    let (restored_file_count, code_reverted, snapshot_kind) = if let Some(snap) = target_snapshot {
+        // 提取被回退范围内消息的工具调用路径
+        let range_messages =
+            message_repo::list_messages_from(&conn, &session_id, &active_branch_id, &message_id);
+        let paths = crate::services::snapshot::collect_tool_paths(&range_messages);
+        let kind = if snap.kind == "git" {
+            crate::services::snapshot::SnapshotKind::Git
+        } else {
+            crate::services::snapshot::SnapshotKind::Files
+        };
+        let restored = crate::services::snapshot::restore_snapshot(
+            kind,
+            &snap.snapshot_ref,
+            &workspace_path,
+            &backup_base,
+            &paths,
+        )?;
+        log::info!(
+            "rollback: 恢复文件完成, session_id={}, restored={}",
+            session_id,
+            restored
+        );
+        (restored, true, Some(snap.kind.clone()))
+    } else {
+        // 无快照的旧消息：仅回退对话，代码不回退
+        log::warn!(
+            "rollback: 消息 '{}' 无快照，仅回退对话（代码未回退）",
+            message_id
+        );
+        (0, false, None)
+    };
+
+    // 6. 写入回退状态（消息 staged 隐藏）
+    crate::db::revert_repo::set_revert(
+        &conn,
+        &crate::db::revert_repo::RevertRecord {
+            session_id: session_id.clone(),
+            revert_message_id: message_id.clone(),
+            redo_snapshot_id,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        },
+    )?;
+
+    // 7. 统计被隐藏的消息数（含边界消息自身）
+    let hidden_count =
+        message_repo::count_messages_from(&conn, &session_id, &active_branch_id, &message_id);
+    log::info!(
+        "rollback_session_messages 成功: session_id={}, 边界={}, 隐藏={}, 恢复文件={}",
+        session_id,
+        message_id,
+        hidden_count,
+        restored_file_count
+    );
+
+    // 8. 发射会话更新事件，通知前端刷新工作流
+    let emitter = AgentEmitter::new(app_handle);
+    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+        session_id: session_id.clone(),
+        change_type: "updated".to_string(),
+        data: Some(serde_json::json!({ "revert": { "revertMessageId": message_id } })),
+    });
+
+    Ok(crate::models::snapshot::RollbackResult {
+        revert_message_id: message_id,
+        hidden_count,
+        restored_file_count,
+        code_reverted,
+        snapshot_kind,
+    })
+}
+
+/// 撤销回退（redo）：恢复 redo 基线快照文件并清除 revert 状态
+///
+/// 被隐藏的消息采用 staged 模式（物理仍在 DB），清除 revert 状态后自动恢复显示
+#[tauri::command]
+pub async fn redo_session_messages(
+    session_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<crate::models::snapshot::RedoResult, CommandError> {
+    log::info!("redo_session_messages 请求: session_id={}", session_id);
+
+    // 1. Agent 运行中拒绝
+    {
+        let active = state.active_agents.lock().await;
+        if active.contains_key(&session_id) {
+            log::warn!(
+                "redo_session_messages 失败: 会话 '{}' 的 Agent 正在运行",
+                session_id
+            );
+            return Err(CommandError::agent(
+                crate::errors::AGENT_ALREADY_RUNNING,
+                format!("会话 '{}' 的 Agent 正在运行，无法撤销回退", session_id),
+            ));
+        }
+    }
+
+    let conn = state.db.conn()?;
+
+    // 2. 无 revert 状态时 no-op
+    let revert = match crate::db::revert_repo::get_revert(&conn, &session_id)? {
+        Some(r) => r,
+        None => {
+            log::info!("redo: 会话 '{}' 无回退状态，忽略", session_id);
+            return Ok(crate::models::snapshot::RedoResult { hidden_count: 0 });
+        }
+    };
+    let active_branch_id = crate::db::branch_repo::get_session_active_branch(&conn, &session_id)?;
+
+    // 3. 边界属于当前活跃分支时才生效（分支切换后忽略）
+    let belongs = message_repo::get_message(&conn, &session_id, &revert.revert_message_id)?
+        .map(|(_, branch, _)| branch == active_branch_id)
+        .unwrap_or(false);
+    if !belongs {
+        log::warn!(
+            "redo: 回退边界 '{}' 不属于当前活跃分支 '{}'，忽略",
+            revert.revert_message_id,
+            active_branch_id
+        );
+        return Ok(crate::models::snapshot::RedoResult { hidden_count: 0 });
+    }
+    let hidden_count = message_repo::count_messages_from(
+        &conn,
+        &session_id,
+        &active_branch_id,
+        &revert.revert_message_id,
+    );
+
+    // 4. 解析工作区与备份目录
+    let session = session_repo::get_session(&conn, &session_id)?;
+    let workspace_path = resolve_workspace_path(
+        &session_id,
+        session.workspace_id.as_deref().unwrap_or(""),
+        &state.config,
+    )?;
+    let backup_base = snapshot_backup_base(&app_handle)?;
+
+    // 5. 用 redo 基线快照恢复文件（回退范围内工具路径）
+    if let Some(redo_snap) =
+        crate::db::snapshot_repo::get_snapshot_by_id(&conn, &revert.redo_snapshot_id)?
+    {
+        let range_messages = message_repo::list_messages_from(
+            &conn,
+            &session_id,
+            &active_branch_id,
+            &revert.revert_message_id,
+        );
+        let paths = crate::services::snapshot::collect_tool_paths(&range_messages);
+        let kind = if redo_snap.kind == "git" {
+            crate::services::snapshot::SnapshotKind::Git
+        } else {
+            crate::services::snapshot::SnapshotKind::Files
+        };
+        let restored = crate::services::snapshot::restore_snapshot(
+            kind,
+            &redo_snap.snapshot_ref,
+            &workspace_path,
+            &backup_base,
+            &paths,
+        )?;
+        log::info!(
+            "redo: 恢复文件完成, session_id={}, restored={}",
+            session_id,
+            restored
+        );
+    } else {
+        log::warn!(
+            "redo: redo 基线快照 '{}' 不存在，仅恢复对话",
+            revert.redo_snapshot_id
+        );
+    }
+
+    // 6. 清除回退状态（消息恢复显示）
+    crate::db::revert_repo::clear_revert(&conn, &session_id)?;
+    log::info!(
+        "redo_session_messages 成功: session_id={}, 恢复消息数={}",
+        session_id,
+        hidden_count
+    );
+
+    // 7. 发射会话更新事件，通知前端刷新工作流
+    let emitter = AgentEmitter::new(app_handle);
+    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+        session_id: session_id.clone(),
+        change_type: "updated".to_string(),
+        data: Some(serde_json::json!({ "redo": true })),
+    });
+
+    Ok(crate::models::snapshot::RedoResult { hidden_count })
 }

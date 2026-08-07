@@ -1337,6 +1337,90 @@
   opacity: 0.5;
 }
 
+/* 回退消息按钮：复用创建分支按钮样式，hover 颜色为 accent 提示可回退 */
+.wf-rollback-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.wf-rollback-button:hover {
+  color: var(--color-accent);
+}
+
+.wf-rollback-button:active {
+  opacity: 0.5;
+}
+
+/* 回退失败提示文字 */
+.wf-rollback-error {
+  color: var(--color-error);
+}
+
+/* 回退状态横幅：粘性显示在时间线顶部，提示已回退并可撤销 */
+.wf-revert-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 16px 8px;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  background: var(--color-warning-bg, rgba(255, 193, 7, 0.12));
+  border: 1px solid var(--color-warning, rgba(255, 193, 7, 0.4));
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.wf-revert-banner-text {
+  flex: 1;
+}
+
+.wf-revert-undo-btn {
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--color-accent);
+  background: none;
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.wf-revert-undo-btn:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.wf-revert-undo-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 快照节点提示：灰底小字，与暂停节点一致 */
+.wf-snapshot-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.wf-snapshot-kind {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
 /* 编辑模式 contentEditable div — 完全继承消息框样式，保持尺寸一致 */
 .wf-user-edit-div {
   outline: none;

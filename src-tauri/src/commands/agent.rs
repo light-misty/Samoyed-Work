@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::db::session_repo;
 use crate::db::sub_agent_message_repo;
@@ -72,6 +72,221 @@ fn provider_id_to_option(provider_id: &str) -> Option<&str> {
     }
 }
 
+/// 清理 staged revert 状态：发送新消息时物理删除被隐藏的消息、
+/// 清除回退状态并删除相关快照记录与备份目录
+fn cleanup_staged_revert(
+    db: &Arc<crate::db::Database>,
+    session_id: &str,
+    backup_base: &std::path::Path,
+) -> Result<(), CommandError> {
+    let conn = db.conn()?;
+    let active_branch_id = crate::db::branch_repo::get_session_active_branch(&conn, session_id)?;
+    let revert = match crate::db::revert_repo::get_revert(&conn, session_id)? {
+        Some(r) => r,
+        None => return Ok(()),
+    };
+    // 边界属于当前活跃分支才清理（分支切换后旧分支的 revert 忽略）
+    let belongs =
+        crate::db::message_repo::get_message(&conn, session_id, &revert.revert_message_id)?
+            .map(|(_, branch, _)| branch == active_branch_id)
+            .unwrap_or(false);
+    if !belongs {
+        return Ok(());
+    }
+    log::info!(
+        "cleanup: 物理删除隐藏消息, session_id={}, 边界={}",
+        session_id,
+        revert.revert_message_id
+    );
+    // 1. 删除隐藏消息关联的快照记录与备份
+    let hidden_messages = crate::db::message_repo::list_messages_from(
+        &conn,
+        session_id,
+        &active_branch_id,
+        &revert.revert_message_id,
+    );
+    for msg in &hidden_messages {
+        if let Some(snap) = crate::db::snapshot_repo::get_snapshot_by_message_id(&conn, &msg.id)? {
+            delete_snapshot_with_backup(&conn, &snap, backup_base)?;
+        }
+    }
+    // 2. 物理删除隐藏消息（边界及之后）
+    crate::db::message_repo::delete_messages_from(
+        &conn,
+        session_id,
+        &active_branch_id,
+        &revert.revert_message_id,
+    )?;
+    // 3. 删除 redo 基线快照记录与备份
+    if let Some(redo_snap) =
+        crate::db::snapshot_repo::get_snapshot_by_id(&conn, &revert.redo_snapshot_id)?
+    {
+        delete_snapshot_with_backup(&conn, &redo_snap, backup_base)?;
+    }
+    // 4. 清除回退状态
+    crate::db::revert_repo::clear_revert(&conn, session_id)?;
+    Ok(())
+}
+
+/// 删除快照记录及其备份目录（git 未跟踪备份 / files 备份目录）
+fn delete_snapshot_with_backup(
+    conn: &rusqlite::Connection,
+    snap: &crate::models::snapshot::SnapshotRecord,
+    backup_base: &std::path::Path,
+) -> Result<(), CommandError> {
+    let kind = if snap.kind == "git" {
+        crate::services::snapshot::SnapshotKind::Git
+    } else {
+        crate::services::snapshot::SnapshotKind::Files
+    };
+    let _ = crate::services::snapshot::delete_backup(kind, &snap.snapshot_ref, backup_base);
+    crate::db::snapshot_repo::delete_snapshots_by_ids(conn, std::slice::from_ref(&snap.id))?;
+    Ok(())
+}
+
+/// 创建代码快照（agent 工具执行前），返回 (快照 ID, 快照类型)
+/// 快照先以 message_id=NULL 存入 DB，agent 运行结束后回填关联的 user 消息 ID
+fn create_snapshot_for_session(
+    db: &Arc<crate::db::Database>,
+    session_id: &str,
+    workspace_path: &str,
+    backup_base: &std::path::Path,
+    emitter: &AgentEmitter<tauri::Wry>,
+) -> Option<(String, String)> {
+    let result = (|| -> Result<(String, String), CommandError> {
+        // 工作区不存在时跳过快照（后续回退时仅回退对话）
+        let ws = std::path::Path::new(workspace_path);
+        if !ws.exists() || !ws.is_dir() {
+            return Err(CommandError::fs(
+                crate::errors::FS_PATH_NOT_FOUND,
+                "工作区目录不存在",
+            ));
+        }
+        let (kind, snapshot_ref) =
+            crate::services::snapshot::create_snapshot(workspace_path, backup_base)?;
+        let snapshot_id = uuid::Uuid::new_v4().to_string();
+        let conn = db.conn()?;
+        crate::db::snapshot_repo::create_snapshot(
+            &conn,
+            &crate::models::snapshot::SnapshotRecord {
+                id: snapshot_id.clone(),
+                session_id: session_id.to_string(),
+                message_id: None,
+                kind: kind.as_str().to_string(),
+                snapshot_ref,
+                workspace_path: workspace_path.to_string(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )?;
+        Ok((snapshot_id, kind.as_str().to_string()))
+    })();
+    match result {
+        Ok((id, kind)) => {
+            log::info!(
+                "快照创建成功: session_id={}, snapshot_id={}, kind={}",
+                session_id,
+                id,
+                kind
+            );
+            let _ = emitter.emit_snapshot_created(types::SnapshotCreatedPayload {
+                session_id: session_id.to_string(),
+                message_id: None,
+                kind: kind.clone(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            });
+            Some((id, kind))
+        }
+        Err(e) => {
+            log::warn!(
+                "快照创建失败（回退时仅回退对话）: session_id={}, 错误: {}",
+                session_id,
+                e.message
+            );
+            None
+        }
+    }
+}
+
+/// 回填快照关联的 user 消息 ID（agent 运行结束后执行），并重新发射快照事件
+fn backfill_snapshot_message_id(
+    db: &Arc<crate::db::Database>,
+    session_id: &str,
+    snapshot_id: &str,
+    kind: &str,
+    emitter: &AgentEmitter<tauri::Wry>,
+) {
+    let conn = match db.conn() {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("回填快照失败: 获取数据库连接失败: {}", e.message);
+            return;
+        }
+    };
+    let active_branch_id =
+        match crate::db::branch_repo::get_session_active_branch(&conn, session_id) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("回填快照失败: 获取活跃分支失败: {}", e);
+                return;
+            }
+        };
+    // 该分支最新 user 消息即本次发送的消息
+    let messages = crate::db::message_repo::list_messages(&conn, session_id, &active_branch_id);
+    let message_id = match messages
+        .iter()
+        .rev()
+        .find(|m| m.role == crate::models::message::MessageRole::User)
+    {
+        Some(m) => m.id.clone(),
+        None => {
+            log::warn!("回填快照失败: 未找到 user 消息, session_id={}", session_id);
+            return;
+        }
+    };
+    if let Err(e) =
+        crate::db::snapshot_repo::update_snapshot_message_id(&conn, snapshot_id, &message_id)
+    {
+        log::warn!("回填快照失败: update_snapshot_message_id: {}", e);
+        return;
+    }
+    // 将快照信息写入 user 消息 metadata（前端刷新后恢复快照节点展示）
+    if let Some(msg) = messages.iter().find(|m| m.id == message_id) {
+        let mut metadata = msg
+            .metadata
+            .clone()
+            .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+        if let serde_json::Value::Object(map) = &mut metadata {
+            map.insert(
+                "snapshot".to_string(),
+                serde_json::json!({
+                    "kind": kind,
+                    "createdAt": chrono::Utc::now().to_rfc3339(),
+                }),
+            );
+        }
+        if let Err(e) = crate::db::message_repo::update_message_metadata(
+            &conn,
+            &message_id,
+            session_id,
+            &metadata,
+        ) {
+            log::warn!("回填快照失败: update_message_metadata: {}", e);
+            return;
+        }
+    }
+    log::info!(
+        "快照已关联消息: snapshot_id={}, message_id={}",
+        snapshot_id,
+        message_id
+    );
+    let _ = emitter.emit_snapshot_created(types::SnapshotCreatedPayload {
+        session_id: session_id.to_string(),
+        message_id: Some(message_id),
+        kind: kind.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    });
+}
+
 /// 启动 Agent 执行，在后台 spawn 一个 tokio task
 #[tauri::command]
 pub async fn start_agent(
@@ -107,6 +322,13 @@ pub async fn start_agent(
     let emitter = AgentEmitter::new(app_handle.clone());
     let sid = session_id.clone();
     let prompt_clone = prompt.clone();
+
+    // 快照备份根目录（app_data_dir/snapshots）
+    let snapshot_backup_base = app_handle
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("snapshots"))
+        .unwrap_or_default();
 
     let llm_router = Arc::clone(&state.llm_router);
     let tool_registry = Arc::clone(&state.tool_registry);
@@ -246,6 +468,19 @@ pub async fn start_agent(
             Arc::clone(&guard)
         };
 
+        // ===== 版本快照：清理 staged revert + 创建本次消息的代码快照 =====
+        // 快照状态 = 用户消息发送前、agent 工具执行前的文件状态
+        if let Err(e) = cleanup_staged_revert(&db, &sid, &snapshot_backup_base) {
+            log::warn!("清理回退状态失败: session_id={}, 错误: {}", sid, e.message);
+        }
+        let pending_snapshot = create_snapshot_for_session(
+            &db,
+            &sid,
+            &workspace_path,
+            &snapshot_backup_base,
+            &emitter,
+        );
+
         let result = run_agent(
             &sid,
             &prompt_clone,
@@ -277,6 +512,11 @@ pub async fn start_agent(
 
         if let Err(e) = &result {
             log::error!("Agent 执行失败: session_id={}, 错误: {}", sid, e.message);
+        }
+
+        // 回填快照关联的 user 消息 ID（agent 执行成功或失败后均回填）
+        if let Some((snapshot_id, kind)) = &pending_snapshot {
+            backfill_snapshot_message_id(&db, &sid, snapshot_id, kind, &emitter);
         }
 
         // 从 active_agents 中移除（如果正常执行到这里，守卫不再需要代劳）
@@ -1606,8 +1846,32 @@ async fn run_agent(
     let history_messages = {
         match db.conn() {
             Ok(conn) => {
-                let db_messages =
+                let mut db_messages =
                     crate::db::message_repo::list_messages(&conn, session_id, &active_branch_id);
+                // 防御性处理：若存在 staged revert（回退后未发送新消息即启动 agent），
+                // 隐藏消息不应进入上下文（start_agent 的 cleanup 通常会先清理，此处兜底）
+                if let Some(revert) = crate::db::revert_repo::get_revert(&conn, session_id)
+                    .ok()
+                    .flatten()
+                {
+                    let belongs = crate::db::message_repo::get_message(
+                        &conn,
+                        session_id,
+                        &revert.revert_message_id,
+                    )
+                    .ok()
+                    .flatten()
+                    .map(|(_, branch, _)| branch == active_branch_id)
+                    .unwrap_or(false);
+                    if belongs {
+                        if let Some(idx) = db_messages
+                            .iter()
+                            .position(|m| m.id == revert.revert_message_id)
+                        {
+                            db_messages.truncate(idx);
+                        }
+                    }
+                }
                 db_messages
                     .into_iter()
                     .filter_map(|m| m.to_chat_message())

@@ -134,4 +134,12 @@ impl<R: Runtime> AgentEmitter<R> {
     ) -> Result<(), CommandError> {
         self.emit_event(types::AGENT_CONTEXT_UPDATE, payload, false, false)
     }
+
+    /// 发射代码快照创建完成事件（非关键，前端用于展示快照节点）
+    pub fn emit_snapshot_created(
+        &self,
+        payload: types::SnapshotCreatedPayload,
+    ) -> Result<(), CommandError> {
+        self.emit_event(types::AGENT_SNAPSHOT_CREATED, payload, false, false)
+    }
 }

@@ -89,6 +89,17 @@ export interface StoppedPayload {
   reason: string;
 }
 
+/** 代码快照创建完成事件 */
+export interface SnapshotCreatedPayload {
+  sessionId: string;
+  /** 快照关联的用户消息 ID（先创建后回填，回填后重新发射一次） */
+  messageId?: string;
+  /** 快照类型: git / files */
+  kind: string;
+  /** 快照创建时间 */
+  createdAt: string;
+}
+
 /** Agent 网络重试事件 */
 export interface NetworkRetryPayload {
   sessionId: string;
@@ -369,6 +380,15 @@ export function onAgentStopped(
   handler: (payload: StoppedPayload) => void,
 ): Promise<UnlistenFn> {
   return listen<StoppedPayload>("agent:stopped", (event) => {
+    handler(event.payload);
+  });
+}
+
+/** 监听代码快照创建完成事件 */
+export function onAgentSnapshotCreated(
+  handler: (payload: SnapshotCreatedPayload) => void,
+): Promise<UnlistenFn> {
+  return listen<SnapshotCreatedPayload>("agent:snapshot_created", (event) => {
     handler(event.payload);
   });
 }

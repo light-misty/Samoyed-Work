@@ -14,6 +14,7 @@ import {
   onAgentNetworkRetry,
   onAgentCompactionStart,
   onAgentCompactionDone,
+  onAgentSnapshotCreated,
   onSubAgentStatus,
   onSubAgentToolCall,
   onSubAgentThinking,
@@ -32,7 +33,7 @@ import i18n from "../i18n";
 import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
 import { useAgentModeStore } from "../stores/useAgentModeStore";
-import type { NodeStatus, SubAgentNodeData } from "../types";
+import type { NodeStatus, SubAgentNodeData, WorkflowNode } from "../types";
 
 export interface UseAgentReturn {
   isLoading: boolean;
@@ -364,6 +365,50 @@ export function useAgent(): UseAgentReturn {
             }, isFailed ? "failed" : "completed");
           }
         }),
+        onAgentSnapshotCreated((payload) => {
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "snapshot_created",
+              messageId: payload.messageId,
+              kind: payload.kind,
+              createdAt: payload.createdAt,
+            });
+            return;
+          }
+          // 当前会话：快照节点插入到对应 user 节点之后（回填后 messageId 已匹配），找不到则追加末尾
+          const { nodes } = useWorkflowStore.getState();
+          let lastUserIdx = -1;
+          if (payload.messageId) {
+            lastUserIdx = nodes.findIndex(
+              (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === payload.messageId
+            );
+          }
+          if (lastUserIdx === -1) {
+            // 未匹配到消息：插入到最新 user 节点之后
+            for (let i = nodes.length - 1; i >= 0; i--) {
+              if (nodes[i].type === "user") {
+                lastUserIdx = i;
+                break;
+              }
+            }
+          }
+          const snapshotNode: WorkflowNode<"snapshot"> = {
+            id: `snapshot_${Date.now()}`,
+            type: "snapshot",
+            status: "completed",
+            timestamp: new Date(payload.createdAt).getTime(),
+            data: { kind: payload.kind },
+            isExpanded: true,
+          };
+          const next = [...nodes];
+          if (lastUserIdx >= 0) {
+            next.splice(lastUserIdx + 1, 0, snapshotNode);
+          } else {
+            next.push(snapshotNode);
+          }
+          useWorkflowStore.setState({ nodes: next });
+        }),
         onSubAgentStatus((payload) => {
           // 后台会话：路由到缓存
           if (payload.parentSessionId !== sessionIdRef.current) {
@@ -549,6 +594,8 @@ export function useAgent(): UseAgentReturn {
       thinkingNodeIdRef.current = null;
       currentIterationRef.current = undefined;
       lastClosedStreamingNodeIdRef.current = null;
+      // 新消息发送后后端将清理 staged revert，同步清除前端回退状态（横幅消失）
+      useWorkflowStore.getState().setRevertInfo(null);
 
       // 从附件 store 获取当前待发送的附件
       const currentAttachments = useAttachmentStore.getState().attachments;

@@ -169,7 +169,8 @@ export const useSessionStore = create<SessionState>((set) => ({
       useWorkflowStore.getState().loadFromMessages(
         detail.messages,
         branchGroups,
-        detail.activeBranchId
+        detail.activeBranchId,
+        detail.revert ?? null
       );
       // 5. 重新加载上下文窗口使用信息
       useWorkflowStore.getState().loadContextUsage(sessionId);

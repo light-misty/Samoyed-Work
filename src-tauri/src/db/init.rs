@@ -167,6 +167,31 @@ fn create_tables(conn: &Connection) -> Result<(), CommandError> {
         );",
     )?;
 
+    // session_snapshots 文件快照表（版本快照/回退功能）
+    // 每次用户发送消息时记录一次工作区文件状态，用于回退时恢复代码
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS session_snapshots (
+            id             TEXT        NOT NULL PRIMARY KEY,
+            session_id     TEXT        NOT NULL,
+            message_id     TEXT        DEFAULT NULL,
+            kind           TEXT        NOT NULL,
+            snapshot_ref   TEXT        NOT NULL,
+            workspace_path TEXT        NOT NULL,
+            created_at     TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );",
+    )?;
+
+    // session_reverts 回退状态表（staged 回退，支持撤销回退/redo）
+    // revert_message_id 为回退边界：该消息及之后的消息被隐藏
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS session_reverts (
+            session_id        TEXT        NOT NULL PRIMARY KEY,
+            revert_message_id TEXT        NOT NULL,
+            redo_snapshot_id  TEXT        NOT NULL,
+            created_at        TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );",
+    )?;
+
     // 迁移：为已有数据库的 session_messages 表添加 metadata 字段（新字段已存在时忽略错误）
     let _ = conn.execute(
         "ALTER TABLE session_messages ADD COLUMN metadata TEXT DEFAULT NULL",
@@ -290,6 +315,16 @@ fn create_indexes(conn: &Connection) -> Result<(), CommandError> {
     )?;
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_message_branches_branch_group_id ON message_branches (branch_group_id)",
+        [],
+    )?;
+
+    // 快照相关索引
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_snapshots_session_id ON session_snapshots (session_id)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_snapshots_message_id ON session_snapshots (message_id)",
         [],
     )?;
 

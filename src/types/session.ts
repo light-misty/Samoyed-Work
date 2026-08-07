@@ -93,6 +93,38 @@ export interface SessionDetail {
   branches: Branch[];
   /** 当前活跃分支 ID */
   activeBranchId: string;
+  /** 回退状态（存在 staged revert 时返回） */
+  revert?: RevertInfo;
+}
+
+/** 回退状态信息（用于显示"已回退"横幅） */
+export interface RevertInfo {
+  /** 回退边界消息 ID（该消息及之后被隐藏） */
+  revertMessageId: string;
+  /** 被隐藏的消息数量 */
+  hiddenCount: number;
+  /** redo 基线快照类型: git / files */
+  snapshotKind: string;
+}
+
+/** 回退命令返回结果 */
+export interface RollbackResult {
+  /** 回退边界消息 ID */
+  revertMessageId: string;
+  /** 被隐藏的消息数量 */
+  hiddenCount: number;
+  /** 恢复的文件数量 */
+  restoredFileCount: number;
+  /** 代码是否已回退（目标消息无快照时为 false，仅回退对话） */
+  codeReverted: boolean;
+  /** 快照类型: git / files（无快照时为 undefined） */
+  snapshotKind?: string;
+}
+
+/** 撤销回退（redo）命令返回结果 */
+export interface RedoResult {
+  /** 恢复显示的消息数量 */
+  hiddenCount: number;
 }
 
 export interface Message {
