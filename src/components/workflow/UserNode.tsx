@@ -458,7 +458,7 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
                 onClick={() => setShowRollbackConfirm(true)}
                 title={t('workflow.rollbackMessage')}
               >
-                <Icon name="history" size={12} />
+                <Icon name="undo" size={12} />
               </button>
             )}
             {!isAgentRunning && (
@@ -536,7 +536,7 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
           <div className="wf-del-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="wf-del-header">
               <span className="wf-del-icon">
-                <Icon name="history" size={18} />
+                <Icon name="undo" size={18} />
               </span>
               <span className="wf-del-title">{t('workflow.rollbackConfirmTitle')}</span>
             </div>

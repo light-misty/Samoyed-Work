@@ -716,9 +716,6 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         .input-container:focus-within {
           border-color: color-mix(in srgb, var(--color-border-strong), black 10%);
         }
-        .input-container.has-content:focus-within {
-          border-color: var(--color-accent);
-        }
         .input-container.drag-over {
           border-color: var(--color-accent);
           background: var(--color-accent-light);
