@@ -64,6 +64,7 @@ Download the latest Windows installer from [Releases](https://github.com/light-m
 - Auto-generated session titles
 - Session todo tasks
 - Session list pagination for large history
+- Version snapshot and message rollback: automatic file snapshots before each message, rollback to any historical message node (with code files restored), undo rollback supported, auto-cleanup of session on full rollback
 
 ### Prompt Templates
 - Built-in templates for common tasks
