@@ -53,6 +53,8 @@ pub struct RollbackResult {
     /// 快照类型：git / files（无快照时为 None）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot_kind: Option<String>,
+    /// 回退后会话已无任何消息，整个会话被删除（前端需清理本地状态）
+    pub session_deleted: bool,
 }
 
 /// 撤销回退（redo）命令返回结果
@@ -76,6 +78,7 @@ mod tests {
             restored_file_count: 2,
             code_reverted: true,
             snapshot_kind: Some("git".to_string()),
+            session_deleted: false,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["revertMessageId"], "msg_2");
@@ -83,6 +86,7 @@ mod tests {
         assert_eq!(json["restoredFileCount"], 2);
         assert_eq!(json["codeReverted"], true);
         assert_eq!(json["snapshotKind"], "git");
+        assert_eq!(json["sessionDeleted"], false);
     }
 
     /// 测试无快照时 codeReverted=false、snapshotKind=None 被跳过
@@ -94,10 +98,12 @@ mod tests {
             restored_file_count: 0,
             code_reverted: false,
             snapshot_kind: None,
+            session_deleted: false,
         };
         let json = serde_json::to_value(&result).unwrap();
         assert_eq!(json["codeReverted"], false);
         assert!(json.get("snapshotKind").is_none());
+        assert_eq!(json["sessionDeleted"], false);
     }
 
     /// 测试 RevertInfo 序列化

@@ -1637,26 +1637,58 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         break;
       }
       case "snapshot_created": {
-        // 快照节点：优先插入到 messageId 对应的 user 节点之后，找不到则追加末尾
-        const snapshotNode: WorkflowNode<"snapshot"> = {
-          id: `bg_node_${++bgNodeCounter}`,
-          type: "snapshot",
-          status: "completed",
-          timestamp: new Date(event.createdAt).getTime(),
-          data: { kind: event.kind },
-          isExpanded: true,
-        };
-        let inserted = false;
+        // 快照节点：优先插入到 messageId 对应的 user 节点之后，找不到则追加末尾。
+        // 去重：快照创建与消息回填各发射一次事件，重复事件时复用已插入的快照节点
+        let lastUserIdx = -1;
         if (event.messageId) {
-          const idx = nodes.findIndex(
+          lastUserIdx = nodes.findIndex(
             (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === event.messageId
           );
-          if (idx >= 0) {
-            nodes.splice(idx + 1, 0, snapshotNode);
-            inserted = true;
+        }
+        if (lastUserIdx === -1) {
+          for (let i = nodes.length - 1; i >= 0; i--) {
+            if (nodes[i].type === "user") {
+              lastUserIdx = i;
+              break;
+            }
           }
         }
-        if (!inserted) nodes.push(snapshotNode);
+        const snapshotData = { kind: event.kind, createdAt: event.createdAt };
+        const snapshotTime = new Date(event.createdAt).getTime();
+        const snapshotNode = () =>
+          ({
+            id: `bg_node_${++bgNodeCounter}`,
+            type: "snapshot",
+            status: "completed",
+            timestamp: snapshotTime,
+            data: snapshotData,
+            isExpanded: true,
+          }) as WorkflowNode<"snapshot">;
+        if (lastUserIdx >= 0) {
+          const following = nodes[lastUserIdx + 1];
+          if (following?.type === "snapshot") {
+            following.data = {
+              ...(following.data as { kind: string; createdAt?: string }),
+              kind: event.kind,
+              createdAt: event.createdAt,
+            };
+            following.timestamp = snapshotTime;
+          } else {
+            nodes.splice(lastUserIdx + 1, 0, snapshotNode());
+          }
+        } else {
+          const last = nodes[nodes.length - 1];
+          if (last?.type === "snapshot") {
+            last.data = {
+              ...(last.data as { kind: string; createdAt?: string }),
+              kind: event.kind,
+              createdAt: event.createdAt,
+            };
+            last.timestamp = snapshotTime;
+          } else {
+            nodes.push(snapshotNode());
+          }
+        }
         break;
       }
     }

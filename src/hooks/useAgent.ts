@@ -393,19 +393,41 @@ export function useAgent(): UseAgentReturn {
               }
             }
           }
-          const snapshotNode: WorkflowNode<"snapshot"> = {
-            id: `snapshot_${Date.now()}`,
-            type: "snapshot",
-            status: "completed",
-            timestamp: new Date(payload.createdAt).getTime(),
-            data: { kind: payload.kind },
-            isExpanded: true,
-          };
           const next = [...nodes];
+          const insertAt = (idx: number, node: WorkflowNode<"snapshot">) => {
+            next.splice(idx, 0, node);
+          };
           if (lastUserIdx >= 0) {
-            next.splice(lastUserIdx + 1, 0, snapshotNode);
+            // 去重：目标 user 节点后紧邻的第一个节点已是快照节点时，复用更新
+            // （快照创建与消息回填各发射一次事件，实时 user 节点无 messageId 时会重复插入）
+            const following = next[lastUserIdx + 1];
+            if (following?.type === "snapshot") {
+              following.data = {
+                ...(following.data as { kind: string; createdAt?: string }),
+                kind: payload.kind,
+                createdAt: payload.createdAt,
+              };
+              following.timestamp = new Date(payload.createdAt).getTime();
+              useWorkflowStore.setState({ nodes: next });
+              return;
+            }
+            insertAt(lastUserIdx + 1, {
+              id: `snapshot_${Date.now()}`,
+              type: "snapshot",
+              status: "completed",
+              timestamp: new Date(payload.createdAt).getTime(),
+              data: { kind: payload.kind, createdAt: payload.createdAt },
+              isExpanded: true,
+            });
           } else {
-            next.push(snapshotNode);
+            next.push({
+              id: `snapshot_${Date.now()}`,
+              type: "snapshot",
+              status: "completed",
+              timestamp: new Date(payload.createdAt).getTime(),
+              data: { kind: payload.kind, createdAt: payload.createdAt },
+              isExpanded: true,
+            });
           }
           useWorkflowStore.setState({ nodes: next });
         }),

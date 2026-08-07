@@ -294,21 +294,33 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
 
     setRollbacking(true);
     try {
-      await tauriCmd.rollbackSessionMessages(sessionId, messageId);
+      const result = await tauriCmd.rollbackSessionMessages(sessionId, messageId);
 
-      // 刷新工作流：重新加载当前活跃分支的消息（后端已截断到回退边界）与回退状态
-      const [branchGroups, detail] = await Promise.all([
-        tauriCmd.listBranchGroups(sessionId),
-        tauriCmd.getSession(sessionId),
-      ]);
-      useWorkflowStore.getState().loadFromMessages(
-        detail.messages,
-        branchGroups,
-        detail.activeBranchId,
-        detail.revert ?? null,
-      );
-      // 清空 workflow 缓存，避免旧节点残留
-      useWorkflowStore.getState().clearSessionCache(sessionId);
+      if (result.sessionDeleted) {
+        // 回退到首条消息且无其他分支消息：后端已删除整个会话（含快照备份），
+        // 这里同步清理本地状态（会话列表 + 当前会话 + 工作流节点/缓存）
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.filter((s) => s.id !== sessionId),
+          currentSessionId: null,
+        }));
+        useWorkflowStore.getState().clearNodes();
+        useWorkflowStore.getState().clearSessionCache(sessionId);
+        useWorkflowStore.getState().setRevertInfo(null);
+      } else {
+        // 刷新工作流：重新加载当前活跃分支的消息（后端已截断到回退边界）与回退状态
+        const [branchGroups, detail] = await Promise.all([
+          tauriCmd.listBranchGroups(sessionId),
+          tauriCmd.getSession(sessionId),
+        ]);
+        useWorkflowStore.getState().loadFromMessages(
+          detail.messages,
+          branchGroups,
+          detail.activeBranchId,
+          detail.revert ?? null,
+        );
+        // 清空 workflow 缓存，避免旧节点残留
+        useWorkflowStore.getState().clearSessionCache(sessionId);
+      }
 
       // 回填输入框：该用户消息文字（复用模板插入机制，替换输入框内容并聚焦）
       useSettingsStore.getState().setPendingInsertTemplate(data.content);

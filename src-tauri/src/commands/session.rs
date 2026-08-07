@@ -731,35 +731,58 @@ pub async fn rollback_session_messages(
         (0, false, None)
     };
 
-    // 6. 写入回退状态（消息 staged 隐藏）
-    crate::db::revert_repo::set_revert(
-        &conn,
-        &crate::db::revert_repo::RevertRecord {
-            session_id: session_id.clone(),
-            revert_message_id: message_id.clone(),
-            redo_snapshot_id,
-            created_at: chrono::Utc::now().to_rfc3339(),
-        },
-    )?;
-
-    // 7. 统计被隐藏的消息数（含边界消息自身）
+    // 6. 统计被隐藏的消息数（含边界消息自身）
     let hidden_count =
         message_repo::count_messages_from(&conn, &session_id, &active_branch_id, &message_id);
+
+    // 7. 回退后会话是否已无任何消息（边界为首条消息且无其他分支消息）
+    // 此时整个会话失去意义（文件已恢复），删除会话并清理所有快照备份（含 redo 基线）
+    let all_messages = message_repo::count_session_messages(&conn, &session_id);
+    let session_deleted = if hidden_count >= all_messages {
+        for snap in crate::db::snapshot_repo::list_snapshots_by_session(&conn, &session_id)? {
+            let kind = if snap.kind == "git" {
+                crate::services::snapshot::SnapshotKind::Git
+            } else {
+                crate::services::snapshot::SnapshotKind::Files
+            };
+            let _ =
+                crate::services::snapshot::delete_backup(kind, &snap.snapshot_ref, &backup_base);
+        }
+        crate::db::session_repo::delete_session(&conn, &session_id)?;
+        log::info!(
+            "rollback: 会话 '{}' 回退后已无任何消息，删除整个会话",
+            session_id
+        );
+        true
+    } else {
+        // 8. 写入回退状态（消息 staged 隐藏）
+        crate::db::revert_repo::set_revert(
+            &conn,
+            &crate::db::revert_repo::RevertRecord {
+                session_id: session_id.clone(),
+                revert_message_id: message_id.clone(),
+                redo_snapshot_id,
+                created_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )?;
+
+        // 9. 发射会话更新事件，通知前端刷新工作流
+        let emitter = AgentEmitter::new(app_handle);
+        let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
+            session_id: session_id.clone(),
+            change_type: "updated".to_string(),
+            data: Some(serde_json::json!({ "revert": { "revertMessageId": message_id } })),
+        });
+        false
+    };
     log::info!(
-        "rollback_session_messages 成功: session_id={}, 边界={}, 隐藏={}, 恢复文件={}",
+        "rollback_session_messages 成功: session_id={}, 边界={}, 隐藏={}, 恢复文件={}, 删除会话={}",
         session_id,
         message_id,
         hidden_count,
-        restored_file_count
+        restored_file_count,
+        session_deleted
     );
-
-    // 8. 发射会话更新事件，通知前端刷新工作流
-    let emitter = AgentEmitter::new(app_handle);
-    let _ = emitter.emit_session_updated(types::SessionUpdatePayload {
-        session_id: session_id.clone(),
-        change_type: "updated".to_string(),
-        data: Some(serde_json::json!({ "revert": { "revertMessageId": message_id } })),
-    });
 
     Ok(crate::models::snapshot::RollbackResult {
         revert_message_id: message_id,
@@ -767,6 +790,7 @@ pub async fn rollback_session_messages(
         restored_file_count,
         code_reverted,
         snapshot_kind,
+        session_deleted,
     })
 }
 

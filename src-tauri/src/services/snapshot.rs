@@ -93,7 +93,7 @@ pub fn create_snapshot(
     let workspace = Path::new(workspace_path);
     if is_git_repo(workspace) {
         match create_git_snapshot(workspace, backup_base_dir) {
-            Ok(sha) => return Ok((SnapshotKind::Git, sha)),
+            Ok(snapshot_ref) => return Ok((SnapshotKind::Git, snapshot_ref)),
             Err(_) => {
                 // 降级：git 快照失败时使用文件备份
                 log::warn!(
@@ -109,7 +109,10 @@ pub fn create_snapshot(
 
 /// 创建 git 快照：
 /// 1. `git stash create` 捕获已跟踪修改（空输出表示无修改，回退到 HEAD）
-/// 2. 未跟踪文件复制备份到 `{backup_base}/git_{sha}/`
+/// 2. 未跟踪文件复制备份到 `{backup_base}/git_{sha}_{uuid}/`
+///
+/// 返回快照引用字符串：`{sha}:{备份目录名}`（备份目录按快照唯一，避免同 SHA 的
+/// 多个快照共享目录导致未跟踪文件备份互相污染）
 fn create_git_snapshot(workspace: &Path, backup_base_dir: &Path) -> Result<String, CommandError> {
     // 1. 收集未跟踪文件（?? 行）
     let untracked = list_untracked_files(workspace)?;
@@ -147,12 +150,14 @@ fn create_git_snapshot(workspace: &Path, backup_base_dir: &Path) -> Result<Strin
     } else {
         sha
     };
-    // 3. 备份未跟踪文件（快照中不包含它们，需单独复制）
+    // 3. 备份未跟踪文件（快照中不包含它们，需单独复制）。
+    //    备份目录名按快照唯一：git_{sha}_{uuid}，同一工作区的多个快照互不污染
+    let dir_name = format!("git_{sha}_{}", uuid::Uuid::new_v4());
     if !untracked.is_empty() {
-        let backup_dir = backup_base_dir.join(format!("git_{sha}"));
+        let backup_dir = backup_base_dir.join(&dir_name);
         copy_paths(workspace, &backup_dir, &untracked)?;
     }
-    Ok(sha)
+    Ok(format!("{sha}:{dir_name}"))
 }
 
 /// 列出工作区中所有未跟踪文件（非黑名单）
@@ -279,11 +284,12 @@ pub fn restore_snapshot(
 /// 恢复 git 快照
 fn restore_git_snapshot(
     workspace: &Path,
-    sha: &str,
+    snapshot_ref: &str,
     backup_base_dir: &Path,
     paths: &[String],
 ) -> Result<usize, CommandError> {
-    let backup_dir = backup_base_dir.join(format!("git_{sha}"));
+    let (sha, dir_name) = parse_git_ref(snapshot_ref);
+    let backup_dir = backup_base_dir.join(dir_name);
     let mut restored = 0usize;
     for rel in paths {
         let rel = normalize_path(rel);
@@ -291,8 +297,8 @@ fn restore_git_snapshot(
             CommandError::fs(crate::errors::FS_IO_ERROR, format!("非法恢复路径: {rel}"))
         })?;
         // 1. 快照中已跟踪该文件 -> git show 写回
-        if file_exists_in_git(workspace, sha, &rel) {
-            let content = git_show_file(workspace, sha, &rel)?;
+        if file_exists_in_git(workspace, &sha, &rel) {
+            let content = git_show_file(workspace, &sha, &rel)?;
             if let Some(parent) = ws_file.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
                     CommandError::fs(crate::errors::FS_IO_ERROR, format!("创建目录失败: {e}"))
@@ -392,6 +398,14 @@ fn restore_files_snapshot(
     Ok(restored)
 }
 
+/// 解析 git 快照引用：新格式 `{sha}:{备份目录名}`；旧格式（纯 SHA）时备份目录为 `git_{sha}`
+fn parse_git_ref(snapshot_ref: &str) -> (String, String) {
+    match snapshot_ref.split_once(':') {
+        Some((sha, dir_name)) => (sha.to_string(), dir_name.to_string()),
+        None => (snapshot_ref.to_string(), format!("git_{snapshot_ref}")),
+    }
+}
+
 /// 删除快照的备份产物（git 未跟踪备份目录 / files 备份目录）
 pub fn delete_backup(
     kind: SnapshotKind,
@@ -399,7 +413,10 @@ pub fn delete_backup(
     backup_base_dir: &Path,
 ) -> Result<(), CommandError> {
     let dir = match kind {
-        SnapshotKind::Git => backup_base_dir.join(format!("git_{snapshot_ref}")),
+        SnapshotKind::Git => {
+            let (_, dir_name) = parse_git_ref(snapshot_ref);
+            backup_base_dir.join(dir_name)
+        }
         SnapshotKind::Files => PathBuf::from(snapshot_ref),
     };
     if dir.exists() {
@@ -440,7 +457,7 @@ fn collect_call_paths(call: &ToolCall, out: &mut Vec<String>) {
         }
     };
     match call.name.as_str() {
-        "write" | "edit" | "remove" => push("path"),
+        "write" | "edit" | "remove" | "mkdir" | "remove_dir" => push("path"),
         "rename" | "copy" => {
             push("source_path");
             push("target_path");
@@ -650,7 +667,7 @@ mod tests {
         assert!(out.status.success());
 
         let backup_base = tmp.path().join("backups");
-        let (kind, sha) = create_snapshot(&ws.to_string_lossy(), &backup_base).unwrap();
+        let (kind, snapshot_ref) = create_snapshot(&ws.to_string_lossy(), &backup_base).unwrap();
         assert_eq!(kind, SnapshotKind::Git);
 
         // 修改已跟踪文件 + 新建未跟踪文件
@@ -659,7 +676,7 @@ mod tests {
 
         let restored = restore_snapshot(
             kind,
-            &sha,
+            &snapshot_ref,
             &ws.to_string_lossy(),
             &backup_base,
             &["a.txt".to_string(), "new.txt".to_string()],
@@ -668,7 +685,7 @@ mod tests {
         assert_eq!(restored, 2);
         // 已跟踪文件恢复
         assert_eq!(std::fs::read_to_string(ws.join("a.txt")).unwrap(), "v1");
-        // 新建未跟踪文件被删除（依赖 git_{sha} 备份目录存在与否：
+        // 新建未跟踪文件被删除（依赖备份目录存在与否：
         // 若快照创建时文件已存在则从备份恢复——此处 new.txt 是快照后新建，
         // 备份中不存在，应删除）
         assert!(!ws.join("new.txt").exists());
@@ -680,9 +697,10 @@ mod tests {
             .unwrap();
         assert!(String::from_utf8_lossy(&out.stdout).trim().is_empty());
 
-        // 删除备份
-        delete_backup(kind, &sha, &backup_base).unwrap();
-        assert!(!backup_base.join(format!("git_{sha}")).exists());
+        // 删除备份（备份目录名按快照唯一，含 sha 与随机后缀）
+        let (_, dir_name) = parse_git_ref(&snapshot_ref);
+        delete_backup(kind, &snapshot_ref, &backup_base).unwrap();
+        assert!(!backup_base.join(dir_name).exists());
     }
 
     #[test]
@@ -723,7 +741,7 @@ mod tests {
         std::fs::write(ws.join("draft.txt"), "draft-v1").unwrap();
 
         let backup_base = tmp.path().join("backups");
-        let (kind, sha) = create_snapshot(&ws.to_string_lossy(), &backup_base).unwrap();
+        let (kind, snapshot_ref) = create_snapshot(&ws.to_string_lossy(), &backup_base).unwrap();
         assert_eq!(kind, SnapshotKind::Git);
 
         // agent 修改了该未跟踪文件
@@ -731,7 +749,7 @@ mod tests {
 
         let restored = restore_snapshot(
             kind,
-            &sha,
+            &snapshot_ref,
             &ws.to_string_lossy(),
             &backup_base,
             &["draft.txt".to_string()],

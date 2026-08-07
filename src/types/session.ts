@@ -119,6 +119,8 @@ export interface RollbackResult {
   codeReverted: boolean;
   /** 快照类型: git / files（无快照时为 undefined） */
   snapshotKind?: string;
+  /** 回退后会话已无任何消息，整个会话被删除（前端需清理本地状态） */
+  sessionDeleted: boolean;
 }
 
 /** 撤销回退（redo）命令返回结果 */

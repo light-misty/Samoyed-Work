@@ -322,8 +322,15 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
   // 模板插入回调
   const handleTemplateInsert = useCallback((templateText: string) => {
     setText(templateText);
-    // 聚焦输入框（保存定时器，组件卸载时清理）
-    templateFocusTimerRef.current = setTimeout(() => textareaRef.current?.focus(), 50);
+    // 聚焦输入框并将光标移到末尾（避免空值→有值时光标停留在开头）
+    templateFocusTimerRef.current = setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    }, 50);
     // 调整高度（保存定时器，组件卸载时清理）
     templateHeightTimerRef.current = setTimeout(adjustTextareaHeight, 60);
   }, []);
@@ -709,7 +716,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
         .input-container:focus-within {
           border-color: color-mix(in srgb, var(--color-border-strong), black 10%);
         }
-        .input-container.has-content {
+        .input-container.has-content:focus-within {
           border-color: var(--color-accent);
         }
         .input-container.drag-over {

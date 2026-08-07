@@ -633,6 +633,16 @@ pub fn list_messages_from(
     result
 }
 
+/// 统计会话全部分支的消息总数（回退时判断是否需要删除整个会话）
+pub fn count_session_messages(conn: &Connection, session_id: &str) -> usize {
+    conn.query_row(
+        "SELECT COUNT(*) FROM session_messages WHERE session_id = ?1",
+        rusqlite::params![session_id],
+        |row| row.get(0),
+    )
+    .unwrap_or(0)
+}
+
 /// 统计指定消息（含）及其后的消息数量（回退时计算隐藏消息数）
 pub fn count_messages_from(
     conn: &Connection,
