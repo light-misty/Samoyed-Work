@@ -8,7 +8,7 @@ export type IconName =
   | "file" | "doc" | "xlsx" | "ppt" | "pdf" | "folder"
   | "search" | "close" | "warning" | "check" | "check-circle" | "dot"
   | "code" | "menu" | "minimize" | "maximize" | "unmaximize"
-  | "refresh" | "edit" | "trash" | "stop" | "stop-circle" | "back"
+  | "refresh" | "edit" | "trash" | "stop" | "stop-circle" | "back" | "undo"
   | "copy" | "eye" | "folder-plus" | "file-plus" | "external-link"
   | "chart" | "git-branch"
   | "theme" | "moon" | "keyboard" | "slash" | "info" | "image" | "book" | "more-vertical"
@@ -95,6 +95,13 @@ const paths: Record<IconName, React.JSX.Element> = {
     <g key="history">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </g>
+  ),
+  // 撤销（回旋箭头：上下横线等长，右半侧为 180 度圆弧，箭头位于上方线的左端，整体上下对称）
+  undo: (
+    <g key="undo">
+      <path d="M5.5 9h7.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H5.5" />
+      <polyline points="8.5 5.5 5.5 9 8.5 12.5" />
     </g>
   ),
   // 加号

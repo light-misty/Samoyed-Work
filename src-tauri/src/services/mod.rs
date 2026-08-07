@@ -10,5 +10,6 @@ pub mod lsp;
 pub mod network_monitor;
 pub mod permission;
 pub mod skill;
+pub mod snapshot;
 pub mod tool;
 pub mod web;

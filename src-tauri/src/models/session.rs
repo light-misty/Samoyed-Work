@@ -64,4 +64,7 @@ pub struct SessionDetail {
     pub branches: Vec<crate::models::Branch>,
     /// 当前活跃分支 ID
     pub active_branch_id: String,
+    /// 回退状态（存在 staged revert 时返回，否则不序列化）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revert: Option<crate::models::snapshot::RevertInfo>,
 }

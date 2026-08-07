@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData, ToolNodeData, ThinkingNodeData, ContentNodeData } from "../types";
-import type { Message, BranchGroupInfo } from "../types/session";
+import type { WorkflowNode, WorkflowNodeType, NodeStatus, ExecutionStatus, NodeDataMap, SubAgentNodeData, UserNodeData, ToolNodeData, ThinkingNodeData, ContentNodeData, SnapshotNodeData } from "../types";
+import type { Message, BranchGroupInfo, RevertInfo } from "../types/session";
 import type { ContextUsageInfo } from "../types/settings";
 
 import { extractToolPath } from "../utils/format";
@@ -15,6 +15,47 @@ function getWorkspaceRoot(): string {
   const { workspaces, currentWorkspaceId } = useWorkspaceStore.getState();
   const ws = workspaces.find((w) => w.id === currentWorkspaceId);
   return ws?.path || '';
+}
+
+/** 将快照节点合并/插入到节点列表，返回新列表。
+ * 去重：目标 user 节点之后已存在快照节点时复用更新（快照创建与消息回填各发射一次事件，
+ * 实时 user 节点无 messageId 时会重复插入）；未匹配到 user 节点时插入到列表末尾。
+ */
+export function applySnapshotNode(
+  nodes: WorkflowNode[],
+  payload: { messageId?: string; kind: string; createdAt: string },
+  makeNode: () => WorkflowNode<"snapshot">,
+): WorkflowNode[] {
+  const next = [...nodes];
+  let lastUserIdx = -1;
+  if (payload.messageId) {
+    lastUserIdx = next.findIndex(
+      (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === payload.messageId,
+    );
+  }
+  if (lastUserIdx === -1) {
+    for (let i = next.length - 1; i >= 0; i--) {
+      if (next[i].type === "user") {
+        lastUserIdx = i;
+        break;
+      }
+    }
+  }
+  const snapshotTime = new Date(payload.createdAt).getTime();
+  const updateExisting = (target: WorkflowNode) => {
+    target.data = { ...(target.data as { kind: string }), kind: payload.kind };
+    target.timestamp = snapshotTime;
+  };
+  if (lastUserIdx >= 0) {
+    const following = next[lastUserIdx + 1];
+    if (following?.type === "snapshot") updateExisting(following);
+    else next.splice(lastUserIdx + 1, 0, makeNode());
+  } else {
+    const last = next[next.length - 1];
+    if (last?.type === "snapshot") updateExisting(last);
+    else next.push(makeNode());
+  }
+  return next;
 }
 
 /** 按会话缓存的状态条目，切换会话时保存/恢复 */
@@ -49,6 +90,8 @@ export interface SessionCacheEntry {
   lastAccessedAt: number;
   /** 分支组列表快照，restore 时恢复 */
   branchGroups: BranchGroupInfo[];
+  /** 回退状态（staged revert），restore 时恢复 */
+  revertInfo: RevertInfo | null;
 }
 
 /** 缓存上限：最多保留 20 个会话的缓存 */
@@ -79,7 +122,8 @@ export type BackgroundAgentEvent =
   | { type: "compaction_done"; tokensBefore: number; tokensAfter: number; compacted: boolean; error?: string }
   | { type: "sub_agent_status"; agentId: string; status: string; message?: string; iteration: number; taskDescription: string }
   | { type: "sub_agent_tool_call"; agentId: string; toolName: string; arguments: Record<string, unknown>; iteration: number }
-  | { type: "question"; questionId: string; questions: QuestionItem[] };
+  | { type: "question"; questionId: string; questions: QuestionItem[] }
+  | { type: "snapshot_created"; messageId?: string; kind: string; createdAt: string };
 
 /** addToolNodeFromEvent 方法的返回结果 */
 export interface AddToolNodeEventResult {
@@ -125,6 +169,8 @@ interface WorkflowState {
   activeBranchId: string;
   /** 创建分支后待发送的消息（由 UserNode 设置，App.tsx 监听消费） */
   pendingBranchSend: { content: string; branchGroupId: string } | null;
+  /** 回退状态信息（存在 staged revert 时非空，用于展示"已回退"横幅） */
+  revertInfo: RevertInfo | null;
 
   /** 右侧边栏是否可见 */
   rightSidebarVisible: boolean;
@@ -156,7 +202,7 @@ interface WorkflowState {
   setConfirmHandler: (handler: ((approved: boolean, feedback?: string) => Promise<void>) | null) => void;
   /** 设置权限审批回调（与 setConfirmHandler 并存，permissionHandler 优先） */
   setPermissionHandler: (handler: ((response: 'once' | 'reject', feedback?: string) => Promise<void>) | null) => void;
-  loadFromMessages: (messages: Message[], branchGroups: BranchGroupInfo[], activeBranchId: string) => void;
+  loadFromMessages: (messages: Message[], branchGroups: BranchGroupInfo[], activeBranchId: string, revertInfo?: RevertInfo | null) => void;
   /** 设置当前查看的子 Agent ID */
   setCurrentSubAgentId: (agentId: string | null) => void;
   /** 将子 Agent 消息转换为工作流节点，设置 subAgentNodes */
@@ -175,6 +221,8 @@ interface WorkflowState {
   initContextUsageListener: () => Promise<() => void>;
   /** 从后端加载指定会话的上下文窗口使用信息 */
   loadContextUsage: (sessionId: string) => Promise<void>;
+  /** 从后端重新加载会话消息/分支组/回退状态生成工作流节点，并清除该会话缓存 */
+  reloadFromServer: (sessionId: string) => Promise<void>;
   /** 清除上下文窗口使用信息（新会话/切换会话时调用） */
   clearContextUsage: () => void;
   /** 将当前状态保存到指定会话的缓存 */
@@ -191,6 +239,8 @@ interface WorkflowState {
   getCachedContextUsage: (sessionId: string) => ContextUsageInfo | null;
   /** 设置/清除待发送的分支消息（UserNode 创建分支后设置，App.tsx 消费后清空） */
   setPendingBranchSend: (data: { content: string; branchGroupId: string } | null) => void;
+  /** 设置/清除回退状态信息（回退成功后设置，撤销回退/新消息发送后清除） */
+  setRevertInfo: (revertInfo: RevertInfo | null) => void;
 
   /** 设置右侧边栏可见性并同步到 localStorage */
   setRightSidebarVisible: (visible: boolean) => void;
@@ -308,6 +358,21 @@ function convertMessagesToNodes(
         } as UserNodeData,
         isExpanded: true,
       });
+
+      // 用户消息附带快照信息（回退/新分支起点）时，追加快照节点
+      if (msg.metadata?.snapshot) {
+        const snapshot = msg.metadata.snapshot as { kind?: string; createdAt?: string };
+        nodes.push({
+          id: `node_${++nodeCounter}`,
+          type: "snapshot",
+          status: "completed",
+          timestamp: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : msgTimestamp,
+          data: {
+            kind: snapshot.kind ?? "files",
+          } as SnapshotNodeData,
+          isExpanded: true,
+        });
+      }
     } else if (msg.role === "assistant") {
       // 检查是否为 error 节点
       if (msg.metadata?.nodeType === "error") {
@@ -502,6 +567,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   branchGroups: [],
   activeBranchId: "",
   pendingBranchSend: null,
+  revertInfo: null,
   rightSidebarVisible: false,
   // nodeRefs 已移至模块级 nodeRefsMap，不作为 store state
   currentVisibleNodeId: null,
@@ -759,9 +825,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ permissionHandler: handler });
   },
 
-  loadFromMessages: (messages, branchGroups, activeBranchId) => {
+  loadFromMessages: (messages, branchGroups, activeBranchId, revertInfo) => {
     const nodes = convertMessagesToNodes(messages, branchGroups, activeBranchId);
-    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups, activeBranchId });
+    set({ nodes, error: null, executionStatus: "idle", confirmHandler: null, permissionHandler: null, branchGroups, activeBranchId, revertInfo: revertInfo ?? null });
   },
 
   setCurrentSubAgentId: (agentId) => {
@@ -1025,6 +1091,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ contextUsage: null });
   },
 
+  // 从后端重新加载会话消息/分支组/回退状态生成工作流节点，并清除该会话缓存。
+  // 用于回退/撤销回退/切换分支后重新拉取后端最新数据
+  reloadFromServer: async (sessionId: string) => {
+    const [branchGroups, detail] = await Promise.all([
+      tauriCmd.listBranchGroups(sessionId),
+      tauriCmd.getSession(sessionId),
+    ]);
+    get().loadFromMessages(detail.messages, branchGroups, detail.activeBranchId, detail.revert ?? null);
+    get().clearSessionCache(sessionId);
+  },
+
   // 将当前状态保存到指定会话的缓存
   saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => {
     const state = get();
@@ -1051,6 +1128,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       bgCompactionNodeId: cache.get(sessionId)?.bgCompactionNodeId ?? null,
       lastAccessedAt: Date.now(),
       branchGroups: state.branchGroups,
+      revertInfo: state.revertInfo,
     });
 
     evictCacheIfNeeded(cache);
@@ -1072,6 +1150,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       confirmHandler: null,
       permissionHandler: null,
       branchGroups: entry.branchGroups,
+      revertInfo: entry.revertInfo ?? null,
     });
 
     // 更新缓存访问时间
@@ -1611,6 +1690,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         });
         break;
       }
+      case "snapshot_created": {
+        // 快照节点：优先插入到 messageId 对应的 user 节点之后，找不到则追加末尾（公共函数内已去重）
+        nodes = applySnapshotNode(
+          nodes,
+          { messageId: event.messageId, kind: event.kind, createdAt: event.createdAt },
+          () =>
+            ({
+              id: `bg_node_${++bgNodeCounter}`,
+              type: "snapshot",
+              status: "completed",
+              timestamp: new Date(event.createdAt).getTime(),
+              data: { kind: event.kind },
+              isExpanded: true,
+            }) as WorkflowNode<"snapshot">,
+        );
+        break;
+      }
     }
 
     cache.set(sessionId, {
@@ -1640,6 +1736,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   // 设置/清除待发送的分支消息
   setPendingBranchSend: (data) => set({ pendingBranchSend: data }),
+
+  // 设置/清除回退状态信息（回退成功后设置，撤销回退/新消息发送后清除）
+  setRevertInfo: (revertInfo) => set({ revertInfo }),
 
   // 设置右侧边栏可见性（仅在内存中，不持久化）
   setRightSidebarVisible: (visible) => set({ rightSidebarVisible: visible }),

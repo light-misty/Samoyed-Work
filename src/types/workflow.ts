@@ -4,7 +4,7 @@ export type NodeStatus = "pending" | "running" | "completed" | "failed" | "cance
 
 export type ExecutionStatus = "idle" | "running" | "stopping" | "paused" | "completed" | "failed" | "cancelled";
 
-export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question" | "stats" | "paused";
+export type WorkflowNodeType = "user" | "thinking" | "content" | "tool" | "confirm" | "error" | "compaction" | "sub_agent" | "question" | "stats" | "paused" | "snapshot";
 
 export interface Attachment {
   id: string;
@@ -156,6 +156,12 @@ export interface PausedNodeData {
   messageId?: string;
 }
 
+/** 文件快照节点数据（版本快照/回退功能） */
+export interface SnapshotNodeData {
+  /** 快照类型: git / files */
+  kind: string;
+}
+
 export interface NodeDataMap {
   user: UserNodeData;
   thinking: ThinkingNodeData;
@@ -168,6 +174,7 @@ export interface NodeDataMap {
   question: QuestionNodeData;
   stats: StatsNodeData;
   paused: PausedNodeData;
+  snapshot: SnapshotNodeData;
 }
 
 export interface WorkflowNode<T extends WorkflowNodeType = WorkflowNodeType> {

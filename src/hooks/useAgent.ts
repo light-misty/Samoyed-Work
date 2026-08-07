@@ -14,6 +14,7 @@ import {
   onAgentNetworkRetry,
   onAgentCompactionStart,
   onAgentCompactionDone,
+  onAgentSnapshotCreated,
   onSubAgentStatus,
   onSubAgentToolCall,
   onSubAgentThinking,
@@ -29,10 +30,10 @@ import {
   type NetworkRetryPayload,
 } from "../services/event";
 import i18n from "../i18n";
-import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
+import { useWorkflowStore, setCurrentSessionId, applySnapshotNode, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
 import { useAgentModeStore } from "../stores/useAgentModeStore";
-import type { NodeStatus, SubAgentNodeData } from "../types";
+import type { NodeStatus, SubAgentNodeData, WorkflowNode } from "../types";
 
 export interface UseAgentReturn {
   isLoading: boolean;
@@ -364,6 +365,34 @@ export function useAgent(): UseAgentReturn {
             }, isFailed ? "failed" : "completed");
           }
         }),
+        onAgentSnapshotCreated((payload) => {
+          // 后台会话：路由到缓存
+          if (payload.sessionId !== sessionIdRef.current) {
+            routeBackgroundEvent(payload.sessionId, {
+              type: "snapshot_created",
+              messageId: payload.messageId,
+              kind: payload.kind,
+              createdAt: payload.createdAt,
+            });
+            return;
+          }
+          // 当前会话：快照节点插入到对应 user 节点之后（回填后 messageId 已匹配），
+          // 未匹配则插入最新 user 节点之后（公共函数内已处理去重）
+          const next = applySnapshotNode(
+            useWorkflowStore.getState().nodes,
+            { messageId: payload.messageId, kind: payload.kind, createdAt: payload.createdAt },
+            () =>
+              ({
+                id: `snapshot_${Date.now()}`,
+                type: "snapshot",
+                status: "completed",
+                timestamp: new Date(payload.createdAt).getTime(),
+                data: { kind: payload.kind },
+                isExpanded: true,
+              }) as WorkflowNode<"snapshot">,
+          );
+          useWorkflowStore.setState({ nodes: next });
+        }),
         onSubAgentStatus((payload) => {
           // 后台会话：路由到缓存
           if (payload.parentSessionId !== sessionIdRef.current) {
@@ -549,6 +578,8 @@ export function useAgent(): UseAgentReturn {
       thinkingNodeIdRef.current = null;
       currentIterationRef.current = undefined;
       lastClosedStreamingNodeIdRef.current = null;
+      // 新消息发送后后端将清理 staged revert，同步清除前端回退状态（横幅消失）
+      useWorkflowStore.getState().setRevertInfo(null);
 
       // 从附件 store 获取当前待发送的附件
       const currentAttachments = useAttachmentStore.getState().attachments;

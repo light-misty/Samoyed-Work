@@ -39,6 +39,8 @@ import type {
   LspServerInfo,
   SkillInfo,
   TodoList,
+  RollbackResult,
+  RedoResult,
 } from "../types";
 
 // ================================================================
@@ -159,6 +161,20 @@ export async function clearWorkspaceSessions(workspaceId: string): Promise<numbe
 export async function deleteSessionMessages(sessionId: string, messageIds: string[]): Promise<void> {
   const result = await safeInvoke(() => invoke("delete_session_messages", { sessionId, messageIds }), { context: "deleteSessionMessages" });
   if (!result.ok) throw result.error.raw;
+}
+
+/** 回退消息：将工作流回退到指定用户消息节点之前，并恢复该消息发送前的代码快照 */
+export async function rollbackSessionMessages(sessionId: string, messageId: string): Promise<RollbackResult> {
+  const result = await safeInvoke(() => invoke<RollbackResult>("rollback_session_messages", { sessionId, messageId }), { context: "rollbackSessionMessages" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
+}
+
+/** 撤销回退（redo）：恢复回退前的文件状态并恢复显示被隐藏的消息 */
+export async function redoSessionMessages(sessionId: string): Promise<RedoResult> {
+  const result = await safeInvoke(() => invoke<RedoResult>("redo_session_messages", { sessionId }), { context: "redoSessionMessages" });
+  if (!result.ok) throw result.error.raw;
+  return result.data;
 }
 
 /** 更新会话的工作区 ID（用于修复旧数据中 workspace_id 为空的会话） */

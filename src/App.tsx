@@ -845,7 +845,7 @@ export default function App() {
       hasMessages = detail.messages.length > 0;
       // 仅在缓存未命中时使用后端数据覆盖（缓存命中时后端数据作为补充验证）
       if (!cacheHit) {
-        loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
+        loadFromMessages(detail.messages, branchGroups, detail.activeBranchId, detail.revert ?? null);
       }
     } catch (err) {
       console.error("[App] 加载历史会话失败:", err);
@@ -934,7 +934,7 @@ export default function App() {
             tauriCmd.listBranchGroups(nextSessionId),
             tauriCmd.getSession(nextSessionId),
           ]);
-          loadFromMessages(detail.messages, branchGroups, detail.activeBranchId);
+          loadFromMessages(detail.messages, branchGroups, detail.activeBranchId, detail.revert ?? null);
         } catch (err) {
           console.error("[App] 加载切换后的会话失败:", err);
           clearNodes();

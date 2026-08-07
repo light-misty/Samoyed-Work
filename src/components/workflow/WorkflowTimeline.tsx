@@ -1,11 +1,14 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import { useWorkflowStore, nodeRefsMap } from "../../stores/useWorkflowStore";
+import { useSessionStore } from "../../stores/useSessionStore";
 import { useAgentModeStore } from "../../stores/useAgentModeStore";
+import { useToastStore } from "../../stores/useToastStore";
 import type { AgentMode } from "../../stores/useAgentModeStore";
 import { Icon, type IconName } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
 import { CustomScrollArea } from "../common/CustomScrollArea";
+import * as tauriCmd from "../../services/tauri";
 
 interface WorkflowTimelineProps {
   /** 错误节点重试回调 */
@@ -71,7 +74,11 @@ function throttle<T extends (...args: any[]) => void>(fn: T, delay: number): T {
  */
 export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimelineProps) {
   const { t } = useTranslation();
-  const { nodes, registerNodeRef, unregisterNodeRef } = useWorkflowStore();
+  const { nodes, registerNodeRef, unregisterNodeRef, revertInfo } = useWorkflowStore();
+  const executionStatus = useWorkflowStore((s) => s.executionStatus);
+  const isAgentRunning = executionStatus === "running";
+  // 撤销回退进行中状态
+  const [undoingRollback, setUndoingRollback] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 追踪是否应自动滚动（用户未手动上滚时自动跟随）
   const autoScrollRef = useRef(true);
@@ -226,7 +233,24 @@ export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimeli
     return () => clearTimeout(timer);
   }, [nodes.length, computeCurrentVisibleNode]);
 
-  if (nodes.length === 0) {
+  // 撤销回退（redo）：恢复回退前的文件状态并恢复显示被隐藏的消息
+  const handleUndoRollback = async () => {
+    const sessionId = useSessionStore.getState().currentSessionId;
+    if (!sessionId) return;
+
+    setUndoingRollback(true);
+    try {
+      await tauriCmd.redoSessionMessages(sessionId);
+      // 刷新工作流：重新加载消息（redo 后消息恢复显示）与回退状态（应为空）
+      await useWorkflowStore.getState().reloadFromServer(sessionId);
+    } catch (err) {
+      console.error("[WorkflowTimeline] 撤销回退失败:", err);
+      useToastStore.getState().addToast("error", t('workflow.undoRollbackFailed'));
+    }
+    setUndoingRollback(false);
+  };
+
+  if (nodes.length === 0 && !revertInfo) {
     return (
       <EmptySessionTitle typewriterKey={typewriterKey} />
     );
@@ -243,6 +267,22 @@ export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimeli
         'aria-live': 'polite',
       }}
     >
+      {/* 回退状态横幅：存在 staged revert 时展示，可撤销回退 */}
+      {revertInfo && (
+        <div className="wf-revert-banner" role="status">
+          <Icon name="history" size={14} />
+          <span className="wf-revert-banner-text">
+            {t(revertInfo.codeReverted ? 'workflow.revertBanner' : 'workflow.revertBannerNoCode', { hiddenCount: revertInfo.hiddenCount })}
+          </span>
+          <button
+            className="wf-revert-undo-btn"
+            onClick={() => void handleUndoRollback()}
+            disabled={isAgentRunning || undoingRollback}
+          >
+            {undoingRollback ? t('workflow.undoingRollback') : t('workflow.undoRollback')}
+          </button>
+        </div>
+      )}
       <div className="workflow-scroll-padding">
         {nodes.map((node) => (
           <WorkflowNodeRenderer

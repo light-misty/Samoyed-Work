@@ -6,6 +6,7 @@ import { Icon } from "../common/Icon";
 import { formatSize } from "../../utils/format";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import * as tauriCmd from "../../services/tauri";
 
 interface UserNodeProps {
@@ -19,6 +20,10 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
   const hasAttachments = data.attachments && data.attachments.length > 0;
   const [copied, setCopied] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // 回退消息确认弹窗状态
+  const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
+  const [rollbacking, setRollbacking] = useState(false);
+  const [rollbackError, setRollbackError] = useState<string | null>(null);
   // 创建分支原位编辑模式状态
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -196,7 +201,6 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
         // 统计当前节点之前（含自身）的 user 节点数量，得到 1-based 索引
         const userMsgIndex = nodes.slice(0, nodes.findIndex((n) => n.id === node.id) + 1)
           .filter((n) => n.type === "user").length;
-        if (userMsgIndex === 0) return;
 
         // 从后端获取消息列表，找到对应位置的 user 消息 id
         const detail = await tauriCmd.getSession(sessionId);
@@ -218,19 +222,8 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       setIsEditing(false);
       setEditContent("");
 
-      // 3. 刷新 workflow 节点：从后端重新加载当前活跃分支的消息
-      const [branchGroups, detail] = await Promise.all([
-        tauriCmd.listBranchGroups(sessionId),
-        tauriCmd.getSession(sessionId),
-      ]);
-      useWorkflowStore.getState().loadFromMessages(
-        detail.messages,
-        branchGroups,
-        detail.activeBranchId,
-      );
-
-      // 4. 清空 workflow 缓存（分支已切换，旧缓存失效）
-      useWorkflowStore.getState().clearSessionCache(sessionId);
+      // 3. 刷新 workflow 节点：从后端重新加载当前活跃分支的消息（含缓存清理）
+      await useWorkflowStore.getState().reloadFromServer(sessionId);
 
       // 5. 通过 pendingBranchSend 触发 App.tsx 的 handleSend 流程
       //    不能直接调用 tauriCmd.startAgent，否则会绕过 useAgent.sendMessage，
@@ -257,6 +250,63 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       e.preventDefault();
       handleCancelEdit();
     }
+  };
+
+  // 回退消息：调用后端回退到该用户消息之前，恢复代码快照并隐藏该消息及后续消息
+  // 成功后回填输入框（复用模板插入机制替换输入框内容）并刷新工作流展示回退结果
+  const handleRollback = async () => {
+    const sessionId = useSessionStore.getState().currentSessionId;
+    if (!sessionId) return;
+
+    setRollbackError(null);
+
+    // 定位用户消息 ID：优先用节点数据，实时对话中创建的节点无 messageId 时按位置匹配
+    let messageId = data.messageId;
+    if (!messageId) {
+      try {
+        const { nodes } = useWorkflowStore.getState();
+        const currentIdx = nodes.findIndex((n) => n.id === node.id);
+        if (currentIdx === -1) return;
+        const userMsgIndex = nodes.slice(0, currentIdx + 1).filter((n) => n.type === "user").length;
+        const detail = await tauriCmd.getSession(sessionId);
+        const userMessages = detail.messages.filter((m) => m.role === "user");
+        messageId = userMessages[userMsgIndex - 1]?.id;
+      } catch (err) {
+        console.error("[UserNode] 获取会话消息失败:", err);
+        setRollbackError(t('workflow.rollbackError'));
+        return;
+      }
+    }
+    if (!messageId) return;
+
+    setRollbacking(true);
+    try {
+      const result = await tauriCmd.rollbackSessionMessages(sessionId, messageId);
+
+      if (result.sessionDeleted) {
+        // 回退到首条消息且无其他分支消息：后端已删除整个会话（含快照备份），
+        // 这里同步清理本地状态（会话列表 + 当前会话 + 工作流节点/缓存）
+        useSessionStore.setState((state) => ({
+          sessions: state.sessions.filter((s) => s.id !== sessionId),
+          currentSessionId: null,
+        }));
+        useWorkflowStore.getState().clearNodes();
+        useWorkflowStore.getState().clearSessionCache(sessionId);
+        useWorkflowStore.getState().setRevertInfo(null);
+      } else {
+        // 刷新工作流：从后端重新加载当前活跃分支的消息（后端已截断到回退边界）与回退状态
+        await useWorkflowStore.getState().reloadFromServer(sessionId);
+      }
+
+      // 回填输入框：该用户消息文字（复用模板插入机制，替换输入框内容并聚焦）
+      useSettingsStore.getState().setPendingInsertTemplate(data.content);
+
+      setShowRollbackConfirm(false);
+    } catch (err) {
+      console.error("[UserNode] 回退消息失败:", err);
+      setRollbackError(t('workflow.rollbackError'));
+    }
+    setRollbacking(false);
   };
 
   // 切换分支：根据方向（-1 上一个 / 1 下一个）在分支组内循环切换
@@ -380,6 +430,15 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
           <div className="wf-msg-actions-row">
             {!isAgentRunning && (
               <button
+                className="wf-rollback-button"
+                onClick={() => setShowRollbackConfirm(true)}
+                title={t('workflow.rollbackMessage')}
+              >
+                <Icon name="undo" size={12} />
+              </button>
+            )}
+            {!isAgentRunning && (
+              <button
                 className="wf-branch-button"
                 onClick={handleStartEdit}
                 title={t('workflow.modifyAndCreateBranch')}
@@ -438,6 +497,43 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
               <button
                 className="wf-del-btn wf-del-btn-cancel"
                 onClick={() => setShowDeleteConfirm(false)}
+              >
+                {t('deleteConfirm.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 回退消息确认弹窗 */}
+      {showRollbackConfirm && createPortal(
+        <div className="wf-del-overlay" onClick={() => { if (!rollbacking) setShowRollbackConfirm(false); }}>
+          <div className="wf-del-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="wf-del-header">
+              <span className="wf-del-icon">
+                <Icon name="undo" size={18} />
+              </span>
+              <span className="wf-del-title">{t('workflow.rollbackConfirmTitle')}</span>
+            </div>
+            <div className="wf-del-body">
+              <p className="wf-del-message">{t('workflow.rollbackConfirmMessage')}</p>
+              {rollbackError && (
+                <p className="wf-del-message wf-rollback-error">{rollbackError}</p>
+              )}
+            </div>
+            <div className="wf-del-footer">
+              <button
+                className="wf-del-btn wf-del-btn-danger"
+                disabled={rollbacking}
+                onClick={() => void handleRollback()}
+              >
+                {rollbacking ? t('workflow.rollbacking') : t('workflow.rollbackConfirm')}
+              </button>
+              <button
+                className="wf-del-btn wf-del-btn-cancel"
+                disabled={rollbacking}
+                onClick={() => setShowRollbackConfirm(false)}
               >
                 {t('deleteConfirm.cancel')}
               </button>

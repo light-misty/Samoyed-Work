@@ -734,6 +734,8 @@ pub fn run() {
             commands::session::list_branch_groups,
             commands::session::list_all_branch_user_messages,
             commands::session::get_todo_list,
+            commands::session::rollback_session_messages,
+            commands::session::redo_session_messages,
             // 工作区命令
             commands::workspace::list_workspaces,
             commands::workspace::add_workspace,

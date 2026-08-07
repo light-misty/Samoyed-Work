@@ -31,6 +31,8 @@ pub const AGENT_SUB_AGENT_CONTENT: &str = "agent:sub_agent_content";
 pub const AGENT_SUB_AGENT_TOOL_RESULT: &str = "agent:sub_agent_tool_result";
 /// 向用户提问事件
 pub const AGENT_QUESTION: &str = "agent:question";
+/// 代码快照创建完成事件
+pub const AGENT_SNAPSHOT_CREATED: &str = "agent:snapshot_created";
 
 // ================================================================
 // 系统事件名常量
@@ -310,6 +312,21 @@ pub struct QuestionItem {
     pub options: Vec<QuestionOption>,
     /// 是否允许多选
     pub multi_select: bool,
+}
+
+/// 代码快照创建完成事件 Payload
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotCreatedPayload {
+    /// 会话 ID
+    pub session_id: String,
+    /// 快照关联的用户消息 ID（快照先创建、后回填，回填后重新发射一次）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+    /// 快照类型: "git" | "files"
+    pub kind: String,
+    /// 快照创建时间
+    pub created_at: String,
 }
 
 /// 问题选项
