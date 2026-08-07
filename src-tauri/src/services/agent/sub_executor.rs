@@ -43,6 +43,7 @@ fn parse_agent_mode(mode: &str) -> AgentMode {
 }
 
 /// 按子 Agent 配置过滤工具定义列表
+/// - 强制移除 task 工具（仅主 Agent 可调用 task，子 Agent 不可再创建子 Agent）
 /// - Explore 模式下仅保留 EXPLORE_TOOL_NAMES 中的只读工具
 /// - 非 Document 模式下过滤掉 docx/xlsx/pptx/pdf
 /// - allowed_tools 非空时仅保留白名单中的工具
@@ -55,6 +56,15 @@ pub fn filter_tools_for_sub_agent(
 ) -> Vec<Value> {
     let mode = parse_agent_mode(agent_mode);
     let mut defs = tool_defs;
+
+    // 强制移除 task 工具：子 Agent 无法创建孙 Agent
+    defs.retain(|d| {
+        d.get("function")
+            .and_then(|f| f.get("name"))
+            .and_then(|n| n.as_str())
+            .map(|n| n != "task")
+            .unwrap_or(true)
+    });
 
     // Explore 模式下仅保留只读探索工具
     if mode.is_explore() {
@@ -702,7 +712,7 @@ impl SubAgentExecutor {
                 "_session_id".to_string(),
                 Value::String(config.parent_session_id.clone()),
             );
-            // 注入 nesting_depth（子 Agent 嵌套深度，用于限制递归）
+            // 注入 nesting_depth（子 Agent 深度为 1，task 工具拒绝深度 >= 1 的嵌套调用）
             obj.insert(
                 "_nesting_depth".to_string(),
                 Value::Number(serde_json::Number::from(config.nesting_depth)),

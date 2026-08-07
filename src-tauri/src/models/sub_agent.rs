@@ -21,16 +21,14 @@ pub struct SubAgentConfig {
     pub max_iterations: u32,
     /// 超时时间（秒，默认 300）
     pub timeout_seconds: u64,
-    /// 是否允许子 Agent 调用 Task 工具（默认 false，防止递归）
-    pub allow_nested_task: bool,
     /// 可用工具列表（空表示继承所有工具）
     pub allowed_tools: Vec<String>,
     /// Agent 模式（继承自父 Agent）
     /// 取值为 "plan" / "build" / "document"，子 Agent 必须与父 Agent 模式一致
     /// Document 模式下子 Agent 也能看到文档 Handler（docx/xlsx/pptx/pdf）
     pub agent_mode: String,
-    /// 嵌套深度（0 表示主 Agent 直接委托的子 Agent，1 表示子 Agent 委托的孙 Agent，以此类推）
-    /// 限制最大深度为 3 层，超过则拒绝执行
+    /// 嵌套深度（主 Agent 为 0，子 Agent 为 1）
+    /// 嵌套功能已删除：仅主 Agent 可通过 task 工具创建子 Agent，子 Agent 调用 task 会被拒绝
     pub nesting_depth: u32,
 }
 
@@ -44,7 +42,6 @@ impl Default for SubAgentConfig {
             workspace_root: String::new(),
             max_iterations: 10,
             timeout_seconds: 300,
-            allow_nested_task: false,
             allowed_tools: Vec::new(),
             agent_mode: "build".to_string(),
             nesting_depth: 0,

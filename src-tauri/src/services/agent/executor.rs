@@ -2171,7 +2171,7 @@ impl<R: Runtime> AgentExecutor<R> {
                         if !ctx.workspace_path.is_empty() {
                             safe_params["_workspace_root"] = json!(ctx.workspace_path);
                         }
-                        safe_params["_nesting_depth"] = json!(0u32); // 主 Agent 的嵌套深度为 0
+                        safe_params["_nesting_depth"] = json!(0u32); // 主 Agent 深度为 0，仅主 Agent 可调用 task
                         safe_params["_system_prompt"] = json!(ctx.system_prompt);
                         // current_mode 在上方已获取，复用以避免重复查询
                         let mode_str = match current_mode {

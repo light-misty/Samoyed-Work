@@ -2,7 +2,6 @@
 //! 主 Agent 可通过此工具将子任务委托给独立子 Agent，子 Agent 拥有独立上下文但继承父 Agent 配置
 //! 支持 single（单个子任务）和 batch（并行批量子任务）两种模式
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -17,18 +16,12 @@ use crate::services::agent::sub_executor::SubAgentExecTrait;
 use crate::services::tool::trait_def::Tool;
 
 /// 检查嵌套深度是否允许执行子任务
-/// - current_depth >= 3：超过最大嵌套深度限制
-/// - current_depth >= 1 且 allow_nested_task=false：子 Agent 不允许调用 task 工具（防止递归）
+/// 嵌套功能已删除：仅主 Agent（深度 0）可通过 task 工具创建子 Agent
+/// 子 Agent（深度 >= 1）一律拒绝调用，防止递归创建孙 Agent
 ///
 /// 返回 Ok(()) 表示允许执行，Err(错误信息) 表示拒绝
-pub fn check_nesting_depth(
-    current_depth: u32,
-    allow_nested_task: bool,
-) -> Result<(), &'static str> {
-    if current_depth >= 3 {
-        return Err("Sub-agent nesting depth exceeds limit (3 levels)");
-    }
-    if current_depth >= 1 && !allow_nested_task {
+fn check_nesting_depth(current_depth: u32) -> Result<(), &'static str> {
+    if current_depth >= 1 {
         return Err("Sub-agent is not allowed to call the task tool");
     }
     Ok(())
@@ -37,6 +30,7 @@ pub fn check_nesting_depth(
 /// Task 工具：委托子任务给子 Agent 执行
 /// 主 Agent 可通过此工具将子任务委托给独立子 Agent，子 Agent 拥有独立上下文但继承父 Agent 配置
 /// 支持 single（单个子任务）和 batch（并行批量子任务）两种模式
+/// 嵌套功能已删除：仅主 Agent 可调用 task，子 Agent 工具列表已强制移除
 /// T4.18: 采用延迟注入模式，sub_executor 在应用初始化后通过 set_sub_executor 设置
 #[derive(Clone)]
 pub struct TaskTool {
@@ -47,8 +41,6 @@ pub struct TaskTool {
     parent_system_prompt: Arc<RwLock<String>>,
     /// 当前 Agent 模式（plan/build/document）
     agent_mode: Arc<RwLock<String>>,
-    /// 当前嵌套深度（0=主 Agent，1=子 Agent，2=孙 Agent，最大 3）
-    nesting_depth: Arc<AtomicU32>,
 }
 
 impl TaskTool {
@@ -58,7 +50,6 @@ impl TaskTool {
             sub_executor: Arc::new(RwLock::new(None)),
             parent_system_prompt: Arc::new(RwLock::new(String::new())),
             agent_mode: Arc::new(RwLock::new("build".to_string())),
-            nesting_depth: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -78,11 +69,6 @@ impl TaskTool {
     pub async fn update_agent_mode(&self, mode: String) {
         let mut guard = self.agent_mode.write().await;
         *guard = mode;
-    }
-
-    /// 更新当前嵌套深度
-    pub fn update_nesting_depth(&self, depth: u32) {
-        self.nesting_depth.store(depth, Ordering::Relaxed);
     }
 }
 
@@ -265,16 +251,15 @@ impl TaskTool {
             .unwrap_or("")
             .to_string();
 
-        // 7. 从 params["_nesting_depth"] 获取当前嵌套深度（默认用 self.nesting_depth 的值）
+        // 7. 从 params["_nesting_depth"] 获取当前嵌套深度（主 Agent 为 0，子 Agent 为 1）
         let current_depth = params
             .get("_nesting_depth")
             .and_then(|v| v.as_u64())
             .map(|d| d as u32)
-            .unwrap_or_else(|| self.nesting_depth.load(Ordering::Relaxed));
+            .unwrap_or(0);
 
-        // 8. 嵌套深度检查（调用公共函数，allow_nested_task 默认为 false 防止递归调用）
-        let allow_nested_task = false;
-        if let Err(msg) = check_nesting_depth(current_depth, allow_nested_task) {
+        // 8. 嵌套深度检查（仅主 Agent 可调用，子 Agent 一律拒绝防止递归）
+        if let Err(msg) = check_nesting_depth(current_depth) {
             return ToolResult {
                 success: false,
                 output: None,
@@ -310,7 +295,6 @@ impl TaskTool {
             workspace_root,
             max_iterations,
             timeout_seconds,
-            allow_nested_task: false,
             allowed_tools,
             agent_mode,
             nesting_depth: current_depth + 1,
@@ -404,12 +388,12 @@ impl TaskTool {
             .unwrap_or("")
             .to_string();
 
-        // 5. 提取公共参数：_nesting_depth（默认用 self.nesting_depth 的值）
+        // 5. 提取公共参数：_nesting_depth（主 Agent 为 0，子 Agent 为 1）
         let current_depth = params
             .get("_nesting_depth")
             .and_then(|v| v.as_u64())
             .map(|d| d as u32)
-            .unwrap_or_else(|| self.nesting_depth.load(Ordering::Relaxed));
+            .unwrap_or(0);
 
         // 6. 提取公共参数：allowedTools（空表示继承所有工具）
         let allowed_tools: Vec<String> = params
@@ -422,9 +406,8 @@ impl TaskTool {
             })
             .unwrap_or_default();
 
-        // 7. 嵌套深度检查（调用公共函数，与 execute_single 相同逻辑）
-        let allow_nested_task = false;
-        if let Err(msg) = check_nesting_depth(current_depth, allow_nested_task) {
+        // 7. 嵌套深度检查（仅主 Agent 可调用，子 Agent 一律拒绝防止递归）
+        if let Err(msg) = check_nesting_depth(current_depth) {
             return ToolResult {
                 success: false,
                 output: None,
@@ -491,7 +474,6 @@ impl TaskTool {
                 workspace_root: workspace_root.clone(),
                 max_iterations,
                 timeout_seconds,
-                allow_nested_task: false,
                 allowed_tools: allowed_tools.clone(),
                 agent_mode: agent_mode.clone(),
                 nesting_depth: current_depth + 1,
