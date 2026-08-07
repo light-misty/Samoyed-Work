@@ -9,14 +9,13 @@ interface SnapshotNodeProps {
 /** 文件快照节点：提示"文件快照已创建"（版本快照/回退功能） */
 export function SnapshotNode({ node }: SnapshotNodeProps) {
   const data = node.data as SnapshotNodeData;
-  const kindLabel = data.kind === "git" ? "git" : "files";
 
   return (
-    <div className="wf-node wf-node-snapshot">
+    <div className="wf-node">
       <div className="wf-snapshot-notice">
         <Icon name="history" size={12} />
         <span>{i18n.t("workflow.snapshotCreated")}</span>
-        <span className="wf-snapshot-kind">({kindLabel})</span>
+        <span className="wf-snapshot-kind">({data.kind})</span>
       </div>
     </div>
   );

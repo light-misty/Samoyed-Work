@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useWorkflowStore, nodeRefsMap } from "../../stores/useWorkflowStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useAgentModeStore } from "../../stores/useAgentModeStore";
+import { useToastStore } from "../../stores/useToastStore";
 import type { AgentMode } from "../../stores/useAgentModeStore";
 import { Icon, type IconName } from "../common/Icon";
 import { WorkflowNodeRenderer } from "./WorkflowNode";
@@ -241,25 +242,15 @@ export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimeli
     try {
       await tauriCmd.redoSessionMessages(sessionId);
       // 刷新工作流：重新加载消息（redo 后消息恢复显示）与回退状态（应为空）
-      const [branchGroups, detail] = await Promise.all([
-        tauriCmd.listBranchGroups(sessionId),
-        tauriCmd.getSession(sessionId),
-      ]);
-      useWorkflowStore.getState().loadFromMessages(
-        detail.messages,
-        branchGroups,
-        detail.activeBranchId,
-        detail.revert ?? null,
-      );
-      // 清空 workflow 缓存，避免旧节点残留
-      useWorkflowStore.getState().clearSessionCache(sessionId);
+      await useWorkflowStore.getState().reloadFromServer(sessionId);
     } catch (err) {
       console.error("[WorkflowTimeline] 撤销回退失败:", err);
+      useToastStore.getState().addToast("error", t('workflow.undoRollbackFailed'));
     }
     setUndoingRollback(false);
   };
 
-  if (nodes.length === 0) {
+  if (nodes.length === 0 && !revertInfo) {
     return (
       <EmptySessionTitle typewriterKey={typewriterKey} />
     );
@@ -281,7 +272,7 @@ export function WorkflowTimeline({ onRetryError, typewriterKey }: WorkflowTimeli
         <div className="wf-revert-banner" role="status">
           <Icon name="history" size={14} />
           <span className="wf-revert-banner-text">
-            {t('workflow.revertBanner', { count: revertInfo.hiddenCount })}
+            {t(revertInfo.codeReverted ? 'workflow.revertBanner' : 'workflow.revertBannerNoCode', { hiddenCount: revertInfo.hiddenCount })}
           </span>
           <button
             className="wf-revert-undo-btn"

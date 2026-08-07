@@ -160,10 +160,6 @@ export interface PausedNodeData {
 export interface SnapshotNodeData {
   /** 快照类型: git / files */
   kind: string;
-  /** 快照创建时间 */
-  createdAt?: string;
-  /** 关联的 user 消息 ID */
-  messageId?: string;
 }
 
 export interface NodeDataMap {

@@ -518,7 +518,7 @@ export function InputArea({ onSend, disabled = false, executionStatus = "idle", 
           )}
 
           <div
-            className={`input-container ${hasContent ? "has-content" : ""} ${isDragOver ? "drag-over" : ""}`}
+            className={`input-container ${isDragOver ? "drag-over" : ""}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}

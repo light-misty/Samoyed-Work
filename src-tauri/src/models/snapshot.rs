@@ -16,16 +16,6 @@ pub struct SnapshotRecord {
     pub created_at: String,
 }
 
-/// 快照简要信息（返回给前端，用于恢复快照节点展示）
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct SnapshotInfo {
-    pub message_id: String,
-    /// 快照类型：git / files
-    pub kind: String,
-    pub created_at: String,
-}
-
 /// 回退状态信息（返回给前端，用于显示"已回退"横幅）
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -34,8 +24,8 @@ pub struct RevertInfo {
     pub revert_message_id: String,
     /// 被隐藏的消息数量
     pub hidden_count: usize,
-    /// 快照类型：git / files
-    pub snapshot_kind: String,
+    /// 边界消息是否有可用快照（false 时仅回退对话，代码未回退）
+    pub code_reverted: bool,
 }
 
 /// 回退命令返回结果
@@ -112,11 +102,11 @@ mod tests {
         let info = RevertInfo {
             revert_message_id: "msg_3".to_string(),
             hidden_count: 2,
-            snapshot_kind: "files".to_string(),
+            code_reverted: true,
         };
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["revertMessageId"], "msg_3");
         assert_eq!(json["hiddenCount"], 2);
-        assert_eq!(json["snapshotKind"], "files");
+        assert_eq!(json["codeReverted"], true);
     }
 }

@@ -134,11 +134,7 @@ fn delete_snapshot_with_backup(
     snap: &crate::models::snapshot::SnapshotRecord,
     backup_base: &std::path::Path,
 ) -> Result<(), CommandError> {
-    let kind = if snap.kind == "git" {
-        crate::services::snapshot::SnapshotKind::Git
-    } else {
-        crate::services::snapshot::SnapshotKind::Files
-    };
+    let kind = crate::services::snapshot::kind_from_str(&snap.kind);
     let _ = crate::services::snapshot::delete_backup(kind, &snap.snapshot_ref, backup_base);
     crate::db::snapshot_repo::delete_snapshots_by_ids(conn, std::slice::from_ref(&snap.id))?;
     Ok(())

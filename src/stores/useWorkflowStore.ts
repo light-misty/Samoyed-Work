@@ -17,6 +17,47 @@ function getWorkspaceRoot(): string {
   return ws?.path || '';
 }
 
+/** 将快照节点合并/插入到节点列表，返回新列表。
+ * 去重：目标 user 节点之后已存在快照节点时复用更新（快照创建与消息回填各发射一次事件，
+ * 实时 user 节点无 messageId 时会重复插入）；未匹配到 user 节点时插入到列表末尾。
+ */
+export function applySnapshotNode(
+  nodes: WorkflowNode[],
+  payload: { messageId?: string; kind: string; createdAt: string },
+  makeNode: () => WorkflowNode<"snapshot">,
+): WorkflowNode[] {
+  const next = [...nodes];
+  let lastUserIdx = -1;
+  if (payload.messageId) {
+    lastUserIdx = next.findIndex(
+      (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === payload.messageId,
+    );
+  }
+  if (lastUserIdx === -1) {
+    for (let i = next.length - 1; i >= 0; i--) {
+      if (next[i].type === "user") {
+        lastUserIdx = i;
+        break;
+      }
+    }
+  }
+  const snapshotTime = new Date(payload.createdAt).getTime();
+  const updateExisting = (target: WorkflowNode) => {
+    target.data = { ...(target.data as { kind: string }), kind: payload.kind };
+    target.timestamp = snapshotTime;
+  };
+  if (lastUserIdx >= 0) {
+    const following = next[lastUserIdx + 1];
+    if (following?.type === "snapshot") updateExisting(following);
+    else next.splice(lastUserIdx + 1, 0, makeNode());
+  } else {
+    const last = next[next.length - 1];
+    if (last?.type === "snapshot") updateExisting(last);
+    else next.push(makeNode());
+  }
+  return next;
+}
+
 /** 按会话缓存的状态条目，切换会话时保存/恢复 */
 export interface SessionCacheEntry {
   nodes: WorkflowNode[];
@@ -180,6 +221,8 @@ interface WorkflowState {
   initContextUsageListener: () => Promise<() => void>;
   /** 从后端加载指定会话的上下文窗口使用信息 */
   loadContextUsage: (sessionId: string) => Promise<void>;
+  /** 从后端重新加载会话消息/分支组/回退状态生成工作流节点，并清除该会话缓存 */
+  reloadFromServer: (sessionId: string) => Promise<void>;
   /** 清除上下文窗口使用信息（新会话/切换会话时调用） */
   clearContextUsage: () => void;
   /** 将当前状态保存到指定会话的缓存 */
@@ -325,7 +368,7 @@ function convertMessagesToNodes(
           status: "completed",
           timestamp: snapshot.createdAt ? new Date(snapshot.createdAt).getTime() : msgTimestamp,
           data: {
-            kind: snapshot.kind === "git" ? "git" : "files",
+            kind: snapshot.kind ?? "files",
           } as SnapshotNodeData,
           isExpanded: true,
         });
@@ -1048,6 +1091,17 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     set({ contextUsage: null });
   },
 
+  // 从后端重新加载会话消息/分支组/回退状态生成工作流节点，并清除该会话缓存。
+  // 用于回退/撤销回退/切换分支后重新拉取后端最新数据
+  reloadFromServer: async (sessionId: string) => {
+    const [branchGroups, detail] = await Promise.all([
+      tauriCmd.listBranchGroups(sessionId),
+      tauriCmd.getSession(sessionId),
+    ]);
+    get().loadFromMessages(detail.messages, branchGroups, detail.activeBranchId, detail.revert ?? null);
+    get().clearSessionCache(sessionId);
+  },
+
   // 将当前状态保存到指定会话的缓存
   saveSessionToCache: (sessionId: string, streamingRef: StreamingRefSnapshot) => {
     const state = get();
@@ -1096,7 +1150,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       confirmHandler: null,
       permissionHandler: null,
       branchGroups: entry.branchGroups,
-      revertInfo: entry.revertInfo,
+      revertInfo: entry.revertInfo ?? null,
     });
 
     // 更新缓存访问时间
@@ -1637,58 +1691,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         break;
       }
       case "snapshot_created": {
-        // 快照节点：优先插入到 messageId 对应的 user 节点之后，找不到则追加末尾。
-        // 去重：快照创建与消息回填各发射一次事件，重复事件时复用已插入的快照节点
-        let lastUserIdx = -1;
-        if (event.messageId) {
-          lastUserIdx = nodes.findIndex(
-            (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === event.messageId
-          );
-        }
-        if (lastUserIdx === -1) {
-          for (let i = nodes.length - 1; i >= 0; i--) {
-            if (nodes[i].type === "user") {
-              lastUserIdx = i;
-              break;
-            }
-          }
-        }
-        const snapshotData = { kind: event.kind, createdAt: event.createdAt };
-        const snapshotTime = new Date(event.createdAt).getTime();
-        const snapshotNode = () =>
-          ({
-            id: `bg_node_${++bgNodeCounter}`,
-            type: "snapshot",
-            status: "completed",
-            timestamp: snapshotTime,
-            data: snapshotData,
-            isExpanded: true,
-          }) as WorkflowNode<"snapshot">;
-        if (lastUserIdx >= 0) {
-          const following = nodes[lastUserIdx + 1];
-          if (following?.type === "snapshot") {
-            following.data = {
-              ...(following.data as { kind: string; createdAt?: string }),
-              kind: event.kind,
-              createdAt: event.createdAt,
-            };
-            following.timestamp = snapshotTime;
-          } else {
-            nodes.splice(lastUserIdx + 1, 0, snapshotNode());
-          }
-        } else {
-          const last = nodes[nodes.length - 1];
-          if (last?.type === "snapshot") {
-            last.data = {
-              ...(last.data as { kind: string; createdAt?: string }),
-              kind: event.kind,
-              createdAt: event.createdAt,
-            };
-            last.timestamp = snapshotTime;
-          } else {
-            nodes.push(snapshotNode());
-          }
-        }
+        // 快照节点：优先插入到 messageId 对应的 user 节点之后，找不到则追加末尾（公共函数内已去重）
+        nodes = applySnapshotNode(
+          nodes,
+          { messageId: event.messageId, kind: event.kind, createdAt: event.createdAt },
+          () =>
+            ({
+              id: `bg_node_${++bgNodeCounter}`,
+              type: "snapshot",
+              status: "completed",
+              timestamp: new Date(event.createdAt).getTime(),
+              data: { kind: event.kind },
+              isExpanded: true,
+            }) as WorkflowNode<"snapshot">,
+        );
         break;
       }
     }

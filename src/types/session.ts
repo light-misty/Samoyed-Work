@@ -103,8 +103,8 @@ export interface RevertInfo {
   revertMessageId: string;
   /** 被隐藏的消息数量 */
   hiddenCount: number;
-  /** redo 基线快照类型: git / files */
-  snapshotKind: string;
+  /** 代码是否已回退（目标消息无快照时为 false，仅回退对话） */
+  codeReverted: boolean;
 }
 
 /** 回退命令返回结果 */

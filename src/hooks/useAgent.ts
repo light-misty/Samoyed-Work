@@ -30,7 +30,7 @@ import {
   type NetworkRetryPayload,
 } from "../services/event";
 import i18n from "../i18n";
-import { useWorkflowStore, setCurrentSessionId, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
+import { useWorkflowStore, setCurrentSessionId, applySnapshotNode, type BackgroundAgentEvent, type ToolEventRefs } from "../stores/useWorkflowStore";
 import { useAttachmentStore } from "../stores/useAttachmentStore";
 import { useAgentModeStore } from "../stores/useAgentModeStore";
 import type { NodeStatus, SubAgentNodeData, WorkflowNode } from "../types";
@@ -376,59 +376,21 @@ export function useAgent(): UseAgentReturn {
             });
             return;
           }
-          // 当前会话：快照节点插入到对应 user 节点之后（回填后 messageId 已匹配），找不到则追加末尾
-          const { nodes } = useWorkflowStore.getState();
-          let lastUserIdx = -1;
-          if (payload.messageId) {
-            lastUserIdx = nodes.findIndex(
-              (n) => n.type === "user" && (n.data as { messageId?: string }).messageId === payload.messageId
-            );
-          }
-          if (lastUserIdx === -1) {
-            // 未匹配到消息：插入到最新 user 节点之后
-            for (let i = nodes.length - 1; i >= 0; i--) {
-              if (nodes[i].type === "user") {
-                lastUserIdx = i;
-                break;
-              }
-            }
-          }
-          const next = [...nodes];
-          const insertAt = (idx: number, node: WorkflowNode<"snapshot">) => {
-            next.splice(idx, 0, node);
-          };
-          if (lastUserIdx >= 0) {
-            // 去重：目标 user 节点后紧邻的第一个节点已是快照节点时，复用更新
-            // （快照创建与消息回填各发射一次事件，实时 user 节点无 messageId 时会重复插入）
-            const following = next[lastUserIdx + 1];
-            if (following?.type === "snapshot") {
-              following.data = {
-                ...(following.data as { kind: string; createdAt?: string }),
-                kind: payload.kind,
-                createdAt: payload.createdAt,
-              };
-              following.timestamp = new Date(payload.createdAt).getTime();
-              useWorkflowStore.setState({ nodes: next });
-              return;
-            }
-            insertAt(lastUserIdx + 1, {
-              id: `snapshot_${Date.now()}`,
-              type: "snapshot",
-              status: "completed",
-              timestamp: new Date(payload.createdAt).getTime(),
-              data: { kind: payload.kind, createdAt: payload.createdAt },
-              isExpanded: true,
-            });
-          } else {
-            next.push({
-              id: `snapshot_${Date.now()}`,
-              type: "snapshot",
-              status: "completed",
-              timestamp: new Date(payload.createdAt).getTime(),
-              data: { kind: payload.kind, createdAt: payload.createdAt },
-              isExpanded: true,
-            });
-          }
+          // 当前会话：快照节点插入到对应 user 节点之后（回填后 messageId 已匹配），
+          // 未匹配则插入最新 user 节点之后（公共函数内已处理去重）
+          const next = applySnapshotNode(
+            useWorkflowStore.getState().nodes,
+            { messageId: payload.messageId, kind: payload.kind, createdAt: payload.createdAt },
+            () =>
+              ({
+                id: `snapshot_${Date.now()}`,
+                type: "snapshot",
+                status: "completed",
+                timestamp: new Date(payload.createdAt).getTime(),
+                data: { kind: payload.kind },
+                isExpanded: true,
+              }) as WorkflowNode<"snapshot">,
+          );
           useWorkflowStore.setState({ nodes: next });
         }),
         onSubAgentStatus((payload) => {

@@ -158,21 +158,9 @@ export const useSessionStore = create<SessionState>((set) => ({
     try {
       // 1. 通知后端切换活跃分支
       await tauriCmd.switchBranch(sessionId, branchId);
-      // 2. 清空 workflow store 中该会话的缓存，强制重新加载
-      useWorkflowStore.getState().clearSessionCache(sessionId);
-      // 3. 并行获取分支组信息和会话详情（SessionDetail 不含 branchGroups，需单独获取）
-      const [branchGroups, detail] = await Promise.all([
-        tauriCmd.listBranchGroups(sessionId),
-        tauriCmd.getSession(sessionId),
-      ]);
-      // 4. 重新生成工作流节点
-      useWorkflowStore.getState().loadFromMessages(
-        detail.messages,
-        branchGroups,
-        detail.activeBranchId,
-        detail.revert ?? null
-      );
-      // 5. 重新加载上下文窗口使用信息
+      // 2. 从后端重新加载工作流节点（含该会话缓存清理）
+      await useWorkflowStore.getState().reloadFromServer(sessionId);
+      // 3. 重新加载上下文窗口使用信息
       useWorkflowStore.getState().loadContextUsage(sessionId);
     } catch (error) {
       console.error("[SessionStore] 切换分支失败:", error);

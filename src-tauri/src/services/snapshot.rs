@@ -29,7 +29,17 @@ impl SnapshotKind {
     }
 }
 
-/// 备份时需要跳过的目录名（任意层级命中即跳过）
+/// 字符串快照类型转枚举（未知类型按 files 处理）
+pub fn kind_from_str(kind: &str) -> SnapshotKind {
+    if kind == "git" {
+        SnapshotKind::Git
+    } else {
+        SnapshotKind::Files
+    }
+}
+
+/// 备份时需要跳过的目录名。
+/// files 引擎任意层级命中即跳过；git 引擎仅跳过未跟踪文件路径的第一段
 const SKIP_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -175,11 +185,11 @@ fn list_untracked_files(workspace: &Path) -> Result<Vec<String>, CommandError> {
     }
     let mut files = Vec::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {
-        // ?? 前缀 + 空格，其后为相对路径
+        // ?? 前缀 + 空格，其后为相对路径（含空格/中文等特殊文件名时带引号与八进制转义）
         let Some(rest) = line.strip_prefix("?? ") else {
             continue;
         };
-        let rel = normalize_path(rest);
+        let rel = normalize_path(&decode_git_path(rest.trim()));
         // 跳过黑名单目录（含 / 分隔）
         let first_seg = rel.split('/').next().unwrap_or("");
         if SKIP_DIRS.contains(&first_seg) {
@@ -188,6 +198,52 @@ fn list_untracked_files(workspace: &Path) -> Result<Vec<String>, CommandError> {
         files.push(rel);
     }
     Ok(files)
+}
+
+/// 解码 git status --porcelain 输出的路径：
+/// core.quotePath 默认开启，特殊字符文件名输出为 `"..."`，其中非 ASCII 字符按
+/// 字节以 `\ooo` 八进制转义（如 `"\346\265\213\350\257\225.txt"` = "测试.txt"）
+fn decode_git_path(raw: &str) -> String {
+    if raw.len() < 2 || !raw.starts_with('"') || !raw.ends_with('"') {
+        return raw.to_string();
+    }
+    let bytes = &raw.as_bytes()[1..raw.len() - 1];
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            let next = bytes[i + 1];
+            if (b'0'..=b'7').contains(&next) {
+                // \ooo 八进制转义（最多 3 位）
+                let mut val = 0u8;
+                let mut j = 0;
+                while j < 3 && i + 1 + j < bytes.len() {
+                    let c = bytes[i + 1 + j];
+                    if !(b'0'..=b'7').contains(&c) {
+                        break;
+                    }
+                    val = val * 8 + (c - b'0');
+                    j += 1;
+                }
+                out.push(val);
+                i += 1 + j;
+                continue;
+            }
+            let ch = match next {
+                b'\\' => b'\\',
+                b'"' => b'"',
+                b't' => b'\t',
+                b'n' => b'\n',
+                _ => b'\\',
+            };
+            out.push(ch);
+            i += 2;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| raw.to_string())
 }
 
 /// 创建文件备份快照：全量复制工作区（跳过黑名单目录）
@@ -282,6 +338,9 @@ pub fn restore_snapshot(
 }
 
 /// 恢复 git 快照
+///
+/// 两阶段处理：先恢复/删除文件路径，再删除快照后新建的目录（mkdir/remove_dir 调用），
+/// 避免目录删除与文件恢复互相干扰；非法路径（逃逸/绝对路径）跳过而非中止整个回退
 fn restore_git_snapshot(
     workspace: &Path,
     snapshot_ref: &str,
@@ -291,11 +350,16 @@ fn restore_git_snapshot(
     let (sha, dir_name) = parse_git_ref(snapshot_ref);
     let backup_dir = backup_base_dir.join(dir_name);
     let mut restored = 0usize;
+    // 阶段1：文件路径
     for rel in paths {
         let rel = normalize_path(rel);
-        let ws_file = safe_join(workspace, &rel).ok_or_else(|| {
-            CommandError::fs(crate::errors::FS_IO_ERROR, format!("非法恢复路径: {rel}"))
-        })?;
+        let Some(ws_file) = safe_join(workspace, &rel) else {
+            log::warn!("restore: 跳过非法恢复路径: {rel}");
+            continue;
+        };
+        if !ws_file.is_file() {
+            continue;
+        }
         // 1. 快照中已跟踪该文件 -> git show 写回
         if file_exists_in_git(workspace, &sha, &rel) {
             let content = git_show_file(workspace, &sha, &rel)?;
@@ -326,15 +390,46 @@ fn restore_git_snapshot(
                 continue;
             }
         }
-        // 3. 快照中不存在 -> 该文件为快照后新建，删除
-        if ws_file.is_file() {
-            std::fs::remove_file(&ws_file).map_err(|e| {
-                CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除文件失败: {e}"))
-            })?;
-            restored += 1;
+        // 3. 快照与备份均不存在 -> 该文件为快照后新建，删除
+        std::fs::remove_file(&ws_file).map_err(|e| {
+            CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除文件失败: {e}"))
+        })?;
+        restored += 1;
+    }
+    // 阶段2：目录路径（快照后新建的目录删除，快照中已有的目录保留）
+    for rel in paths {
+        let rel = normalize_path(rel);
+        let Some(ws_file) = safe_join(workspace, &rel) else {
+            continue;
+        };
+        if !ws_file.is_dir() {
+            continue;
         }
+        if dir_exists_in_git(workspace, &sha, &rel) {
+            continue;
+        }
+        if let Some(backup_file) = safe_join(&backup_dir, &rel) {
+            if backup_file.exists() {
+                continue;
+            }
+        }
+        std::fs::remove_dir_all(&ws_file).map_err(|e| {
+            CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除目录失败: {e}"))
+        })?;
+        restored += 1;
     }
     Ok(restored)
+}
+
+/// 判断目录路径在 git 快照中是否存在（文件路径用 cat-file，目录用 ls-tree）
+fn dir_exists_in_git(workspace: &Path, sha: &str, rel: &str) -> bool {
+    let rel = rel.trim_end_matches('/');
+    run_git(
+        workspace,
+        &["ls-tree", "-d", "--name-only", sha, &format!("{rel}/")],
+    )
+    .map(|out| out.status.success() && !String::from_utf8_lossy(&out.stdout).trim().is_empty())
+    .unwrap_or(false)
 }
 
 /// 判断路径在 git 快照中是否存在
@@ -360,18 +455,23 @@ fn git_show_file(workspace: &Path, sha: &str, rel: &str) -> Result<Vec<u8>, Comm
     Ok(output.stdout)
 }
 
-/// 恢复文件备份快照
+/// 恢复文件备份快照（两阶段：先文件路径，再目录路径；非法路径跳过）
 fn restore_files_snapshot(
     workspace: &Path,
     backup_dir: &Path,
     paths: &[String],
 ) -> Result<usize, CommandError> {
     let mut restored = 0usize;
+    // 阶段1：文件路径
     for rel in paths {
         let rel = normalize_path(rel);
-        let ws_file = safe_join(workspace, &rel).ok_or_else(|| {
-            CommandError::fs(crate::errors::FS_IO_ERROR, format!("非法恢复路径: {rel}"))
-        })?;
+        let Some(ws_file) = safe_join(workspace, &rel) else {
+            log::warn!("restore: 跳过非法恢复路径: {rel}");
+            continue;
+        };
+        if !ws_file.is_file() {
+            continue;
+        }
         let backup_file = safe_join(backup_dir, &rel);
         if let Some(backup_file) = backup_file {
             if backup_file.is_file() {
@@ -388,12 +488,30 @@ fn restore_files_snapshot(
             }
         }
         // 备份中不存在 -> 快照后新建的文件，删除
-        if ws_file.is_file() {
-            std::fs::remove_file(&ws_file).map_err(|e| {
-                CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除文件失败: {e}"))
-            })?;
-            restored += 1;
+        std::fs::remove_file(&ws_file).map_err(|e| {
+            CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除文件失败: {e}"))
+        })?;
+        restored += 1;
+    }
+    // 阶段2：目录路径（备份中不存在的目录视为快照后新建，删除）
+    for rel in paths {
+        let rel = normalize_path(rel);
+        let Some(ws_file) = safe_join(workspace, &rel) else {
+            continue;
+        };
+        if !ws_file.is_dir() {
+            continue;
         }
+        let backup_exists = safe_join(backup_dir, &rel)
+            .map(|p| p.exists())
+            .unwrap_or(false);
+        if backup_exists {
+            continue;
+        }
+        std::fs::remove_dir_all(&ws_file).map_err(|e| {
+            CommandError::fs(crate::errors::FS_IO_ERROR, format!("删除目录失败: {e}"))
+        })?;
+        restored += 1;
     }
     Ok(restored)
 }
@@ -506,6 +624,22 @@ mod tests {
             .output()
             .map(|out| out.status.success())
             .unwrap_or(false)
+    }
+
+    /// 解码 git status --porcelain 引号/八进制转义路径
+    #[test]
+    fn test_decode_git_path() {
+        // 无引号：原样返回
+        assert_eq!(decode_git_path("hello.txt"), "hello.txt");
+        // 含空格文件名
+        assert_eq!(decode_git_path(r#""my notes.md""#), "my notes.md");
+        // 中文文件名（UTF-8 字节按八进制转义）
+        assert_eq!(
+            decode_git_path(r#""\346\265\213\350\257\225.txt""#),
+            "测试.txt"
+        );
+        // 转义的引号与反斜杠
+        assert_eq!(decode_git_path(r#""a\"b\\c.txt""#), "a\"b\\c.txt");
     }
 
     #[test]

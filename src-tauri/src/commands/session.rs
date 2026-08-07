@@ -147,16 +147,15 @@ fn resolve_revert_info(
     let hidden_count = messages.len() - idx;
     messages.truncate(idx);
 
-    // 读取 redo 基线快照类型（可能已不存在，容错处理）
-    let redo_snapshot_kind =
-        crate::db::snapshot_repo::get_snapshot_by_id(conn, &revert.redo_snapshot_id)?
-            .map(|s| s.kind)
-            .unwrap_or_default();
+    // 边界消息是否有可用快照（决定代码是否已回退）
+    let code_reverted =
+        crate::db::snapshot_repo::get_snapshot_by_message_id(conn, &revert.revert_message_id)?
+            .is_some();
 
     Ok(Some(crate::models::snapshot::RevertInfo {
         revert_message_id: revert.revert_message_id,
         hidden_count,
-        snapshot_kind: redo_snapshot_kind,
+        code_reverted,
     }))
 }
 
@@ -704,11 +703,7 @@ pub async fn rollback_session_messages(
         let range_messages =
             message_repo::list_messages_from(&conn, &session_id, &active_branch_id, &message_id);
         let paths = crate::services::snapshot::collect_tool_paths(&range_messages);
-        let kind = if snap.kind == "git" {
-            crate::services::snapshot::SnapshotKind::Git
-        } else {
-            crate::services::snapshot::SnapshotKind::Files
-        };
+        let kind = crate::services::snapshot::kind_from_str(&snap.kind);
         let restored = crate::services::snapshot::restore_snapshot(
             kind,
             &snap.snapshot_ref,
@@ -740,11 +735,7 @@ pub async fn rollback_session_messages(
     let all_messages = message_repo::count_session_messages(&conn, &session_id);
     let session_deleted = if hidden_count >= all_messages {
         for snap in crate::db::snapshot_repo::list_snapshots_by_session(&conn, &session_id)? {
-            let kind = if snap.kind == "git" {
-                crate::services::snapshot::SnapshotKind::Git
-            } else {
-                crate::services::snapshot::SnapshotKind::Files
-            };
+            let kind = crate::services::snapshot::kind_from_str(&snap.kind);
             let _ =
                 crate::services::snapshot::delete_backup(kind, &snap.snapshot_ref, &backup_base);
         }
@@ -861,9 +852,8 @@ pub async fn redo_session_messages(
     let backup_base = snapshot_backup_base(&app_handle)?;
 
     // 5. 用 redo 基线快照恢复文件（回退范围内工具路径）
-    if let Some(redo_snap) =
-        crate::db::snapshot_repo::get_snapshot_by_id(&conn, &revert.redo_snapshot_id)?
-    {
+    let redo_snap = crate::db::snapshot_repo::get_snapshot_by_id(&conn, &revert.redo_snapshot_id)?;
+    if let Some(redo_snap) = &redo_snap {
         let range_messages = message_repo::list_messages_from(
             &conn,
             &session_id,
@@ -871,11 +861,7 @@ pub async fn redo_session_messages(
             &revert.revert_message_id,
         );
         let paths = crate::services::snapshot::collect_tool_paths(&range_messages);
-        let kind = if redo_snap.kind == "git" {
-            crate::services::snapshot::SnapshotKind::Git
-        } else {
-            crate::services::snapshot::SnapshotKind::Files
-        };
+        let kind = crate::services::snapshot::kind_from_str(&redo_snap.kind);
         let restored = crate::services::snapshot::restore_snapshot(
             kind,
             &redo_snap.snapshot_ref,
@@ -895,8 +881,17 @@ pub async fn redo_session_messages(
         );
     }
 
-    // 6. 清除回退状态（消息恢复显示）
+    // 6. 清除回退状态（消息恢复显示），并清理已使用完毕的 redo 基线快照（记录+备份）
     crate::db::revert_repo::clear_revert(&conn, &session_id)?;
+    if let Some(redo_snap) = redo_snap {
+        let kind = crate::services::snapshot::kind_from_str(&redo_snap.kind);
+        let _ =
+            crate::services::snapshot::delete_backup(kind, &redo_snap.snapshot_ref, &backup_base);
+        let _ = crate::db::snapshot_repo::delete_snapshots_by_ids(
+            &conn,
+            std::slice::from_ref(&revert.redo_snapshot_id),
+        );
+    }
     log::info!(
         "redo_session_messages 成功: session_id={}, 恢复消息数={}",
         session_id,

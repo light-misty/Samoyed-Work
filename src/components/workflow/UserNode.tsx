@@ -201,7 +201,6 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
         // 统计当前节点之前（含自身）的 user 节点数量，得到 1-based 索引
         const userMsgIndex = nodes.slice(0, nodes.findIndex((n) => n.id === node.id) + 1)
           .filter((n) => n.type === "user").length;
-        if (userMsgIndex === 0) return;
 
         // 从后端获取消息列表，找到对应位置的 user 消息 id
         const detail = await tauriCmd.getSession(sessionId);
@@ -223,19 +222,8 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
       setIsEditing(false);
       setEditContent("");
 
-      // 3. 刷新 workflow 节点：从后端重新加载当前活跃分支的消息
-      const [branchGroups, detail] = await Promise.all([
-        tauriCmd.listBranchGroups(sessionId),
-        tauriCmd.getSession(sessionId),
-      ]);
-      useWorkflowStore.getState().loadFromMessages(
-        detail.messages,
-        branchGroups,
-        detail.activeBranchId,
-      );
-
-      // 4. 清空 workflow 缓存（分支已切换，旧缓存失效）
-      useWorkflowStore.getState().clearSessionCache(sessionId);
+      // 3. 刷新 workflow 节点：从后端重新加载当前活跃分支的消息（含缓存清理）
+      await useWorkflowStore.getState().reloadFromServer(sessionId);
 
       // 5. 通过 pendingBranchSend 触发 App.tsx 的 handleSend 流程
       //    不能直接调用 tauriCmd.startAgent，否则会绕过 useAgent.sendMessage，
@@ -280,7 +268,6 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
         const currentIdx = nodes.findIndex((n) => n.id === node.id);
         if (currentIdx === -1) return;
         const userMsgIndex = nodes.slice(0, currentIdx + 1).filter((n) => n.type === "user").length;
-        if (userMsgIndex === 0) return;
         const detail = await tauriCmd.getSession(sessionId);
         const userMessages = detail.messages.filter((m) => m.role === "user");
         messageId = userMessages[userMsgIndex - 1]?.id;
@@ -307,19 +294,8 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
         useWorkflowStore.getState().clearSessionCache(sessionId);
         useWorkflowStore.getState().setRevertInfo(null);
       } else {
-        // 刷新工作流：重新加载当前活跃分支的消息（后端已截断到回退边界）与回退状态
-        const [branchGroups, detail] = await Promise.all([
-          tauriCmd.listBranchGroups(sessionId),
-          tauriCmd.getSession(sessionId),
-        ]);
-        useWorkflowStore.getState().loadFromMessages(
-          detail.messages,
-          branchGroups,
-          detail.activeBranchId,
-          detail.revert ?? null,
-        );
-        // 清空 workflow 缓存，避免旧节点残留
-        useWorkflowStore.getState().clearSessionCache(sessionId);
+        // 刷新工作流：从后端重新加载当前活跃分支的消息（后端已截断到回退边界）与回退状态
+        await useWorkflowStore.getState().reloadFromServer(sessionId);
       }
 
       // 回填输入框：该用户消息文字（复用模板插入机制，替换输入框内容并聚焦）
