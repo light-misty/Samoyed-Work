@@ -209,16 +209,18 @@ Function PageReinstall
   nsis_tauri_utils::SemverCompare "${VERSION}" $R0
   Pop $R0
   ; ============================================================
-  ; Samoyed Work 自定义修改：升级场景自动跳过重装页面
-  ; 当检测到旧版本且为升级（$R0 = 1）且非 WiX 迁移时，
+  ; Samoyed Work 自定义修改：已有安装自动跳过重装页面
+  ; 当检测到已安装应用（同版本 $R0 = 0 或旧版本 $R0 = 1）且非 WiX 迁移时，
   ; 直接 Abort 跳过 PageReinstall 页面，进入后续安装流程
-  ; （目录选择 -> 安装文件覆盖 -> 完成），实现"升级"语义
+  ; （安装文件覆盖 -> 完成），实现"直接更新已有安装目录"语义
   ; 安装路径会通过 .onInit 中的 RestorePreviousInstallLocation 自动恢复
-  ; 同版本重装（$R0 = 0）和降级（$R0 = -1）仍保留原对话框行为
+  ; 降级（$R0 = -1）仍保留原对话框行为（受 ALLOWDOWNGRADES 保护）
   ; ============================================================
-  ${If} $R0 = 1
-  ${AndIf} $WixMode <> 1
-    Abort
+  ${If} $WixMode <> 1
+    ${If} $R0 = 0
+    ${OrIf} $R0 = 1
+      Abort
+    ${EndIf}
   ${EndIf}
 
   ; Reinstalling the same version
@@ -374,7 +376,9 @@ Function PageLeaveReinstall
 FunctionEnd
 
 ; 5. Choose install directory page
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+; 已安装应用时跳过该页面（由 SkipIfInstalled 检测），
+; 直接使用 .onInit 中 RestorePreviousInstallLocation 恢复的已有安装目录进行更新
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfInstalled
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; 6. Start menu shortcut page
@@ -895,6 +899,20 @@ FunctionEnd
 
 Function SkipIfPassive
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
+FunctionEnd
+
+; Samoyed Work 自定义函数：已安装应用时跳过"选择安装位置"页面
+; 当注册表 MANUPRODUCTKEY 中已记录安装目录（即电脑上已安装该应用）时，
+; 直接 Abort 跳过目录选择页面，安装程序会对已有安装目录执行覆盖更新；
+; 全新安装时保持显示目录选择页面（被动模式除外，使用默认位置）
+Function SkipIfInstalled
+  ReadRegStr $0 SHCTX "${MANUPRODUCTKEY}" ""
+  ${If} $0 != ""
+    Abort
+  ${EndIf}
+  ${If} $PassiveMode = 1
+    Abort
+  ${EndIf}
 FunctionEnd
 Function un.SkipIfPassive
   ${IfThen} $PassiveMode = 1  ${|} Abort ${|}
