@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { WorkflowRightSidebar } from "../workflow/WorkflowRightSidebar";
+import { Icon } from "../common/Icon";
 
 interface MainAreaProps {
   workflow: ReactNode;
@@ -17,10 +18,11 @@ export function MainArea({ workflow, inputArea, isEmpty = false, onOpenPreview }
   // 右侧边栏可见性：仅在非空会话且开关开启时显示
   const rightSidebarVisible = useWorkflowStore((s) => s.rightSidebarVisible);
   const setRightSidebarVisible = useWorkflowStore((s) => s.setRightSidebarVisible);
+  const jumpToPreviousUserMessage = useWorkflowStore((s) => s.jumpToPreviousUserMessage);
   // 非空会话时始终渲染右侧边栏（通过 collapsed class + 动画控制显隐，避免条件渲染导致动画失效）
   const showRightSidebar = !isEmpty;
-  // 右侧边栏收起时，显示浮动展开按钮
-  const showToggleButton = !isEmpty && !rightSidebarVisible;
+  // 右上角浮动按钮组：空会话或右侧边栏展开时不渲染（展开时由侧边栏自身的收起按钮接管）
+  const showFloatActions = !isEmpty && !rightSidebarVisible;
   // 右侧边栏收起时，给 workflow-area 添加预留区域 class，避免消息框与浮动按钮重叠
   // 右侧边栏展开时，添加 sidebar-expanded class，通过 padding-right 给 Timeline 预留空间
   const workflowAreaClass = `workflow-area ${isEmpty ? "" : "flex-1"}${!isEmpty && !rightSidebarVisible ? " workflow-area-reserved" : ""}${!isEmpty && rightSidebarVisible ? " workflow-area-sidebar-expanded" : ""}`;
@@ -32,19 +34,29 @@ export function MainArea({ workflow, inputArea, isEmpty = false, onOpenPreview }
       {/* 工作流区域：滚动由 WorkflowTimeline 内部虚拟滚动容器管理 */}
       <div className={workflowAreaClass}>
         {workflow}
-        {/* 右侧边栏收起时的浮动展开按钮（无边框，仅图标） */}
-        {showToggleButton && (
-          <button
-            className="workflow-right-sidebar-toggle"
-            onClick={() => setRightSidebarVisible(true)}
-            title={t('workflow.showRightSidebar')}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <line x1="15" y1="3" x2="15" y2="21" />
-              <polyline points="11 10 8 13 11 16" />
-            </svg>
-          </button>
+        {/* 右上角浮动按钮组（仅侧边栏收起时显示）：侧边栏开关永久显示，
+            其下方为跳转上一条用户消息按钮（hover 附近时才显示） */}
+        {showFloatActions && (
+          <div className="workflow-float-actions-zone">
+            <button
+              className="workflow-float-action-btn workflow-float-action-btn-always"
+              onClick={() => setRightSidebarVisible(true)}
+              title={t('workflow.showRightSidebar')}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="15" y1="3" x2="15" y2="21" />
+                <polyline points="11 10 8 13 11 16" />
+              </svg>
+            </button>
+            <button
+              className="workflow-float-action-btn"
+              onClick={() => jumpToPreviousUserMessage()}
+              title={t('workflow.previousUserMessage')}
+            >
+              <Icon name="chevron-up" size={14} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -95,11 +107,18 @@ export function MainArea({ workflow, inputArea, isEmpty = false, onOpenPreview }
           padding-right: 240px;
           transition: padding-right 0.3s ease;
         }
-        .workflow-right-sidebar-toggle {
+        /* 右上角浮动按钮组容器：垂直排列，作为 hover 触发区，鼠标移动到附近时才显示跳转按钮 */
+        .workflow-float-actions-zone {
           position: absolute;
-          top: 12px;
-          right: 12px;
-          z-index: 10;
+          top: 8px;
+          right: 8px;
+          z-index: 20;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          padding: 4px;
+        }
+        .workflow-float-action-btn {
           width: 28px;
           height: 28px;
           display: flex;
@@ -110,9 +129,22 @@ export function MainArea({ workflow, inputArea, isEmpty = false, onOpenPreview }
           background: transparent;
           color: var(--color-text-secondary);
           cursor: pointer;
-          transition: color 0.15s;
+          /* 跳转按钮默认隐藏：不显示也不响应点击 */
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.15s, color 0.15s;
         }
-        .workflow-right-sidebar-toggle:hover {
+        /* 跳转按钮：hover 到附近区域时淡入 */
+        .workflow-float-actions-zone:hover .workflow-float-action-btn {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        /* 侧边栏开关按钮：永久显示 */
+        .workflow-float-action-btn-always {
+          opacity: 1;
+          pointer-events: auto;
+        }
+        .workflow-float-action-btn:hover {
           color: var(--color-text-primary);
         }
         /* 右侧边栏展开时，InputArea 也跟随收缩宽度 */

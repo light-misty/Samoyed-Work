@@ -91,6 +91,7 @@
     "contextWindow": "上下文窗口",
     "hideRightSidebar": "隐藏侧边栏",
     "showRightSidebar": "显示侧边栏",
+    "previousUserMessage": "上一条用户消息",
     "branchesCount": "{{count}} 个分支",
     "currentBranch": "当前分支",
     "emptyWorkflow": "暂无工作流节点",

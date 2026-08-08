@@ -252,6 +252,8 @@ interface WorkflowState {
   jumpToNode: (nodeId: string) => boolean;
   /** 通过 messageId 跳转到对应节点（用于跨分支搜索结果跳转） */
   jumpToMessage: (messageId: string) => boolean;
+  /** 跳到上一个用户消息节点：以当前滚动位置为基准，向上找最近的一条 */
+  jumpToPreviousUserMessage: () => boolean;
   /** 设置当前可见节点 ID */
   setCurrentVisibleNodeId: (nodeId: string | null) => void;
 }
@@ -1769,6 +1771,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     );
     if (!targetNode) return false;
     return get().jumpToNode(targetNode.id);
+  },
+
+  // 跳到上一个用户消息节点：以当前滚动位置为基准，向上找最近的一条用户消息
+  jumpToPreviousUserMessage: () => {
+    const nodes = get().nodes;
+    // 通过已注册节点元素向上查找滚动容器（.workflow-scroll-container）
+    let scrollEl: HTMLElement | null = null;
+    // 记录每个 user 节点相对滚动内容顶部的偏移
+    const positions: { id: string; top: number }[] = [];
+    for (const node of nodes) {
+      if (node.type !== "user") continue;
+      const el = nodeRefsMap.get(node.id);
+      if (!el) continue;
+      if (!scrollEl) scrollEl = el.closest<HTMLElement>(".workflow-scroll-container");
+      if (!scrollEl) return false;
+      const containerRect = scrollEl.getBoundingClientRect();
+      positions.push({ id: node.id, top: el.getBoundingClientRect().top - containerRect.top + scrollEl.scrollTop });
+    }
+    if (positions.length === 0) return false;
+
+    const scrollTop = scrollEl?.scrollTop ?? 0;
+    // 选中视口顶部上方（含边缘）最接近的那条用户消息；视口上方没有时跳最早一条
+    let targetId = positions[0].id;
+    let bestTop = -Infinity;
+    positions.forEach((p) => {
+      if (p.top <= scrollTop + 1 && p.top > bestTop) {
+        bestTop = p.top;
+        targetId = p.id;
+      }
+    });
+    return get().jumpToNode(targetId);
   },
 
   // 设置当前可见节点 ID

@@ -91,6 +91,7 @@
     "contextWindow": "Context Window",
     "hideRightSidebar": "Hide Side Panel",
     "showRightSidebar": "Show Side Panel",
+    "previousUserMessage": "Previous user message",
     "branchesCount": "{{count}} branches",
     "currentBranch": "Current Branch",
     "emptyWorkflow": "No workflow nodes yet",
