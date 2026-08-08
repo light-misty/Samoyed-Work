@@ -55,7 +55,6 @@ App
 │   └── TextPreview                    // 纯文本预览
 ├── SettingsDialog  (lazy)             // 设置弹窗
 │   ├── LLMConfig                      // Provider 管理（含 ProviderFormDialog）
-│   ├── WorkspaceTab                   // 工作区管理（含 AddWorkspaceDialog）
 │   ├── HandlersTab                    // Handler/Tool 信息展示
 │   ├── TemplatesTab                   // 模板管理（含 TemplateEditDialog）
 │   ├── AppearanceTab                  // 外观设置

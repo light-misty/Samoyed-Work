@@ -282,7 +282,6 @@
     "title": "Settings",
     "tabs": {
       "llm": "LLM Configuration",
-      "workspace": "Workspace",
       "handler": "Tools & Handlers",
       "template": "Prompt Templates",
       "permission": "Permission Rules",
@@ -398,21 +397,6 @@
       "enterModelName": "Please enter model name",
       "enterApiKey": "Please enter API Key",
       "typeCustom": "Custom"
-    },
-    "workspace": {
-      "sectionTitle": "Workspace Management",
-      "addWorkspace": "Add Workspace",
-      "name": "Name",
-      "path": "Path",
-      "remove": "Remove",
-      "removeConfirm": "Are you sure you want to remove this workspace?",
-      "removeConfirmNote": "Local files will not be deleted",
-      "noWorkspaces": "No workspaces",
-      "workspaceList": "Workspace List",
-      "emptyHint": "No workspaces yet, click the button on the right to add",
-      "current": "Current",
-      "switch": "Switch",
-      "createdAt": "Created at"
     },
     "addWorkspace": {
       "title": "Add Workspace",
@@ -641,7 +625,7 @@
       "faqQ3": "How does Agent confirm high-risk operations?",
       "faqA3": "When Agent performs high-risk operations such as deletion or overwriting, a confirmation dialog will pop up, and you can choose to approve or reject. The confirmation level can be adjusted in Settings > General (Always confirm / Confirm delete only / Auto-confirm all).",
       "faqQ5": "How to switch workspaces?",
-      "faqA5": "Click the workspace selector in the top bar to switch workspaces, or add, switch and manage workspaces in Settings > Workspace Management. Each workspace's files and configuration are independent.",
+      "faqA5": "Click the workspace selector in the top bar to add, switch and manage workspaces. Each workspace's files and configuration are independent.",
       "faqQ6": "How to use Prompt templates?",
       "faqA6": "You can create and manage commonly used Prompt templates in Settings > Prompt Templates, with support for variable placeholders. You can quickly insert template content through the template picker in the input box."
     },

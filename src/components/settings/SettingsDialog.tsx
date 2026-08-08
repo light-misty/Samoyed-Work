@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { Icon } from "../common/Icon";
 import { LLMConfigTab } from "./LLMConfig";
-import { WorkspaceTab } from "./WorkspaceTab";
 import { HandlersTab } from "./HandlersTab";
 import { TemplatesTab } from "./TemplatesTab";
 import { PermissionTab } from "./PermissionTab";
@@ -20,7 +19,6 @@ export function SettingsDialog() {
   // 将 tabs 数组移到组件内部，以便使用 t() 函数
   const tabs = [
     { id: "llm" as const, label: t('settings.tabs.llm'), icon: "settings" },
-    { id: "workspace" as const, label: t('settings.tabs.workspace'), icon: "folder" },
     { id: "handler" as const, label: t('settings.tabs.handler'), icon: "tool" },
     { id: "template" as const, label: t('settings.tabs.template'), icon: "template" },
     { id: "permission" as const, label: t('settings.tabs.permission'), icon: "warning" },
@@ -45,7 +43,6 @@ export function SettingsDialog() {
   const renderTab = () => {
     switch (activeSettingsTab) {
       case "llm": return <LLMConfigTab />;
-      case "workspace": return <WorkspaceTab />;
       case "handler": return <HandlersTab />;
       case "template": return <TemplatesTab />;
       case "permission": return <PermissionTab />;

@@ -151,7 +151,6 @@ samoyed-work/
 │   │   │   ├── SettingsDialog.tsx    # 设置弹窗 (懒加载, 9个标签页)
 │   │   │   ├── LLMConfig.tsx        # LLM Provider增删改查+测试
 │   │   │   ├── ProviderFormDialog.tsx # Provider表单子弹窗
-│   │   │   ├── WorkspaceTab.tsx     # 工作区管理
 │   │   │   ├── AddWorkspaceDialog.tsx # 添加工作区子弹窗
 │   │   │   ├── HandlersTab.tsx      # Handler/Tool列表
 │   │   │   ├── TemplatesTab.tsx     # Prompt模板管理

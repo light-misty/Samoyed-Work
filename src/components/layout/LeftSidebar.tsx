@@ -266,7 +266,7 @@ export function LeftSidebar({
                   <Icon name="refresh" size={14} />
                   <span>{t('sidebar.checkUpdate')}</span>
                 </div>
-                <div className="more-dropdown-item" onClick={() => { openSettings("appearance"); setMoreOpen(false); setLangOpen(false); }}>
+                <div className="more-dropdown-item" onClick={() => { openSettings("llm"); setMoreOpen(false); setLangOpen(false); }}>
                   <Icon name="settings" size={14} />
                   <span>{t('topBar.settings')}</span>
                 </div>

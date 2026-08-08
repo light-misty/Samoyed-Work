@@ -282,8 +282,7 @@
     "title": "设置",
     "tabs": {
       "llm": "模型配置",
-      "workspace": "工作区管理",
-      "handler": "Tools 和 Handlers管理",
+      "handler": "Tools 和 Handlers",
       "template": "Prompt 模板",
       "permission": "权限规则",
       "appearance": "外观设置",
@@ -398,21 +397,6 @@
       "enterModelName": "请输入模型名称",
       "enterApiKey": "请输入 API Key",
       "typeCustom": "自定义"
-    },
-    "workspace": {
-      "sectionTitle": "工作区管理",
-      "addWorkspace": "添加工作区",
-      "name": "名称",
-      "path": "路径",
-      "remove": "移除",
-      "removeConfirm": "确定移除此工作区？",
-      "removeConfirmNote": "不会删除本地文件",
-      "noWorkspaces": "暂无工作区",
-      "workspaceList": "工作区列表",
-      "emptyHint": "暂无工作区，请点击右侧按钮添加",
-      "current": "当前",
-      "switch": "切换",
-      "createdAt": "创建于"
     },
     "addWorkspace": {
       "title": "添加工作区",
@@ -641,7 +625,7 @@
       "faqQ3": "Agent 执行高风险操作时如何确认?",
       "faqA3": "Agent 执行删除、覆盖等高风险操作时会弹出确认对话框，您可以选择批准或拒绝。确认级别可在设置 > 通用设置中调整（全部需确认/仅删除确认/全部自动确认）。",
       "faqQ5": "如何切换工作区?",
-      "faqA5": "点击顶部栏的工作区选择器可切换工作区，或在设置 > 工作区管理中添加、切换和管理工作区。每个工作区的文件和配置相互独立。",
+      "faqA5": "点击顶部栏的工作区选择器可添加、切换和管理工作区。每个工作区的文件和配置相互独立。",
       "faqQ6": "如何使用 Prompt 模板?",
       "faqA6": "在设置 > Prompt 模板中可创建和管理常用 Prompt 模板，支持变量占位符。在输入框中可通过模板选择器快速插入模板内容。"
     },

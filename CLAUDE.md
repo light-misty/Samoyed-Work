@@ -102,8 +102,8 @@ src/                     React 前端 (TypeScript)
     sidebar/             侧边栏: FileTreeSection, AgentInfoSection,
                             SessionListSection
     preview/             文档预览: PreviewPage, MarkdownPreview, PdfCanvasViewer
-    settings/            设置弹窗: SettingsDialog + 10 标签页
-                            (LLMConfig, WorkspaceTab, HandlersTab, TemplatesTab,
+    settings/            设置弹窗: SettingsDialog + 9 标签页
+                            (LLMConfig, HandlersTab, TemplatesTab,
                              AppearanceTab, ShortcutsTab, GeneralTab, HelpTab,
                              LspStatusPanel, PermissionTab)
                             + 子弹窗 (ProviderFormDialog, AddWorkspaceDialog,
@@ -378,10 +378,10 @@ AppState {
 - `useNetworkStore` 同步前端网络状态，Agent 可在断网时暂停并自动重试 LLM 请求
 
 ### 应用设置
-`AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 10 个标签页：
+`AppSettings` 含以下子配置（JSON 文件存储），前端 SettingsDialog 含 9 个标签页：
 - `GeneralSettings`: 作者名、作者邮箱、作者公司、确认级别(Always/DeleteOnly/Never)、`git_bash_path`（String，空表示自动检测）→ **GeneralTab**（含"代码执行环境"区域）
 - `AppearanceSettings`: 主题模式(light/dark/system)、界面语言(language)、跟随系统语言(languageFollowSystem) → **AppearanceTab**
-- `WorkspaceDefaults`: 默认工作区 ID → **WorkspaceTab**
+- `WorkspaceDefaults`: 默认工作区 ID（数据层保留，设置页的工作区管理标签页已移除）
 - `Shortcuts`: 快捷键配置（newSession/closeSession/sendMessage/toggleSidebar/quickPrompt/switchMode）→ **ShortcutsTab**
 - `UpdateSettings`: 自动检查更新(autoCheck) → 与 **GeneralTab** 关联
 - LLM Provider 配置管理 → **LLMConfig**（含 ProviderFormDialog 子弹窗，Provider 支持 contextWindow/supportsVision/extraParams）
