@@ -12,6 +12,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeHighlight from "rehype-highlight";
 // KaTeX 公式渲染样式（字体随包打包，由 Vite 输出为静态资源）
 import "katex/dist/katex.min.css";
+import { copyToClipboard } from "../../utils/clipboard";
 
 interface MarkdownPreviewProps {
   content: string;
@@ -67,7 +68,7 @@ function CodeBlock({
 
   const handleCopy = useCallback(async () => {
     const text = ref.current?.textContent || "";
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, []);

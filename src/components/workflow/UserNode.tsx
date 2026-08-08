@@ -7,6 +7,7 @@ import { formatSize } from "../../utils/format";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { copyToClipboard } from "../../utils/clipboard";
 import * as tauriCmd from "../../services/tauri";
 
 interface UserNodeProps {
@@ -67,17 +68,9 @@ export function UserNode({ node, hideCopy }: UserNodeProps) {
     );
   }
 
+  // 复制内容到系统剪贴板
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(data.content);
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = data.content;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
+    await copyToClipboard(data.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

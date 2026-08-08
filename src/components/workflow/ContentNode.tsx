@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { WorkflowNode, ContentNodeData } from "../../types";
 import { MarkdownPreview } from "../preview/MarkdownPreview";
 import { Icon } from "../common/Icon";
+import { copyToClipboard } from "../../utils/clipboard";
 import { useWorkflowStore } from "../../stores/useWorkflowStore";
 
 interface ContentNodeProps {
@@ -40,18 +41,9 @@ export function ContentNode({ node, hideCopy }: ContentNodeProps) {
     return true;
   })();
 
-  // 复制内容到剪贴板：优先使用现代 Clipboard API，失败时降级为 execCommand
+  // 复制内容到系统剪贴板
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(data.content);
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = data.content;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    }
+    await copyToClipboard(data.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

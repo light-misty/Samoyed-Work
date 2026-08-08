@@ -19,6 +19,8 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+# 剪贴板插件：直接写入系统剪贴板，避免 WebView2 navigator.clipboard API 写入内部延迟剪贴板的问题
+tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }

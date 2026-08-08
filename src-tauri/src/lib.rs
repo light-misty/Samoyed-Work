@@ -130,7 +130,8 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init());
 
     // 桌面端插件：更新和进程管理（需在 Builder 级别注册，构建脚本才能发现权限定义）
     #[cfg(desktop)]

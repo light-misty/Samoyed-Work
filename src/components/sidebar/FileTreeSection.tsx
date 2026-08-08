@@ -6,6 +6,7 @@ import { useWorkspaceStore } from "../../stores/useWorkspaceStore";
 import { Icon } from "../common/Icon";
 import { ContextMenu, type ContextMenuItem } from "../common/ContextMenu";
 import { DeleteConfirmDialog } from "../common/DeleteConfirmDialog";
+import { copyToClipboard } from "../../utils/clipboard";
 import * as tauriCmd from "../../services/tauri";
 import type { FileNode, SearchResult } from "../../types";
 
@@ -455,23 +456,11 @@ export function FileTreeSection({ onOpenPreview, hideSearchBar }: { onOpenPrevie
     }
   }, [activeWorkspaceId, loadTree]);
 
-  /* 复制路径到剪贴板 */
+  /* 复制路径到系统剪贴板 */
   const handleCopyPath = useCallback(async (nodePath: string) => {
     if (!activeWorkspace) return;
     const fullPath = activeWorkspace.path + "\\" + nodePath.replace(/\//g, "\\");
-    try {
-      await navigator.clipboard.writeText(fullPath);
-    } catch {
-      /* 降级方案：使用 textarea 复制 */
-      const textarea = document.createElement("textarea");
-      textarea.value = fullPath;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-    }
+    await copyToClipboard(fullPath);
   }, [activeWorkspace]);
 
   /* 执行重命名 */
