@@ -782,7 +782,7 @@
     },
     "doc": {
       "fileNotFound": "文件不存在，请检查文件路径",
-      "unsupportedFormat": "不支持的文档格式",
+      "unsupportedFormat": "不支持的文件格式",
       "parseFailed": "文档解析失败，文件可能已损坏",
       "writeFailed": "文档写入失败，请检查文件权限",
       "convertFailed": "格式转换失败，请检查源文件",

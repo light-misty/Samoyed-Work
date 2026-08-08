@@ -782,7 +782,7 @@
     },
     "doc": {
       "fileNotFound": "File not found, please check the file path",
-      "unsupportedFormat": "Unsupported document format",
+      "unsupportedFormat": "Unsupported file format",
       "parseFailed": "Document parsing failed, the file may be corrupted",
       "writeFailed": "Document write failed, please check file permissions",
       "convertFailed": "Format conversion failed, please check the source file",
