@@ -321,7 +321,7 @@
       "gitBashPath": "Git Bash Path",
       "gitBashPathDesc": "Path to Git Bash executable for running shell commands. Leave empty to auto-detect from PATH",
       "gitBashPathPlaceholder": "e.g. C:\\Program Files\\Git\\bin\\bash.exe (empty for auto-detect)",
-      "gitBashPathNotFound": "Git Bash not detected. Shell command execution will be unavailable. Please install Git or configure the path manually in settings",
+      "gitBashPathNotFound": "Git Bash not detected. Shell command execution via the bash tool will be unavailable (the powershell tool can still run PowerShell commands). Please install Git or configure the path manually in settings",
       "dataManagement": "Data Management",
       "exportErrorLog": "Log Directory",
       "exportErrorLogDesc": "View app runtime logs for troubleshooting",

@@ -292,6 +292,62 @@ mod tests {
         assert_eq!(fetched.description, "禁止删除命令");
     }
 
+    /// powershell 权限规则必须能真实落库并原样读回
+    /// permission_rules.permission_type 是裸 TEXT 列（无 CHECK 约束），
+    /// 但写库用 Display、读库用 from_str，任一侧缺失都会静默退化成 Wildcard
+    #[test]
+    fn test_insert_and_get_powershell_rule() {
+        let db = setup_test_db();
+        let conn = db.conn().unwrap();
+        let rule = PermissionRule::new(
+            RuleScope::Global,
+            PermissionType::Powershell,
+            "Remove-Item *".to_string(),
+            PermissionAction::Ask,
+        )
+        .with_description("PowerShell 递归删除需确认");
+
+        insert_rule(&conn, &rule).expect("powershell 规则应能写入（列无 CHECK 约束）");
+
+        let fetched = get_rule(&conn, &rule.id).unwrap();
+        assert_eq!(
+            fetched.permission_type,
+            PermissionType::Powershell,
+            "读回后退化为 {:?}，说明 Display/from_str 不闭环",
+            fetched.permission_type
+        );
+        assert_eq!(fetched.pattern, "Remove-Item *");
+        assert_eq!(fetched.action, PermissionAction::Ask);
+        assert_eq!(fetched.description, "PowerShell 递归删除需确认");
+
+        // 按类型过滤（设置页的真实查询路径）：过滤条件同样用 Display 值比对，
+        // 与写库所用字符串必须闭环一致，否则过滤结果恒空
+        let all = list_rules(
+            &conn,
+            &PermissionRuleFilter {
+                permission_type: Some(PermissionType::Powershell),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            all.len(),
+            1,
+            "按 powershell 过滤应命中刚写入的规则，实际 {} 条",
+            all.len()
+        );
+        assert_eq!(all[0].pattern, "Remove-Item *");
+
+        // 不带过滤的全量查询也要正确还原类型
+        let unfiltered = list_rules(&conn, &PermissionRuleFilter::default()).unwrap();
+        assert!(
+            unfiltered
+                .iter()
+                .any(|r| r.permission_type == PermissionType::Powershell),
+            "list_rules 应能列出 powershell 规则"
+        );
+    }
+
     #[test]
     fn test_list_rules_by_scope() {
         let db = setup_test_db();

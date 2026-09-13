@@ -1172,7 +1172,7 @@ When making changes to files, first understand the file's code conventions. Mimi
     fn layer_tool_strategy() -> String {
         r#"# Tool usage policy
 - When doing file search, prefer to use the glob and grep tools in order to reduce context usage.
-- You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run "git status" and "git diff", send a single message with two tool calls to run the calls in parallel.
+- You have the capability to call multiple tools in a single response. When multiple independent pieces of information are requested, batch your tool calls together for optimal performance. When making multiple bash or powershell tool calls, you MUST send a single message with multiple tools calls to run the calls in parallel. For example, if you need to run "git status" and "git diff", or "Get-Service" and "Get-Process", send a single message with two tool calls to run the calls in parallel.
 - On tool failure: 1) read the error message; 2) analyze the root cause; 3) adjust parameters and retry; 4) after 2 retries, report to the user instead of retrying indefinitely.
 
 ## Available tools overview
@@ -1309,7 +1309,7 @@ When your tool call is intercepted by the confirmation mechanism:
                 r#"# Plan Mode (Read-Only Planning)
 You are currently in Plan mode. In this mode, you MUST NOT perform any modifications to the system. This includes:
 - No file edits (edit, write, apply_patch)
-- No command execution that modifies state (bash with write/rm/mkdir etc.)
+- No command execution that modifies state (bash with write/rm/mkdir, powershell with Remove-Item/Set-Content/New-Item etc.)
 - No document generation or modification (docx/xlsx/pptx/pdf)
 - No script writing and execution (write_script)
 
@@ -1843,6 +1843,46 @@ mod tests {
         assert!(
             !text.contains("commands run via Git Bash; use Unix-style commands"),
             "不应保留\u{201c}Windows 下只能用 Unix 风格命令\u{201d}的排他表述"
+        );
+    }
+
+    /// 提示词与实际权限拦截必须一致：Plan 模式在代码层已拒绝 powershell
+    /// （is_modification 含 Powershell），提示词只点名 bash 会让模型先试错再吃到拒绝
+    #[test]
+    fn test_plan_mode_prompt_names_both_shells() {
+        use crate::services::permission::PermissionType;
+        // 前提：代码层确实两个 shell 都拦
+        assert!(PermissionType::Bash.is_modification());
+        assert!(PermissionType::Powershell.is_modification());
+
+        let text = AgentContext::layer_agent_mode(&AgentMode::Plan);
+        assert!(
+            text.contains("bash"),
+            "Plan 提示词应提及 bash，实际:\n{text}"
+        );
+        assert!(
+            text.contains("powershell"),
+            "Plan 提示词应同时点名 powershell，否则与代码拦截不一致，实际:\n{text}"
+        );
+    }
+
+    /// 并行调用引导要覆盖两个 shell，否则模型倾向串行发起 powershell 调用
+    #[test]
+    fn test_parallel_tool_call_guidance_covers_powershell() {
+        let text = AgentContext::layer_tool_strategy();
+        assert!(
+            text.contains("powershell"),
+            "工具策略层应提及 powershell，实际:\n{}",
+            &text[..text.len().min(400)]
+        );
+        // 并行示例那句必须同时点到两种 shell 的批量调用
+        let parallel_line = text
+            .lines()
+            .find(|l| l.contains("run the calls in parallel"))
+            .expect("应存在并行调用引导句");
+        assert!(
+            parallel_line.contains("bash") && parallel_line.contains("powershell"),
+            "并行调用引导应同时点名 bash 与 powershell，实际: {parallel_line}"
         );
     }
 

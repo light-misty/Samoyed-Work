@@ -321,7 +321,7 @@
       "gitBashPath": "Git Bash 路径",
       "gitBashPathDesc": "用于执行 Shell 命令的 Git Bash 可执行文件路径。留空则从 PATH 环境变量自动检测",
       "gitBashPathPlaceholder": "例如：C:\\Program Files\\Git\\bin\\bash.exe（留空自动检测）",
-      "gitBashPathNotFound": "未检测到 Git Bash，Shell 命令执行将不可用。请安装 Git 或在设置页面中手动配置路径",
+      "gitBashPathNotFound": "未检测到 Git Bash，bash 工具的 Shell 命令执行将不可用（powershell 工具仍可执行 PowerShell 命令）。请安装 Git 或在设置页面中手动配置路径",
       "dataManagement": "数据管理",
       "exportErrorLog": "日志目录",
       "exportErrorLogDesc": "查看应用运行日志，便于排查问题",

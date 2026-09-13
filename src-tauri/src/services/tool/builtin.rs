@@ -6134,10 +6134,7 @@ fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str
 /// 误判成"泄露脚本到工作区"；`sc`/`mi` 等两字母别名同理会被 misc、minus 之类吞掉。
 fn contains_at_word_boundary(hay: &str, token: &str) -> bool {
     // 词边界分隔符：空白、语句/管道分隔符、括号、引号、赋值号、驱动器与静态调用用的冒号
-    const WORD_DELIMS: &[u8] = &[
-        b' ', b'\t', b'\n', b'\r', b';', b'|', b'&', b'(', b')', b'{', b'}', b',', b'"', b'\'',
-        b'=', b':',
-    ];
+    const WORD_DELIMS: &[u8] = b" \t\n\r;|&(){},\"'=:";
     let bytes = hay.as_bytes();
     let is_delim = |b: u8| WORD_DELIMS.contains(&b);
     let mut from = 0usize;
@@ -8537,6 +8534,52 @@ mod powershell_execution_tests {
                 .contains("about-to-fail"),
             "失败时也应保留脚本已产生的输出"
         );
+    }
+
+    /// 真实调用路径：必须能通过 ToolRegistry 取到 powershell 工具并执行成功
+    /// 其余执行测试都是直接构造结构体，覆盖不到注册表里的实例与注册参数
+    #[tokio::test]
+    async fn test_powershell_runs_through_tool_registry_path() {
+        let mut registry = ToolRegistry::new();
+        let _reg = register_builtin_tools(
+            &mut registry,
+            String::new(),
+            Arc::new(Database::new(std::path::Path::new(":memory:")).unwrap()),
+            crate::config::app_settings::WebSearchConfig::default(),
+            std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            None,
+            std::sync::Arc::new(crate::services::skill::registry::SkillRegistry::new(
+                crate::services::skill::loader::SkillLoader::new(
+                    std::path::PathBuf::from("/tmp"),
+                    None,
+                    Vec::new(),
+                ),
+            )),
+        );
+
+        let tool = registry
+            .get_arc("powershell")
+            .expect("注册表应能按名取出 powershell");
+        // 注册表对外声明的定义也必须是 powershell，否则 LLM 侧看不到该工具
+        let names: Vec<String> = registry
+            .tool_definitions()
+            .iter()
+            .map(|d| d["function"]["name"].as_str().unwrap_or("").to_string())
+            .collect();
+        assert!(
+            names.contains(&"powershell".to_string()),
+            "tool_definitions 应包含 powershell，实际: {names:?}"
+        );
+
+        let result = tool
+            .execute(json!({"command": "Write-Output 'via-registry'"}))
+            .await;
+        assert!(result.success, "经注册表执行失败: {:?}", result.error);
+        assert!(out(&result)["stdout"]
+            .as_str()
+            .unwrap_or("")
+            .contains("via-registry"));
+        assert_eq!(out(&result)["exit_code"], json!(0));
     }
 
     /// 输出字段契约：与 bash 工具返回完全相同的键集合
