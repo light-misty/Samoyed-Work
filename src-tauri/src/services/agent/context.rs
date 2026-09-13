@@ -1191,7 +1191,7 @@ When making changes to files, first understand the file's code conventions. Mimi
 ### Code execution
 - bash: execute shell commands via Git Bash (compile, test, build, run scripts; Unix syntax)
 - powershell: execute PowerShell commands (Windows cmdlets, services, registry, processes; PowerShell syntax)
-- write_script: write scripts to the system temp directory (then run via bash)
+- write_script: write Python/Bash/PowerShell scripts to the system temp directory (then run via bash, or via powershell for .ps1)
 
 ### File management
 - remove/rename/copy/mkdir/hash: delete/rename/copy/create directory/compute hash
@@ -1240,7 +1240,7 @@ Example: Clients are marked as failed in the `connectToServer` function in src/s
 # Script execution best practices
 - For complex tasks, prefer writing scripts (write_script) over concatenating long commands in bash
 - Script files are written to the system temp directory; do not pollute the workspace
-- Use clear script file names, e.g., `analyze_imports.py`, `batch_rename.sh`{bash_info}
+- Use clear script file names, e.g., `analyze_imports.py`, `batch_rename.sh`, `collect_logs.ps1`{bash_info}
 - The working directory defaults to the current workspace; specify it via the working_dir parameter
 - Command timeout defaults to 60 seconds; adjust via the timeout parameter (max 300 seconds)
 - Output exceeding 6000 characters will be truncated automatically; for long output, redirect to a file and read it with the read tool

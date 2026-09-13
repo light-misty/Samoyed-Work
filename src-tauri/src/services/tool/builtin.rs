@@ -3828,8 +3828,9 @@ impl Tool for WriteTextFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "Writing script files via write_text_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
-                    file_path
+                    "Writing script files via write_text_file is not allowed: {}. {}",
+                    file_path,
+                    script_execution_guidance()
                 )),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
@@ -4293,10 +4294,12 @@ impl Tool for RenameFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "Renaming files to script files via rename_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
-                    target_path
+                    "Renaming files to script files via rename_file is not allowed: {}. {}",
+                    target_path,
+                    script_execution_guidance()
                 )),
-                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -4463,10 +4466,12 @@ impl Tool for CopyFileTool {
                 success: false,
                 output: None,
                 error: Some(format!(
-                    "Copying files to script files via copy_file is not allowed: {}. Please use the write_script tool to write scripts to the system temporary directory, then execute them via the bash tool",
-                    target_path
+                    "Copying files to script files via copy_file is not allowed: {}. {}",
+                    target_path,
+                    script_execution_guidance()
                 )),
-                duration_ms: start.elapsed().as_millis() as u64, error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
         }
 
@@ -5846,11 +5851,20 @@ pub fn format_scratchpad_summary(
 // write_script - 写入脚本文件到临时目录
 // ============================================================
 //
-// 让智能体编写 Python 或 Bash 脚本文件，存放在系统临时目录下，
-// 供 bash 工具执行。脚本文件不污染工作区目录。
+// 让智能体编写 Python / Bash / PowerShell 脚本文件，存放在系统临时目录下，
+// 供 bash 或 powershell 工具执行。脚本文件不污染工作区目录。
 //
 // 存放路径：<temp_dir>/samoyed_work/scripts/<filename>
-// 脚本语言：python（.py）或 bash（.sh）
+// 脚本语言：python（.py）、bash（.sh/.bash）或 powershell（.ps1）
+
+/// 脚本守卫的统一引导文案
+///
+/// write/rename/copy 三处拒绝写脚本到工作区时都追加这段指引，抽出来避免三份拷贝走样。
+/// 必须同时指向两个执行入口：.ps1 在 Git Bash 里跑不了。
+fn script_execution_guidance() -> &'static str {
+    "Please use the write_script tool to write scripts to the system temporary directory, \
+     then execute them via the bash tool (or the powershell tool for .ps1 scripts)"
+}
 
 /// 脚本写入工具
 /// 将智能体编写的脚本内容写入系统临时目录，返回脚本绝对路径
@@ -5863,10 +5877,11 @@ impl Tool for WriteScriptTool {
     }
 
     fn description(&self) -> &str {
-        "Write script content to a temporary file for execution by the bash tool.\
-         Supports writing Python or Bash scripts to solve user problems (document processing, data analysis, automation tasks, etc.).\
+        "Write script content to a temporary file for execution by the bash or powershell tool.\
+         Supports writing Python (.py), Bash (.sh/.bash) or PowerShell (.ps1) scripts to solve user problems (document processing, data analysis, automation tasks, etc.).\
          Script files are stored in the system temporary directory and do not pollute the workspace.\
-         Returns the absolute path of the script file, which can be executed in bash via 'python <path>' or 'bash <path>'."
+         Returns the absolute path of the script file: run .py/.sh via the bash tool ('python <path>' or 'bash <path>'), and run .ps1 via the powershell tool ('& \"<path>\"' or 'powershell -File <path>').\
+         Note: a PowerShell script must call 'exit <code>' explicitly to report failure; a failing native command inside the script does not change the script's exit status on its own."
     }
 
     fn category(&self) -> &str {
@@ -5879,12 +5894,12 @@ impl Tool for WriteScriptTool {
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "Script filename (including extension, e.g. 'generate_report.py' or 'process_data.sh')"
+                    "description": "Script filename (including extension, e.g. 'generate_report.py', 'process_data.sh' or 'collect_logs.ps1')"
                 },
                 "language": {
                     "type": "string",
-                    "enum": ["python", "bash"],
-                    "description": "Script language type: python (.py) or bash (.sh). If filename already has an extension, this field can be omitted and will be auto-inferred"
+                    "enum": ["python", "bash", "powershell"],
+                    "description": "Script language type: python (.py), bash (.sh) or powershell (.ps1). If filename already has an extension, this field can be omitted and will be auto-inferred"
                 },
                 "content": {
                     "type": "string",
@@ -5993,14 +6008,19 @@ impl Tool for WriteScriptTool {
 /// 若 filename 已含扩展名，直接使用；否则根据 language 参数补充扩展名
 fn infer_script_language(filename: &str, language: &str) -> (String, &'static str) {
     let lower = filename.to_lowercase();
+    // 后缀优先于 language 参数：二者矛盾时以后缀为准，
+    // 否则会把 .ps1 文件报告成 python 语言、或落到默认分支把 .ps1 再补一个 .py
     if lower.ends_with(".py") {
         (filename.to_string(), "python")
-    } else if lower.ends_with(".sh") {
+    } else if lower.ends_with(".sh") || lower.ends_with(".bash") {
         (filename.to_string(), "bash")
+    } else if lower.ends_with(".ps1") {
+        (filename.to_string(), "powershell")
     } else {
         // 无扩展名，根据 language 参数补充
         match language {
             "bash" => (format!("{}.sh", filename), "bash"),
+            "powershell" => (format!("{}.ps1", filename), "powershell"),
             _ => (format!("{}.py", filename), "python"),
         }
     }
@@ -7824,6 +7844,109 @@ mod powershell_tool_tests {
         );
     }
 
+    // ---------- write_script 的 PowerShell 语言支持 ----------
+
+    /// filename 与 language 两个方向都要能推断出 .ps1
+    #[test]
+    fn test_infer_script_language_powershell() {
+        // 仅给 language，补 .ps1 扩展名
+        assert_eq!(
+            infer_script_language("backup_db", "powershell"),
+            ("backup_db.ps1".to_string(), "powershell")
+        );
+        // 仅给 .ps1 后缀，反推语言
+        assert_eq!(
+            infer_script_language("backup_db.ps1", ""),
+            ("backup_db.ps1".to_string(), "powershell")
+        );
+        // 扩展名优先：language 与后缀矛盾时以后缀为准，不得产出 .ps1 却报告 python
+        assert_eq!(
+            infer_script_language("backup_db.ps1", "python"),
+            ("backup_db.ps1".to_string(), "powershell")
+        );
+        // 大写后缀同样识别
+        assert_eq!(
+            infer_script_language("Task.PS1", ""),
+            ("Task.PS1".to_string(), "powershell")
+        );
+    }
+
+    /// 新增语言不得改变 python/bash 的既有推断结果
+    #[test]
+    fn test_infer_script_language_python_bash_unchanged() {
+        let cases: &[(&str, &str, &str, &str)] = &[
+            // (filename, language, 期望文件名, 期望语言)
+            ("run.py", "", "run.py", "python"),
+            ("run.sh", "", "run.sh", "bash"),
+            // .bash 此前会落到默认分支被补成 run.bash.py 并报告 python，一并修正
+            ("run.bash", "", "run.bash", "bash"),
+            ("run", "python", "run.py", "python"),
+            ("run", "bash", "run.sh", "bash"),
+            // 未给 language 时默认补 .py 的历史行为保持不变
+            ("run", "", "run.py", "python"),
+            // 未知 language 仍走默认分支，不得 panic
+            ("run", "ruby", "run.py", "python"),
+        ];
+        for &(filename, language, want_name, want_lang) in cases {
+            let (name, lang) = infer_script_language(filename, language);
+            assert_eq!(
+                name.as_str(),
+                want_name,
+                "filename={filename} language={language}"
+            );
+            assert_eq!(lang, want_lang, "filename={filename} language={language}");
+        }
+    }
+
+    #[test]
+    fn test_write_script_language_enum_includes_powershell() {
+        let schema = WriteScriptTool.parameters();
+        let langs: Vec<&str> = schema["properties"]["language"]["enum"]
+            .as_array()
+            .expect("language 应为枚举数组")
+            .iter()
+            .map(|v| v.as_str().expect("枚举项应为字符串"))
+            .collect();
+        assert!(
+            langs.contains(&"powershell"),
+            "language 枚举应包含 powershell，实际: {langs:?}"
+        );
+        assert!(langs.contains(&"python"));
+        assert!(langs.contains(&"bash"));
+    }
+
+    /// 描述必须说明 .ps1 由 powershell 工具执行
+    /// 否则模型写完脚本只会去 bash 里执行，而 Git Bash 无法运行 .ps1
+    #[test]
+    fn test_write_script_description_covers_powershell() {
+        let desc = WriteScriptTool.description();
+        assert!(
+            desc.contains("PowerShell") || desc.contains("powershell"),
+            "描述应提及 PowerShell，实际: {desc}"
+        );
+        assert!(desc.contains(".ps1"), "描述应列出 .ps1，实际: {desc}");
+        assert!(
+            desc.contains("powershell <path>") || desc.contains("-File"),
+            "描述应给出 .ps1 的执行方式，实际: {desc}"
+        );
+    }
+
+    /// 引导文案要与两个 shell 一致
+    #[test]
+    fn test_script_guard_messages_point_to_both_shells() {
+        // 三处守卫文案都出现在同一模块内，统一检查
+        let combined = format!(
+            "{}{}{}",
+            script_execution_guidance(),
+            script_execution_guidance(),
+            script_execution_guidance()
+        );
+        assert!(
+            combined.contains("bash tool") && combined.contains("powershell tool"),
+            "守卫文案应同时指向 bash 与 powershell 两个执行入口，实际: {combined}"
+        );
+    }
+
     // ---------- 工具元数据与注册 ----------
 
     #[test]
@@ -8329,6 +8452,91 @@ mod powershell_execution_tests {
 
         assert!(ps_max < 20_000, "简单命令热调用耗时异常: {ps_max} ms");
         assert!(cold_ms < 30_000, "冷启动耗时异常: {cold_ms} ms");
+    }
+
+    /// 端到端：write_script 写出的 .ps1 必须能被 powershell 工具直接执行
+    /// 这是 ps1 语言支持真正要打通的链路，只测字符串推断不足以证明可用
+    #[tokio::test]
+    async fn test_write_script_ps1_runs_via_powershell_tool() {
+        let unique = format!("sw_ps1_ok_{}", std::process::id());
+
+        // 不给扩展名，仅靠 language 推断出 .ps1
+        let written = WriteScriptTool
+            .execute(json!({
+                "filename": unique,
+                "language": "powershell",
+                "content": "Write-Output 'ps1-file-ran'\nWrite-Output \"pid=$PID\"\n",
+            }))
+            .await;
+        assert!(written.success, "write_script 失败: {:?}", written.error);
+        let path = out(&written)["path"].as_str().unwrap_or("").to_string();
+        assert!(
+            path.ends_with(".ps1"),
+            "应产出 .ps1 文件，实际 path: {path}"
+        );
+        assert_eq!(out(&written)["language"], json!("powershell"));
+        assert!(
+            std::path::Path::new(&path).is_file(),
+            "脚本文件应真实存在: {path}"
+        );
+
+        // 用 powershell 工具执行该脚本文件（脚本含中文输出与空格外壳路径均可）
+        let run = RunPowerShellCommandTool
+            .execute(json!({"command": format!("& '{path}'")}))
+            .await;
+        let _ = std::fs::remove_file(&path);
+
+        assert!(
+            run.success,
+            "执行 .ps1 失败: {:?} stderr={:?}",
+            run.error,
+            run.output.as_ref().and_then(|o| o["stderr"].as_str())
+        );
+        let stdout = out(&run)["stdout"].as_str().unwrap_or("");
+        assert!(
+            stdout.contains("ps1-file-ran"),
+            "脚本输出未取回，实际: {stdout:?}"
+        );
+        assert!(
+            stdout.contains("pid="),
+            "脚本内变量求值应生效，实际: {stdout:?}"
+        );
+    }
+
+    /// 端到端：脚本内显式 exit 非零时，失败状态必须被退出码归一带回
+    /// 实测依据：& 调用一个 exit 3 的 .ps1 会得到 $? = False 且 $LASTEXITCODE = 3
+    #[tokio::test]
+    async fn test_write_script_ps1_propagates_script_exit_code() {
+        let unique = format!("sw_ps1_fail_{}", std::process::id());
+        let written = WriteScriptTool
+            .execute(json!({
+                "filename": unique,
+                "language": "powershell",
+                "content": "Write-Output 'about-to-fail'\nexit 3\n",
+            }))
+            .await;
+        assert!(written.success);
+        let path = out(&written)["path"].as_str().unwrap_or("").to_string();
+
+        let run = RunPowerShellCommandTool
+            .execute(json!({"command": format!("& '{path}'")}))
+            .await;
+        let _ = std::fs::remove_file(&path);
+
+        assert!(!run.success, "脚本 exit 3 应被判定为失败");
+        assert_eq!(
+            out(&run)["exit_code"],
+            json!(3),
+            "脚本退出码应被归一到 3，stderr={:?}",
+            run.output.as_ref().and_then(|o| o["stderr"].as_str())
+        );
+        assert!(
+            out(&run)["stdout"]
+                .as_str()
+                .unwrap_or("")
+                .contains("about-to-fail"),
+            "失败时也应保留脚本已产生的输出"
+        );
     }
 
     /// 输出字段契约：与 bash 工具返回完全相同的键集合
