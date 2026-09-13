@@ -57,9 +57,9 @@ pip install -r sidecar/requirements.txt
 
 ```bash
 # 编译（不运行）
-cargo build -p samoyed_work_lib
+cargo build -p samoyed-work
 
-# 运行所有 Rust 测试（现有 203 个测试函数，24 个 #[cfg(test)] 模块）
+# 运行所有 Rust 测试（现有 331 个测试函数，34 个 #[cfg(test)] 模块）
 cargo test
 
 # 运行特定测试

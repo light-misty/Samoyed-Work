@@ -32,7 +32,7 @@ Explicitly write out your entire deliberation process, documenting every interme
 | `npm run tauri:dev` | Full Tauri app (Vite + Rust backend, auto syncs sidecar) |
 | `npm run build` | `tsc -b && vite build` |
 | `npm run tauri:build` | Production build (NSIS installer, auto builds sidecar) |
-| `cargo build -p samoyed_work_lib` | Compile Rust only |
+| `cargo build -p samoyed-work` | Compile Rust only |
 | `cargo test` | Runs Rust unit tests (331 tests, 34 `#[cfg(test)]` modules) |
 | `cargo clippy` | Rust lint |
 | `cargo fmt --check` | Rust format check |
