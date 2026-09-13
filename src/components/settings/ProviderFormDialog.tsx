@@ -118,12 +118,14 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   const [modelListFetchedKey, setModelListFetchedKey] = useState("");
 
   // 校验必填字段，收集所有错误返回（测试连接不要求上下文窗口；服务商名称非必填，为空时保存使用模型名称兜底）
+  // Ollama 为本地部署，不需要 API Key
+  const isOllama = providerType === "ollama";
   const validateRequired = (includeContextWindow = true): Record<string, string> => {
     const errors: Record<string, string> = {};
     if (!apiBase.trim()) errors.apiBase = t('settings.providerForm.enterApiBase');
     if (!model.trim()) errors.model = t('settings.providerForm.enterModelName');
-    // 添加模式下 API Key 必填；编辑模式下可留空，后端会从已保存 Provider 查找
-    if (mode === "add" && !apiKey.trim()) errors.apiKey = t('settings.providerForm.enterApiKey');
+    // 添加模式下 API Key 必填；编辑模式下可留空，后端会从已保存 Provider 查找；Ollama 不需要 API Key
+    if (mode === "add" && !isOllama && !apiKey.trim()) errors.apiKey = t('settings.providerForm.enterApiKey');
     if (includeContextWindow && !contextWindow.trim()) errors.contextWindow = t('settings.providerForm.enterContextWindow');
     return errors;
   };
@@ -151,9 +153,15 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
     clearFieldError("apiBase");
   };
 
-  // 切换服务商类型：模板激活时自动联动 API Base URL
+  // 切换服务商类型：模板激活时自动联动 API Base URL；选择 Ollama 时自动填充默认地址
   const handleProviderTypeChange = (value: LLMProviderType) => {
     setProviderType(value);
+    if (value === "ollama") {
+      // Ollama 默认本地地址
+      setApiBase("http://localhost:11434/v1");
+      clearFieldError("apiBase");
+      return;
+    }
     if (activeTemplate) {
       const url = MODEL_TEMPLATES[activeTemplate]?.[value];
       if (url) {
@@ -167,11 +175,13 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
   };
 
   // 点击模型名称输入框：根据 API Key 与 API Base URL 获取可用模型列表
+  // Ollama 等本地部署可省略 API Key
   const handleModelInputFocus = async () => {
     if (modelListLoading) return;
     setModelListOpen(true);
     if (!apiBase.trim()) { setModelListError(t('settings.providerForm.enterApiBase')); setModelList(null); return; }
-    if (!apiKey.trim()) { setModelListError(t('settings.providerForm.enterApiKey')); setModelList(null); return; }
+    // 非 Ollama 类型需要 API Key 才能获取模型列表
+    if (!isOllama && !apiKey.trim()) { setModelListError(t('settings.providerForm.enterApiKey')); setModelList(null); return; }
     const fetchKey = `${providerType}|${apiBase.trim()}|${apiKey.trim()}`;
     // API Key / Base URL / 类型未变化时复用已获取的列表
     if (modelListFetchedKey === fetchKey && modelList) return;
@@ -344,21 +354,24 @@ export function ProviderFormDialog({ mode, provider, onClose, onSaved }: Provide
             )}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">
-              {t('settings.providerForm.apiKey')}{mode === "edit" ? t('settings.providerForm.apiKeyEditHint') : ""}
-            </label>
-            <input
-              type="password"
-              className="form-input form-input-mono"
-              placeholder="sk-..."
-              value={apiKey}
-              onChange={(e) => { setApiKey(e.target.value); clearFieldError("apiKey"); }}
-            />
-            {fieldErrors.apiKey && (
-              <div className="form-field-error">{fieldErrors.apiKey}</div>
-            )}
-          </div>
+          {/* Ollama 为本地部署，不需要 API Key，隐藏输入框 */}
+          {!isOllama && (
+            <div className="form-group">
+              <label className="form-label">
+                {t('settings.providerForm.apiKey')}{mode === "edit" ? t('settings.providerForm.apiKeyEditHint') : ""}
+              </label>
+              <input
+                type="password"
+                className="form-input form-input-mono"
+                placeholder="sk-..."
+                value={apiKey}
+                onChange={(e) => { setApiKey(e.target.value); clearFieldError("apiKey"); }}
+              />
+              {fieldErrors.apiKey && (
+                <div className="form-field-error">{fieldErrors.apiKey}</div>
+              )}
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">{t('settings.providerForm.modelName')}</label>
