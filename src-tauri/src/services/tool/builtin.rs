@@ -6018,21 +6018,15 @@ fn infer_script_language(filename: &str, language: &str) -> (String, &'static st
 // 2. 从 PATH 环境变量查找 git.exe，推断 bash.exe 位置
 // 3. 从 PATH 直接查找 bash.exe
 
-/// 检测命令是否试图将脚本文件复制/移动到工作区目录
-/// 阻止以下脚本泄露途径：
-/// 1. cp/mv 命令将脚本文件从临时目录复制到工作区
-/// 2. 重定向（>、>>）将脚本内容写入工作区
-/// 3. install 命令将脚本安装到工作区
+/// 脚本泄露判定的公共部分：命令是否涉及工作区 + 是否涉及脚本文件
 ///
-/// 检测逻辑：命令同时满足以下条件时拒绝执行
-/// - 包含文件复制/移动/重定向操作（cp/copy/mv/move/install/>/>>）
-/// - 命令中出现脚本文件扩展名（.py/.sh/.bash/.ps1/.bat/.cmd 等）
-/// - 命令中出现工作区路径（用于判断目标是否为工作区）
+/// 与具体 shell 无关，供 bash 与 powershell 两个工具复用；
+/// 调用方还需确认命令含有"写入/复制"类操作才算泄露。
 ///
 /// 路径格式兼容：
 /// - Windows 风格：D:\DeskTop\test 或 D:/DeskTop/test
 /// - Git Bash 风格：/d/DeskTop/test（盘符 D: 转换为 /d/）
-fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str) -> bool {
+fn script_leak_targets_workspace(command: &str, working_dir: &str, workspace_root: &str) -> bool {
     if workspace_root.is_empty() {
         return false;
     }
@@ -6076,17 +6070,31 @@ fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str
         ".bash'", ".bash;", ".ps1 ", ".ps1\"", ".ps1'", ".ps1;", ".bat ", ".bat\"", ".bat'",
         ".bat;", ".cmd ", ".cmd\"", ".cmd'", ".cmd;",
     ];
-    let has_script_ext = SCRIPT_EXT_TOKENS.iter().any(|tok| lower.contains(tok))
-        || lower.ends_with(".py")
+    lower.ends_with(".py")
         || lower.ends_with(".sh")
         || lower.ends_with(".bash")
         || lower.ends_with(".ps1")
         || lower.ends_with(".bat")
-        || lower.ends_with(".cmd");
-    if !has_script_ext {
+        || lower.ends_with(".cmd")
+        || SCRIPT_EXT_TOKENS.iter().any(|tok| lower.contains(tok))
+}
+
+/// 判断命令是否试图将脚本文件复制/移动到工作区目录（Git Bash）
+/// 阻止以下脚本泄露途径：
+/// 1. cp/mv 命令将脚本文件从临时目录复制到工作区
+/// 2. 重定向（>、>>）将脚本内容写入工作区
+/// 3. install 命令将脚本安装到工作区
+///
+/// 检测逻辑：命令同时满足以下条件时拒绝执行
+/// - 包含文件复制/移动/重定向操作（cp/copy/mv/move/install/>/>>）
+/// - 命令中出现脚本文件扩展名（.py/.sh/.bash/.ps1/.bat/.cmd 等）
+/// - 命令中出现工作区路径（用于判断目标是否为工作区）
+fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str) -> bool {
+    if !script_leak_targets_workspace(command, working_dir, workspace_root) {
         return false;
     }
 
+    let lower = command.to_lowercase();
     // 命令中是否包含文件复制/移动/重定向操作
     // cp/copy/mv/move 命令；>、>> 重定向；install 安装命令；tee 写入命令
     lower.contains("cp ")
@@ -6097,6 +6105,84 @@ fn is_script_leak_command(command: &str, working_dir: &str, workspace_root: &str
         || lower.contains("> ")
         || lower.contains(">>")
         || lower.contains("tee ")
+}
+
+/// 判断 token 是否出现在"命令位置"（前后均为分隔符）
+///
+/// PowerShell 必须用词边界而非纯 contains：`Move-Item` 是 `Remove-Item` 的子串
+/// （remove-item 从第 2 个字符起恰为 move-item），纯子串匹配会把"删除工作区脚本"
+/// 误判成"泄露脚本到工作区"；`sc`/`mi` 等两字母别名同理会被 misc、minus 之类吞掉。
+fn contains_at_word_boundary(hay: &str, token: &str) -> bool {
+    // 词边界分隔符：空白、语句/管道分隔符、括号、引号、赋值号、驱动器与静态调用用的冒号
+    const WORD_DELIMS: &[u8] = &[
+        b' ', b'\t', b'\n', b'\r', b';', b'|', b'&', b'(', b')', b'{', b'}', b',', b'"', b'\'',
+        b'=', b':',
+    ];
+    let bytes = hay.as_bytes();
+    let is_delim = |b: u8| WORD_DELIMS.contains(&b);
+    let mut from = 0usize;
+    while let Some(rel) = hay[from..].find(token) {
+        let start = from + rel;
+        let end = start + token.len();
+        let prev_ok = start == 0 || is_delim(bytes[start - 1]);
+        let next_ok = end >= bytes.len() || is_delim(bytes[end]);
+        if prev_ok && next_ok {
+            return true;
+        }
+        from = start + token.len().max(1);
+    }
+    false
+}
+
+/// PowerShell 侧的"写入/复制"操作词表
+/// 全称 + 本机 Get-Alias 实测别名：
+///   Copy-Item => copy cp cpi | Move-Item => mi move mv | Set-Content => sc
+///   Add-Content => ac | Tee-Object => tee | Out-File 无别名
+const PS_LEAK_WRITE_TOKENS: &[&str] = &[
+    "copy-item",
+    "move-item",
+    "set-content",
+    "add-content",
+    "out-file",
+    "tee-object",
+    "copy",
+    "cp",
+    "cpi",
+    "mi",
+    "move",
+    "mv",
+    "sc",
+    "ac",
+    "tee",
+    // 绕过 cmdlet 直接调用 .NET 写文件的常见形式
+    "writealltext",
+    "writeallbytes",
+    "writealllines",
+    "appendalltext",
+    "appendallbytes",
+    "appendalllines",
+];
+
+/// 判断 PowerShell 命令是否试图把脚本文件写入工作区
+///
+/// 不能直接复用 bash 版：它的词表只有 cp/mv/copy/>/tee 等 POSIX 字面量，
+/// 覆盖不到 Copy-Item、Out-File、Set-Content、[IO.File]::WriteAllText 等 PowerShell 写法。
+fn is_script_leak_powershell_command(
+    command: &str,
+    working_dir: &str,
+    workspace_root: &str,
+) -> bool {
+    if !script_leak_targets_workspace(command, working_dir, workspace_root) {
+        return false;
+    }
+    let lower = command.to_lowercase();
+    // PowerShell 的重定向与 bash 同为 > 和 >>
+    if lower.contains("> ") || lower.contains(">>") {
+        return true;
+    }
+    PS_LEAK_WRITE_TOKENS
+        .iter()
+        .any(|tok| contains_at_word_boundary(&lower, tok))
 }
 
 /// 命令执行工具
@@ -6886,7 +6972,8 @@ impl Tool for RunPowerShellCommandTool {
          Output exceeding 6000 characters will be automatically truncated.\
          High-risk commands (Remove-Item/Stop-Process/Clear-Content/Invoke-Expression/shutdown/Set-ExecutionPolicy, etc.) will request user confirmation.\
          Returns stdout, stderr, exit_code, success, and duration_secs fields; exit_code follows the status of the last statement, like a POSIX shell.\
-         Use PowerShell syntax (Get-ChildItem, $var, cmdlet -Parameter), not cmd.exe or Unix syntax; use the bash tool for Git Bash commands."
+         Use PowerShell syntax (Get-ChildItem, $var, cmdlet -Parameter), not cmd.exe or Unix syntax; use the bash tool for Git Bash commands.\
+         Important: copying or writing script files (.py/.sh/.ps1/.bat/.cmd, etc.) into the workspace directory via Copy-Item/Move-Item/Set-Content/Out-File/redirection is prohibited; script files should only be created and executed in the system temporary directory."
     }
 
     fn category(&self) -> &str {
@@ -6931,6 +7018,22 @@ impl Tool for RunPowerShellCommandTool {
                 success: false,
                 output: None,
                 error: Some("Missing command parameter".to_string()),
+                duration_ms: start.elapsed().as_millis() as u64,
+                error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
+            };
+        }
+
+        // 安全校验：阻止将脚本文件复制/写入工作区目录
+        // 脚本文件应只在系统临时目录中创建和执行，不允许通过 Copy-Item/Out-File/重定向等方式泄露到工作区
+        if is_script_leak_powershell_command(&command, working_dir, workspace_root) {
+            log::warn!("powershell: 检测到脚本泄露命令，已拒绝执行: {}", command);
+            return ToolResult {
+                success: false,
+                output: None,
+                error: Some(format!(
+                    "Command detected attempting to copy or write script files to the workspace directory, execution denied. Script files should only be created and executed in the system temporary directory. Please execute scripts directly via 'python <script_path>' or 'powershell <script_path>' in the temporary directory. Command: {}",
+                    command
+                )),
                 duration_ms: start.elapsed().as_millis() as u64,
                 error_code: Some(crate::errors::TOOL_INVALID_PARAMS),
             };
@@ -7496,6 +7599,231 @@ mod powershell_tool_tests {
         }
     }
 
+    // ---------- 脚本泄露检测 ----------
+
+    /// 必须拦下的 PowerShell 写入途径：把临时目录脚本落进工作区
+    #[test]
+    fn test_ps_script_leak_copy_and_move() {
+        let ws = "D:\\DeskTop\\test";
+        let tmp = "C:\\Users\\me\\AppData\\Local\\Temp\\samoyed_work\\scripts";
+        // Copy-Item / Move-Item 全称
+        assert!(is_script_leak_powershell_command(
+            &format!("Copy-Item \"{tmp}\\a.py\" \"{ws}\\a.py\""),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("Move-Item {tmp}\\s.sh {ws}\\s.sh"),
+            "",
+            ws
+        ));
+        // PowerShell 内置别名 cpi/copy=Copy-Item, mi=Move-Item（本机 Test-Path Alias: 实测）
+        assert!(is_script_leak_powershell_command(
+            &format!("cpi {tmp}\\a.py {ws}\\a.py"),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("copy {tmp}\\a.py {ws}\\a.py"),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("mi {tmp}\\a.py {ws}\\a.py"),
+            "",
+            ws
+        ));
+        // cp/mv 在 PowerShell 中同样是 Copy-Item/Move-Item 别名
+        assert!(is_script_leak_powershell_command(
+            &format!("cp {tmp}\\a.py {ws}\\a.py"),
+            "",
+            ws
+        ));
+    }
+
+    /// 内容写入类 cmdlet 与 .NET 写文件 API 都必须被识别
+    #[test]
+    fn test_ps_script_leak_content_writers() {
+        let ws = "D:\\DeskTop\\test";
+        assert!(is_script_leak_powershell_command(
+            &format!("Write-Output \"print(1)\" | Set-Content {ws}\\leak.py"),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("Add-Content -Path {ws}\\leak.py -Value \"print(1)\""),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("Get-Content a.txt | Out-File {ws}\\leak.ps1"),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("\"code\" | Tee-Object -FilePath {ws}\\a.ps1"),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("[System.IO.File]::WriteAllText(\"{ws}\\\\a.py\", \"print(1)\")"),
+            "",
+            ws
+        ));
+        // sc/ac 为 Set-Content/Add-Content 别名
+        assert!(is_script_leak_powershell_command(
+            &format!("sc {ws}\\a.py \"print(1)\""),
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            &format!("ac {ws}\\a.py \"print(1)\""),
+            "",
+            ws
+        ));
+    }
+
+    /// 重定向与正斜杠/ provider 路径形式都要能匹配
+    #[test]
+    fn test_ps_script_leak_redirect_and_path_forms() {
+        // 正斜杠形式
+        assert!(is_script_leak_powershell_command(
+            "\"print(1)\" > D:/DeskTop/test/leak.py",
+            "",
+            "D:\\DeskTop\\test"
+        ));
+        // 追加重定向
+        assert!(is_script_leak_powershell_command(
+            "\"print(1)\" >> D:\\DeskTop\\test\\leak.py",
+            "",
+            "D:\\DeskTop\\test"
+        ));
+        // PowerShell provider 全限定路径
+        assert!(is_script_leak_powershell_command(
+            "Copy-Item C:\\t\\a.py Microsoft.PowerShell.Core\\FileSystem::D:\\DeskTop\\test\\a.py",
+            "",
+            "D:\\DeskTop\\test"
+        ));
+        // 大小写混排
+        assert!(is_script_leak_powershell_command(
+            "copy-ITEM C:\\t\\a.py D:\\DeskTop\\test\\a.py",
+            "",
+            "D:\\DeskTop\\test"
+        ));
+    }
+
+    /// working_dir 等于工作区时，相对路径写入同样构成泄露
+    #[test]
+    fn test_ps_script_leak_relative_path_with_workspace_cwd() {
+        let ws = "D:\\DeskTop\\test";
+        assert!(is_script_leak_powershell_command(
+            "Write-Output \"print(1)\" | Set-Content __self_test__/leak.py",
+            ws,
+            ws
+        ));
+        // working_dir 指向别处时不应触发相对路径判定
+        assert!(!is_script_leak_powershell_command(
+            "Write-Output \"print(1)\" | Set-Content leak.py",
+            "C:\\Users\\me\\AppData\\Local\\Temp",
+            ws
+        ));
+    }
+
+    /// 非泄露场景必须放行，避免确认与拒绝噪音淹没真实拦截
+    #[test]
+    fn test_ps_script_leak_allows_legitimate_commands() {
+        let ws = "D:\\DeskTop\\test";
+        let tmp = "C:\\Users\\me\\AppData\\Local\\Temp\\samoyed_work\\scripts";
+        // 工作区之间互不相关的复制
+        assert!(!is_script_leak_powershell_command(
+            "Copy-Item C:\\a\\src.ps1 C:\\b\\dst.ps1",
+            "",
+            ws
+        ));
+        // 只读工作区
+        assert!(!is_script_leak_powershell_command(
+            &format!("Get-Content {ws}\\src\\main.rs"),
+            "",
+            ws
+        ));
+        // 在临时目录执行脚本，不落入工作区
+        assert!(!is_script_leak_powershell_command(
+            &format!("python {tmp}\\a.py"),
+            "",
+            ws
+        ));
+        // 删除工作区脚本属另一类风险，由高风险确认负责，不算泄露
+        assert!(!is_script_leak_powershell_command(
+            &format!("Remove-Item {ws}\\a.py"),
+            "",
+            ws
+        ));
+        // 写入工作区但不是脚本扩展名
+        assert!(!is_script_leak_powershell_command(
+            &format!("Set-Content {ws}\\notes.txt \"hello\""),
+            "",
+            ws
+        ));
+        // 无工作区上下文
+        assert!(!is_script_leak_powershell_command(
+            "Copy-Item C:\\t\\a.py D:\\DeskTop\\test\\a.py",
+            "",
+            ""
+        ));
+        // 普通命令
+        assert!(!is_script_leak_powershell_command("Get-Process", "", ws));
+    }
+
+    /// 与 bash 工具共用同一套工作区/扩展名判定，二者对同一事实应给出一致结论
+    #[test]
+    fn test_ps_script_leak_shares_workspace_logic_with_bash() {
+        let ws = "D:\\DeskTop\\test";
+        // Git Bash 风格路径仅对 bash 有效，PowerShell 用盘符路径
+        assert!(is_script_leak_command(
+            "cp \"/d/DeskTop/test/../t/a.py\" \"/d/DeskTop/test/a.py\"",
+            "",
+            ws
+        ));
+        assert!(is_script_leak_powershell_command(
+            "cp C:\\t\\a.py D:\\DeskTop\\test\\a.py",
+            "",
+            ws
+        ));
+        // 缺少脚本扩展名时两者都不拦
+        assert!(!is_script_leak_command(
+            "cp C:\\t\\a.txt D:\\DeskTop\\test\\a.txt",
+            "",
+            ws
+        ));
+        assert!(!is_script_leak_powershell_command(
+            "Copy-Item C:\\t\\a.txt D:\\DeskTop\\test\\a.txt",
+            "",
+            ws
+        ));
+    }
+
+    /// 工具层集成：检测到泄露时必须拒绝执行并返回参数错误码
+    #[tokio::test]
+    async fn test_powershell_execute_blocks_script_leak() {
+        let result = RunPowerShellCommandTool
+            .execute(json!({
+                "command": "Copy-Item C:\\Temp\\scripts\\a.py D:\\DeskTop\\test\\a.py",
+                "workspace_root": "D:\\DeskTop\\test",
+            }))
+            .await;
+        assert!(!result.success, "泄露命令应被拒绝");
+        assert_eq!(result.error_code, Some(crate::errors::TOOL_INVALID_PARAMS));
+        assert!(
+            result.output.is_none(),
+            "被拒绝的命令不应启动子进程产生 output"
+        );
+        let err = result.error.unwrap_or_default();
+        assert!(
+            err.contains("workspace") || err.contains("工作区"),
+            "错误信息应说明泄露原因，实际: {err}"
+        );
+    }
+
     // ---------- 工具元数据与注册 ----------
 
     #[test]
@@ -7540,6 +7868,31 @@ mod powershell_tool_tests {
         ] {
             assert!(desc.contains(token), "描述应包含关键契约信息: {token}");
         }
+    }
+
+    /// 描述必须预先告知脚本泄露禁令
+    /// 否则模型只在收到拒绝错误后才被动得知规则，会反复试错消耗迭代次数
+    #[test]
+    fn test_powershell_tool_description_declares_leak_rule() {
+        let desc = RunPowerShellCommandTool.description();
+        assert!(
+            desc.contains("workspace directory"),
+            "应提及工作区限制，实际: {desc}"
+        );
+        assert!(
+            desc.contains("prohibited"),
+            "应明确表达禁止语义，实际: {desc}"
+        );
+        // 需点名 PowerShell 专有写法，POSIX 词表不足以让模型理解被禁的是哪些命令
+        assert!(
+            desc.contains("Copy-Item") && desc.contains("Out-File"),
+            "应点名 Copy-Item/Out-File 等 PowerShell 写入途径，实际: {desc}"
+        );
+        // 与 bash 一样说明脚本只应在临时目录执行
+        assert!(
+            desc.contains("temporary directory"),
+            "应给出临时目录这一正确做法，实际: {desc}"
+        );
     }
 
     #[test]
