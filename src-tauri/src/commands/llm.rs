@@ -64,9 +64,14 @@ pub async fn test_connection_with_config(
         });
     }
 
+    // Ollama 等本地部署不需要 API Key，为空时使用空字符串
+    let is_ollama = config.provider_type == "ollama";
     // 编辑模式下 api_key 为空时，从已保存的 Provider 中查找 API Key
     let api_key = if config.api_key.trim().is_empty() {
-        if let Some(ref pid) = provider_id {
+        if is_ollama {
+            // Ollama 不需要 API Key，使用空字符串
+            String::new()
+        } else if let Some(ref pid) = provider_id {
             let cfg_manager = state.config.lock().await;
             let llm_config = cfg_manager.load_llm_config().map_err(|e| {
                 log::error!("加载 LLM 配置失败: {}", e);
@@ -182,7 +187,9 @@ pub async fn list_models(
             "请输入 API Base URL".to_string(),
         ));
     }
-    if api_key.trim().is_empty() {
+    // Ollama 等本地部署不需要 API Key
+    let is_ollama = provider_type == "ollama";
+    if !is_ollama && api_key.trim().is_empty() {
         return Err(CommandError::llm(
             crate::errors::LLM_INVALID_REQUEST,
             "请输入 API Key".to_string(),
@@ -211,11 +218,12 @@ pub async fn list_models(
     let mut last_error: Option<CommandError> = None;
     for url in &urls {
         log::info!("请求模型列表端点: {}", url);
-        let response = client
-            .get(url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .send()
-            .await;
+        // 构建请求：Ollama 不需要 Authorization 头部
+        let mut request = client.get(url);
+        if !is_ollama && !api_key.trim().is_empty() {
+            request = request.header("Authorization", format!("Bearer {}", api_key));
+        }
+        let response = request.send().await;
 
         match response {
             Ok(resp) => {
