@@ -139,7 +139,7 @@ src-tauri/               Rust 后端
       llm/               LLM多Provider适配: router, provider (trait),
                             openai_adapter, anthropic_adapter, gemini_adapter
       handler/           Handler引擎: registry (注册表), builtin (5个文档处理器)
-      tool/              Tool引擎: registry, builtin (25个工具), trait_def
+      tool/              Tool引擎: registry, builtin (26个工具), trait_def
       document/          Python Sidecar进程管理 (自动重启、超时、重试)
       permission/        权限系统: registry (注册表), evaluator (评估器),
                             doom_loop (死循环检测), wildcard (通配符), types
@@ -223,7 +223,7 @@ docs/                    详细开发文档
 ### Tool 系统（基础操作，始终启用）
 - Tool 是轻量级、始终启用的基础操作工具，与 Handler 平行但不可禁用
 - 每个 Tool 实现 `Tool` trait（与 Handler 相似的接口: `tool_name()`, `description()`, `parameters()`, `execute()`）
-- 内置 25 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
+- 内置 26 个 Tool（纯 Rust 实现，不依赖 Python Sidecar）:
   - `list_directory`: 列出目录内容（支持深度控制、扩展名过滤、排序，含路径遍历安全校验）
   - `search_files`: 按文件名/内容搜索文件（支持扩展名过滤、内容预览）
   - `read_file`: 读取纯文本文件（.txt/.md/.csv/.json 等，1MB 上限，含路径校验）
@@ -242,6 +242,7 @@ docs/                    详细开发文档
   - `scratchpad`: 智能体草稿本（按 session_id 隔离的笔记工具，支持写入/读取/清空/刷新摘要，每轮迭代自动注入摘要）
   - `write_script`: 将智能体生成的脚本写入系统临时目录 `<temp_dir>/samoyed_work/scripts/`
   - `run_command`: 通过 Git Bash 执行命令（运行脚本），支持工作目录和超时控制（LLM 通过 timeout 参数自主控制，最大 300 秒）；高风险命令（rm -rf、format、shutdown 等）需用户确认；Git Bash 路径优先使用用户配置，为空时从 PATH 自动检测（先查找 bash.exe，再从 git.exe 推断 `<git_root>/bin/bash.exe`）
+  - `powershell`: 通过 PowerShell 执行命令，参数与返回契约与 bash 完全一致（stdout/stderr/exit_code/success/duration_secs/command/working_dir）。解释器优先取 PATH 上的 pwsh.exe（PowerShell 7+），回退 System32 的 powershell.exe（5.1）；实测 5.1 单次启动约 2.7-3 秒、pwsh 7 约 0.9 秒。实现要点：脚本经 `-EncodedCommand`（Base64 + UTF-16LE）传入，规避命令行引号二次解析与 5.1 按 GBK 解码 stdin 导致的乱码；脚本前导抑制进度流并强制 UTF-8 输出，Rust 侧再做 UTF-8 优先/GBK 回退解码；stderr 中的 CLIXML 错误流还原为可读文本并剥离 ANSI 序列；脚本后缀按「最后一条语句」归一退出码（PowerShell 默认不把原生命令退出码交给宿主）；管道由独立线程并行消费以避免大输出死锁，超时用 `taskkill /T` 终止进程树
   - `todo_write`: 结构化任务管理（按 session_id 隔离并持久化到数据库）
   - `source_code`: 基于 tree-sitter 的代码语义搜索（支持按符号类型和名称通配符查询）
   - `skill`: 按需加载领域能力（通过 SkillRegistry 管理，支持 list/load 两个 action，系统提示词中仅注入 Skill 清单，Agent 通过此工具加载实际内容）
